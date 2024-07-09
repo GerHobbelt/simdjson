@@ -153,7 +153,7 @@ double from_chars(const char *first, const char* end) noexcept;
 
 
 
-#endif // MSC_VER
+#endif // _MSC_VER
 
 #if defined(simdjson_inline)
   // Prefer the user's definition of simdjson_inline; don't define it ourselves.
