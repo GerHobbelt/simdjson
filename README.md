@@ -46,6 +46,7 @@ Real-world usage
 - [Meta Velox](https://velox-lib.io)
 - [Google Pax](https://github.com/google/paxml)
 - [milvus](https://github.com/milvus-io/milvus)
+- [QuestDB](https://questdb.io/blog/questdb-release-8-0-3/)
 - [Clang Build Analyzer](https://github.com/aras-p/ClangBuildAnalyzer)
 - [Shopify HeapProfiler](https://github.com/Shopify/heap-profiler)
 - [StarRocks](https://github.com/StarRocks/starrocks)
@@ -179,7 +180,7 @@ The simdjson library takes advantage of modern microarchitectures, parallelizing
 instructions, reducing branch misprediction, and reducing data dependency to take advantage of each
 CPU's multiple execution cores.
 
-Our default front-end is called On Demand, and we wrote a paper about it:
+Our default front-end is called On-Demand, and we wrote a paper about it:
 
 - John Keiser, Daniel Lemire, [On-Demand JSON: A Better Way to Parse Documents?](http://arxiv.org/abs/2312.17149), Software: Practice and Experience 54 (6), 2024.
 
