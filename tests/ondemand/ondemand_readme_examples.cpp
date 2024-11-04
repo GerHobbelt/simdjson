@@ -8,7 +8,15 @@
 #endif
 using namespace std;
 using namespace simdjson;
-using error_code=simdjson::error_code;
+using error_code = simdjson::error_code;
+
+bool simplepad() {
+  std::string json = "[1]";
+  ondemand::parser parser;
+  ondemand::document doc;
+  auto error = parser.iterate(simdjson::pad(json)).get(doc);
+  return error == SUCCESS;
+}
 
 bool string1() {
   const char * data = "my data"; // 7 bytes
@@ -49,6 +57,7 @@ struct Car {
   std::vector<double> tire_pressure;
 };
 
+#ifndef __cpp_concepts
 template <>
 simdjson_inline simdjson_result<std::vector<double>>
 simdjson::ondemand::value::get() noexcept {
@@ -66,7 +75,7 @@ simdjson::ondemand::value::get() noexcept {
   }
   return vec;
 }
-
+#endif
 
 
 template <>
@@ -75,28 +84,12 @@ simdjson_inline simdjson_result<Car> simdjson::ondemand::value::get() noexcept {
   auto error = get_object().get(obj);
   if (error) { return error; }
   Car car;
-  // Instead of repeatedly obj["something"], we iterate through the object which
-  // we expect to be faster.
-  for (auto field : obj) {
-    raw_json_string key;
-    if (error = field.key().get(key); error) { return error; }
-    if (key == "make") {
-      error = field.value().get_string(car.make);
-      if(error) { return error; }
-    } else if (key == "model") {
-      error = field.value().get_string(car.model);
-      if(error) { return error; }
-    } else if (key == "year") {
-      error = field.value().get_int64().get(car.year);
-      if(error) { return error; }
-    } else if (key == "tire_pressure") {
-      error = field.value().get<std::vector<double>>().get(car.tire_pressure);
-      if (error) { return error; }
-    }
-  }
+  if((error = obj["make"].get_string(car.make))) { return error; }
+  if((error = obj["model"].get_string(car.model))) { return error; }
+  if((error = obj["year"].get_int64().get(car.year))) { return error; }
+  if((error = obj["tire_pressure"].get<std::vector<double>>().get(car.tire_pressure))) { return error; }
   return car;
 }
-
 
 int custom_type_without_exceptions() {
   padded_string json = R"( [ { "make": "Toyota", "model": "Camry",  "year": 2018,
@@ -193,8 +186,8 @@ int custom_type_with_exceptions() {
 ])"_padded;
   ondemand::parser parser;
   ondemand::document doc = parser.iterate(json);
-  for (auto val : doc) {
-    Car c(val);
+  for (auto value : doc) {
+    Car c(value);
     std::cout << c.make << std::endl;
   }
   return 0;
@@ -1933,6 +1926,7 @@ bool run() {
     && using_the_parsed_json_4()
     && using_the_parsed_json_5()
 #endif
+    && simplepad()
     && using_the_parsed_json_6()
     && json_pointer_simple()
     && json_pointer_unicode()
