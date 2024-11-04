@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.14)
 project(
     simdjson
     # The version number is modified by tools/release.py
-    VERSION 3.10.0
+    VERSION 3.10.1
     DESCRIPTION "Parsing gigabytes of JSON per second"
     HOMEPAGE_URL "https://simdjson.org/"
     LANGUAGES CXX C
@@ -287,6 +287,7 @@ enable_testing()
 add_custom_target(all_tests)
 
 add_subdirectory(windows)
+include(cmake/CPM.cmake)
 add_subdirectory(dependencies) ## This needs to be before tools because of cxxopts
 add_subdirectory(tools)  ## This needs to be before tests because of cxxopts
 
