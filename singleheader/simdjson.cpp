@@ -1,4 +1,4 @@
-/* auto-generated on 2024-10-10 22:17:29 -0400. Do not edit! */
+/* auto-generated on 2024-12-02 20:24:24 -0500. Do not edit! */
 /* including simdjson.cpp:  */
 /* begin file simdjson.cpp */
 #define SIMDJSON_SRC_SIMDJSON_CPP
@@ -7788,7 +7788,7 @@ SIMDJSON_NO_SANITIZE_UNDEFINED
 // See issue https://github.com/simdjson/simdjson/issues/1965
 SIMDJSON_NO_SANITIZE_MEMORY
 simdjson_inline int trailing_zeroes(uint64_t input_num) {
-#ifdef SIMDJSON_REGULAR_VISUAL_STUDIO
+#if SIMDJSON_REGULAR_VISUAL_STUDIO
   unsigned long ret;
   // Search the mask data from least significant bit (LSB)
   // to the most significant bit (MSB) for a set bit (1).
@@ -7812,7 +7812,7 @@ simdjson_inline uint64_t clear_lowest_bit(uint64_t input_num) {
 SIMDJSON_NO_SANITIZE_UNDEFINED
 /* result might be undefined when input_num is zero */
 simdjson_inline int leading_zeroes(uint64_t input_num) {
-#ifdef SIMDJSON_REGULAR_VISUAL_STUDIO
+#if SIMDJSON_REGULAR_VISUAL_STUDIO
   unsigned long leading_zero = 0;
   // Search the mask data from most significant bit (MSB)
   // to least significant bit (LSB) for a set bit (1).
@@ -7865,7 +7865,7 @@ simdjson_inline uint64_t zero_leading_bit(uint64_t rev_bits, int leading_zeroes)
 #endif
 
 simdjson_inline bool add_overflow(uint64_t value1, uint64_t value2, uint64_t *result) {
-#ifdef SIMDJSON_REGULAR_VISUAL_STUDIO
+#if SIMDJSON_REGULAR_VISUAL_STUDIO
   *result = value1 + value2;
   return *result < value1;
 #else
@@ -8008,7 +8008,7 @@ namespace arm64 {
 namespace {
 namespace simd {
 
-#ifdef SIMDJSON_REGULAR_VISUAL_STUDIO
+#if SIMDJSON_REGULAR_VISUAL_STUDIO
 namespace {
 // Start of private section with Visual Studio workaround
 
@@ -8117,7 +8117,7 @@ namespace {
     // We return uint32_t instead of uint16_t because that seems to be more efficient for most
     // purposes (cutting it down to uint16_t costs performance in some compilers).
     simdjson_inline uint32_t to_bitmask() const {
-#ifdef SIMDJSON_REGULAR_VISUAL_STUDIO
+#if SIMDJSON_REGULAR_VISUAL_STUDIO
       const uint8x16_t bit_mask =  simdjson_make_uint8x16_t(0x01, 0x02, 0x4, 0x8, 0x10, 0x20, 0x40, 0x80,
                                                    0x01, 0x02, 0x4, 0x8, 0x10, 0x20, 0x40, 0x80);
 #else
@@ -8148,7 +8148,7 @@ namespace {
     // Splat constructor
     simdjson_inline simd8(uint8_t _value) : simd8(splat(_value)) {}
     // Member-by-member initialization
-#ifdef SIMDJSON_REGULAR_VISUAL_STUDIO
+#if SIMDJSON_REGULAR_VISUAL_STUDIO
     simdjson_inline simd8(
       uint8_t v0,  uint8_t v1,  uint8_t v2,  uint8_t v3,  uint8_t v4,  uint8_t v5,  uint8_t v6,  uint8_t v7,
       uint8_t v8,  uint8_t v9,  uint8_t v10, uint8_t v11, uint8_t v12, uint8_t v13, uint8_t v14, uint8_t v15
@@ -8242,7 +8242,7 @@ namespace {
       uint64x2_t shufmask64 = {thintable_epi8[mask1], thintable_epi8[mask2]};
       uint8x16_t shufmask = vreinterpretq_u8_u64(shufmask64);
       // we increment by 0x08 the second half of the mask
-#ifdef SIMDJSON_REGULAR_VISUAL_STUDIO
+#if SIMDJSON_REGULAR_VISUAL_STUDIO
       uint8x16_t inc = simdjson_make_uint8x16_t(0, 0, 0, 0, 0, 0, 0, 0, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08);
 #else
       uint8x16_t inc = {0, 0, 0, 0, 0, 0, 0, 0, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08};
@@ -8272,7 +8272,7 @@ namespace {
       uint8x8_t compactmask1 = vcreate_u8(thintable_epi8[mask1]);
       uint8x8_t compactmask2 = vcreate_u8(thintable_epi8[mask2]);
       // we increment by 0x08 the second half of the mask
-#ifdef SIMDJSON_REGULAR_VISUAL_STUDIO
+#if SIMDJSON_REGULAR_VISUAL_STUDIO
       uint8x8_t inc = simdjson_make_uint8x8_t(0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08);
 #else
       uint8x8_t inc = {0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08};
@@ -8324,7 +8324,7 @@ namespace {
     // Array constructor
     simdjson_inline simd8(const int8_t* values) : simd8(load(values)) {}
     // Member-by-member initialization
-#ifdef SIMDJSON_REGULAR_VISUAL_STUDIO
+#if SIMDJSON_REGULAR_VISUAL_STUDIO
     simdjson_inline simd8(
       int8_t v0,  int8_t v1,  int8_t v2,  int8_t v3, int8_t v4,  int8_t v5,  int8_t v6,  int8_t v7,
       int8_t v8,  int8_t v9,  int8_t v10, int8_t v11, int8_t v12, int8_t v13, int8_t v14, int8_t v15
@@ -8445,7 +8445,7 @@ namespace {
     }
 
     simdjson_inline uint64_t to_bitmask() const {
-#ifdef SIMDJSON_REGULAR_VISUAL_STUDIO
+#if SIMDJSON_REGULAR_VISUAL_STUDIO
       const uint8x16_t bit_mask = simdjson_make_uint8x16_t(
         0x01, 0x02, 0x4, 0x8, 0x10, 0x20, 0x40, 0x80,
         0x01, 0x02, 0x4, 0x8, 0x10, 0x20, 0x40, 0x80
@@ -10555,7 +10555,7 @@ SIMDJSON_NO_SANITIZE_UNDEFINED
 // See issue https://github.com/simdjson/simdjson/issues/1965
 SIMDJSON_NO_SANITIZE_MEMORY
 simdjson_inline int trailing_zeroes(uint64_t input_num) {
-#ifdef SIMDJSON_REGULAR_VISUAL_STUDIO
+#if SIMDJSON_REGULAR_VISUAL_STUDIO
   unsigned long ret;
   // Search the mask data from least significant bit (LSB)
   // to the most significant bit (MSB) for a set bit (1).
@@ -10579,7 +10579,7 @@ simdjson_inline uint64_t clear_lowest_bit(uint64_t input_num) {
 SIMDJSON_NO_SANITIZE_UNDEFINED
 /* result might be undefined when input_num is zero */
 simdjson_inline int leading_zeroes(uint64_t input_num) {
-#ifdef SIMDJSON_REGULAR_VISUAL_STUDIO
+#if SIMDJSON_REGULAR_VISUAL_STUDIO
   unsigned long leading_zero = 0;
   // Search the mask data from most significant bit (MSB)
   // to least significant bit (LSB) for a set bit (1).
@@ -10632,7 +10632,7 @@ simdjson_inline uint64_t zero_leading_bit(uint64_t rev_bits, int leading_zeroes)
 #endif
 
 simdjson_inline bool add_overflow(uint64_t value1, uint64_t value2, uint64_t *result) {
-#ifdef SIMDJSON_REGULAR_VISUAL_STUDIO
+#if SIMDJSON_REGULAR_VISUAL_STUDIO
   *result = value1 + value2;
   return *result < value1;
 #else
@@ -10775,7 +10775,7 @@ namespace arm64 {
 namespace {
 namespace simd {
 
-#ifdef SIMDJSON_REGULAR_VISUAL_STUDIO
+#if SIMDJSON_REGULAR_VISUAL_STUDIO
 namespace {
 // Start of private section with Visual Studio workaround
 
@@ -10884,7 +10884,7 @@ namespace {
     // We return uint32_t instead of uint16_t because that seems to be more efficient for most
     // purposes (cutting it down to uint16_t costs performance in some compilers).
     simdjson_inline uint32_t to_bitmask() const {
-#ifdef SIMDJSON_REGULAR_VISUAL_STUDIO
+#if SIMDJSON_REGULAR_VISUAL_STUDIO
       const uint8x16_t bit_mask =  simdjson_make_uint8x16_t(0x01, 0x02, 0x4, 0x8, 0x10, 0x20, 0x40, 0x80,
                                                    0x01, 0x02, 0x4, 0x8, 0x10, 0x20, 0x40, 0x80);
 #else
@@ -10915,7 +10915,7 @@ namespace {
     // Splat constructor
     simdjson_inline simd8(uint8_t _value) : simd8(splat(_value)) {}
     // Member-by-member initialization
-#ifdef SIMDJSON_REGULAR_VISUAL_STUDIO
+#if SIMDJSON_REGULAR_VISUAL_STUDIO
     simdjson_inline simd8(
       uint8_t v0,  uint8_t v1,  uint8_t v2,  uint8_t v3,  uint8_t v4,  uint8_t v5,  uint8_t v6,  uint8_t v7,
       uint8_t v8,  uint8_t v9,  uint8_t v10, uint8_t v11, uint8_t v12, uint8_t v13, uint8_t v14, uint8_t v15
@@ -11009,7 +11009,7 @@ namespace {
       uint64x2_t shufmask64 = {thintable_epi8[mask1], thintable_epi8[mask2]};
       uint8x16_t shufmask = vreinterpretq_u8_u64(shufmask64);
       // we increment by 0x08 the second half of the mask
-#ifdef SIMDJSON_REGULAR_VISUAL_STUDIO
+#if SIMDJSON_REGULAR_VISUAL_STUDIO
       uint8x16_t inc = simdjson_make_uint8x16_t(0, 0, 0, 0, 0, 0, 0, 0, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08);
 #else
       uint8x16_t inc = {0, 0, 0, 0, 0, 0, 0, 0, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08};
@@ -11039,7 +11039,7 @@ namespace {
       uint8x8_t compactmask1 = vcreate_u8(thintable_epi8[mask1]);
       uint8x8_t compactmask2 = vcreate_u8(thintable_epi8[mask2]);
       // we increment by 0x08 the second half of the mask
-#ifdef SIMDJSON_REGULAR_VISUAL_STUDIO
+#if SIMDJSON_REGULAR_VISUAL_STUDIO
       uint8x8_t inc = simdjson_make_uint8x8_t(0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08);
 #else
       uint8x8_t inc = {0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08};
@@ -11091,7 +11091,7 @@ namespace {
     // Array constructor
     simdjson_inline simd8(const int8_t* values) : simd8(load(values)) {}
     // Member-by-member initialization
-#ifdef SIMDJSON_REGULAR_VISUAL_STUDIO
+#if SIMDJSON_REGULAR_VISUAL_STUDIO
     simdjson_inline simd8(
       int8_t v0,  int8_t v1,  int8_t v2,  int8_t v3, int8_t v4,  int8_t v5,  int8_t v6,  int8_t v7,
       int8_t v8,  int8_t v9,  int8_t v10, int8_t v11, int8_t v12, int8_t v13, int8_t v14, int8_t v15
@@ -11212,7 +11212,7 @@ namespace {
     }
 
     simdjson_inline uint64_t to_bitmask() const {
-#ifdef SIMDJSON_REGULAR_VISUAL_STUDIO
+#if SIMDJSON_REGULAR_VISUAL_STUDIO
       const uint8x16_t bit_mask = simdjson_make_uint8x16_t(
         0x01, 0x02, 0x4, 0x8, 0x10, 0x20, 0x40, 0x80,
         0x01, 0x02, 0x4, 0x8, 0x10, 0x20, 0x40, 0x80
