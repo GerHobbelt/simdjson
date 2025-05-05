@@ -47,13 +47,15 @@ An overview of what you need to know to use simdjson, with examples.
 Requirements
 ------------------
 
-- A recent compiler (LLVM clang 6 or better, GNU GCC 7.4 or better, Xcode 11 or better) on a 64-bit (PPC, ARM or x64 Intel/AMD) POSIX systems such as macOS, freeBSD or Linux. We require that the compiler supports the C++11 standard or better.
-- Visual Studio 2017 or better under 64-bit Windows. Users should target a 64-bit build (x64 or ARM64) instead of a 32-bit build (x86). We support the LLVM clang compiler under Visual Studio (clang-cl) as well as as the regular Visual Studio compiler. For better release performance (both compile time and execution time), we recommend Visual Studio users adopt LLVM (clang-cl). We also support MinGW 64-bit under Windows.
+The simdjson library is widely deployed in popular systems such as the Node.js runtime
+environment.
 
+- A recent compiler (LLVM clang 6 or better, GNU GCC 7.4 or better, Xcode 11 or better) on POSIX systems such as macOS, FreeBSD or Linux. We require that the compiler supports the C++11 standard or better. We test the library on a big-endian system (IBM s390x with Linux).
+- Visual Studio 2017 or better. We support the LLVM clang compiler under Visual Studio (clang-cl) as well as as the regular Visual Studio compiler. For better release performance (both compile time and execution time), we recommend Visual Studio users adopt LLVM (clang-cl). We also support MinGW 64-bit under Windows.
 
 Support for AVX-512 require a processor with AVX512-VBMI2 support (Ice Lake or better, AMD Zen 4 or better) under a 64-bit system and a recent compiler (LLVM clang 6 or better, GCC 8 or better, Visual Studio 2019 or better). You need a correspondingly recent assembler such as gas (2.30+) or nasm (2.14+): recent compilers usually come with recent assemblers. If you mix a recent compiler with an incompatible/old assembler (e.g., when using a recent compiler with an old Linux distribution), you may get errors at build time because the compiler produces instructions that the assembler does not recognize: you should update your assembler to match your compiler (e.g., upgrade binutils to version 2.30 or better under Linux) or use an older compiler matching the capabilities of your assembler.
 
-We test the library on a big-endian system (IBM s390x with Linux).
+
 
 Including simdjson
 ------------------
@@ -1080,6 +1082,32 @@ int main(void) {
 ```
 
 ### 2. Use `tag_invoke` for custom types (C++20)
+
+The simdjson library takes advantage of C++20. An immediate benefit
+is that you can deserialize JSON data directly in standard containers
+and other standard value types:
+
+```C++
+simdjson::padded_string json = R"({"data" : [1,2,3,4]})"_padded;
+
+simdjson::ondemand::parser parser;
+simdjson::ondemand::document d = parser.iterate(json);
+std::vector<uint8_t> array = d["data"].get<std::vector<uint8_t>>();
+```
+
+Appending to an existing container is just as easy:
+
+```C++
+std::vector<uint32_t> array = {0, 0};
+
+simdjson::padded_string json = R"({"data" : [1,2,3,4]})"_padded;
+
+simdjson::ondemand::parser parser;
+simdjson::ondemand::document d = parser.iterate(json);
+
+d["data"].get<std::vector<uint32_t>>(array);
+// array is now {0,0,1,2,3,4}
+```
 
 In C++20, the standard introduced the notion of *customization point*.
 A customization point is a function or function object that can be customized for different types. It allows library authors to provide default behavior while giving users the ability to override this behavior for specific types.
@@ -2245,6 +2273,11 @@ Thus it is a dynamically typed number. Before accessing the value, you must dete
 * When the value is an integer outside of the valid ranges for a 64-bit integers, e.g., when it is smaller than -9223372036854775808 or larger than 18446744073709551615, then `number.get_number_type()` has value `number_type::big_integer`. If you try to parse
 such a number of `get_number()`, you get the error `BIGINT_ERROR`. You can access the underlying string of digits with the function `raw_json_token()` which returns a `std::string_view` instance starting at the beginning of the digit. You can also call `get_double()` to get a floating-point approximation.
 
+
+  By default, the string `-0` is parsed as the integer 0 as in Python or C++. If you set the macro
+  `SIMDJSON_MINUS_ZERO_AS_FLOAT` to `1` when building simdjson, you can get that `-0` is mapped to `-0.0`
+  as in JavaScript. You can get the desired effect by building simdjson with cmake setting the
+  `SIMDJSON_MINUS_ZERO_AS_FLOAT` to on: `cmake -B build -D SIMDJSON_MINUS_ZERO_AS_FLOAT=ON`.
 
 You must check the type before accessing the value: it is an error to call `get_int64()` when `number.get_number_type()` is not `number_type::signed_integer` and when `number.is_int64()` is false. You are responsible for this check as the user of the library.
 
