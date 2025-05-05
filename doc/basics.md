@@ -1243,7 +1243,6 @@ int main() {
 You may also conditionally fill in `std::optional` values.
 
 ```C++
-
   padded_string json =
       R"( { "car1": { "make": "Toyota", "model": "Camry",  "year": 2018,
        "tire_pressure": [ 40.1, 39.9 ] }
@@ -1255,6 +1254,23 @@ You may also conditionally fill in `std::optional` values.
   // car has no value, error != simdjson::SUCCESS
   error = doc["car1"].get<std::optional<Car>>().get(car);
   // car has value Car{"Toyota", "Camry", 2018, {40.1f, 39.9f}}
+  // error is simdjson::SUCCESS
+```
+
+You can also deserialized to map-like types with keys that can be constructed
+from `std::string_view` instances:
+
+
+```C++
+  padded_string json =
+      R"( { "car1": { "make": "Toyota", "model": "Camry",  "year": 2018,
+       "tire_pressure": [ 40.1, 39.9 ] }
+})"_padded;
+  ondemand::parser parser;
+  ondemand::document doc = parser.iterate(json);
+  std:map<std::string,Car> cars;
+  error = doc.get<std:map<std::string,Car>>().get(cars);
+  // car has value car1->Car{"Toyota", "Camry", 2018, {40.1f, 39.9f}}
   // error is simdjson::SUCCESS
 ```
 
@@ -1531,7 +1547,7 @@ Some errors are recoverable:
 * You may get the error `simdjson::INCORRECT_TYPE` after trying to convert a value to an incorrect type: e.g., you expected a number and try to convert the value to a number, but it is an array.
 * You may query a key from an object, but the key is missing in which case you get the error `simdjson::NO_SUCH_FIELD`: e.g., you call `obj["myname"]` and the object does not have a key `"myname"`.
 
-Other errors (`simdjson::INCOMPLETE_ARRAY_OR_OBJECT` and `simdjson::TAPE_ERROR`)  indicate a fatal error and follow from the fact that the document is not valid JSON. These errors are not recoverable: you cannot continue. In which case, it is no longer safe to continue accessing the document: calling the method `is_alive()` on the document instance returns false. It is your responsability as a user to stop using the simdjson
+Other errors (`simdjson::INCOMPLETE_ARRAY_OR_OBJECT` and `simdjson::TAPE_ERROR`)  indicate a fatal error and follow from the fact that the document is not valid JSON. These errors are not recoverable: you cannot continue. In which case, it is no longer safe to continue accessing the document: calling the method `is_alive()` on the document instance returns false. It is your responsibility as a user to stop using the simdjson
 document after encountering these fatal errors. Consider the following example, after
 the fatal error, the document instance cannot be used. Observe how the JSON input is invalid.
 ```cpp
@@ -1933,6 +1949,8 @@ conclude that you have trailing content and that your document is not valid JSON
 You may then use `doc.current_location()` to obtain a pointer to the start of the trailing
 content.
 
+Example 1.
+
 ```C++
   auto json = R"([1, 2] foo ])"_padded;
   ondemand::parser parser;
@@ -1943,6 +1961,21 @@ content.
   }
   if (!doc.at_end()) {
     // In this instance, we will be left pointing at 'foo' since we have consumed the array [1,2].
+    std::cerr << "trailing content at byte index " << doc.current_location() - json.data() << std::endl;
+  }
+```
+
+Example 2.
+
+```cpp
+  auto json = R"(["extra close"]])"_padded;
+  ondemand::parser parser;
+  ondemand::document doc = parser.iterate(json);
+  ondemand::array array = doc.get_array();
+  for (std::string_view values : array) {
+    std::cout << values << std::endl;
+  }
+  if(!doc.at_end()) {
     std::cerr << "trailing content at byte index " << doc.current_location() - json.data() << std::endl;
   }
 ```
@@ -2558,7 +2591,7 @@ The CPU detection, which runs the first time parsing is attempted and switches t
 parser for your CPU, is transparent and thread-safe.
 Our runtime dispatching is based on global objects that are instantiated at the beginning of the
 main thread and may be discarded at the end of the main thread. If you have multiple threads running
-and some threads use the library while the main thread is cleaning up ressources, you may encounter
+and some threads use the library while the main thread is cleaning up resources, you may encounter
 issues. If you expect such problems, you may consider using [std::quick_exit](https://en.cppreference.com/w/cpp/utility/program/quick_exit).
 
 In a threaded environment, stack space is often limited. Running code like simdjson in debug mode may require hundreds of kilobytes of stack memory. Thus stack overflows are a possibility. We recommend you turn on optimization when working in an environment where stack space is limited. If you must run your code in debug mode, we recommend you configure your system to have more stack space. We discourage you from running production code based on a debug build.
