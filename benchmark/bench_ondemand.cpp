@@ -1,3 +1,5 @@
+#define BENCHMARK_FAMILY_ID  "simdjson_on_demand"
+
 #include "simdjson.h"
 
 SIMDJSON_PUSH_DISABLE_ALL_WARNINGS

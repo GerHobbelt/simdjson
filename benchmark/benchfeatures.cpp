@@ -1,3 +1,5 @@
+#define BENCHMARK_FAMILY_ID  "simdjson_features"
+
 #include "event_counter.h"
 
 #include <cassert>

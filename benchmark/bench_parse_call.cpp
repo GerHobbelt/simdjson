@@ -1,3 +1,5 @@
+#define BENCHMARK_FAMILY_ID  "simdjson_parse"
+
 #include <benchmark/benchmark.h>
 #include <iostream>
 #include "simdjson.h"
