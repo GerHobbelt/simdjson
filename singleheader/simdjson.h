@@ -1,4 +1,4 @@
-/* auto-generated on 2025-06-24 15:13:44 -0400. Do not edit! */
+/* auto-generated on 2025-08-05 16:29:59 +0000. version 4.0.0 Do not edit! */
 /* including simdjson.h:  */
 /* begin file simdjson.h */
 #ifndef SIMDJSON_H
@@ -97,10 +97,29 @@
 #endif
 #endif
 
+#ifndef SIMDJSON_CONSTEXPR_LAMBDA
+#if SIMDJSON_CPLUSPLUS17
+#define SIMDJSON_CONSTEXPR_LAMBDA constexpr
+#else
+#define SIMDJSON_CONSTEXPR_LAMBDA
+#endif
+#endif
+
+
+
 #ifdef __has_include
 #if __has_include(<version>)
 #include <version>
 #endif
+#endif
+
+// The current specification is unclear on how we detect
+// static reflection, both __cpp_lib_reflection and
+// __cpp_impl_reflection are proposed in the draft specification.
+// For now, we disable static reflect by default. It must be
+// specified at compiler time.
+#ifndef SIMDJSON_STATIC_REFLECTION
+#define SIMDJSON_STATIC_REFLECTION 0 // disabled by default.
 #endif
 
 #if defined(__apple_build_version__)
@@ -120,6 +139,14 @@
 #else // defined(__cpp_concepts) && !defined(SIMDJSON_CONCEPT_DISABLED)
 #define SIMDJSON_SUPPORTS_DESERIALIZATION 0
 #endif // defined(__cpp_concepts) && !defined(SIMDJSON_CONCEPT_DISABLED)
+
+#if !defined(SIMDJSON_CONSTEVAL)
+#if defined(__cpp_consteval) && __cpp_consteval >= 201811L
+#define SIMDJSON_CONSTEVAL 1
+#else
+#define SIMDJSON_CONSTEVAL 0
+#endif // defined(__cpp_consteval) && __cpp_consteval >= 201811L
+#endif // !defined(SIMDJSON_CONSTEVAL)
 
 #endif // SIMDJSON_COMPILER_CHECK_H
 /* end file simdjson/compiler_check.h */
@@ -318,6 +345,7 @@ using std::size_t;
 #if defined(NDEBUG) || defined(__OPTIMIZE__) || (defined(_MSC_VER) && !defined(_DEBUG))
 // If NDEBUG is set, or __OPTIMIZE__ is set, or we are under MSVC in release mode,
 // then do away with asserts and use __assume.
+// We still recommend that our users set NDEBUG in release mode.
 #if SIMDJSON_VISUAL_STUDIO
 #define SIMDJSON_UNREACHABLE() __assume(0)
 #define SIMDJSON_ASSUME(COND) __assume(COND)
@@ -569,17 +597,6 @@ double from_chars(const char *first, const char* end) noexcept;
     // We assume by default static linkage
     #define SIMDJSON_DLLIMPORTEXPORT
     #endif
-
-/**
- * Workaround for the vcpkg package manager. Only vcpkg should
- * ever touch the next line. The SIMDJSON_USING_LIBRARY macro is otherwise unused.
- */
-#if SIMDJSON_USING_LIBRARY
-#define SIMDJSON_DLLIMPORTEXPORT __declspec(dllimport)
-#endif
-/**
- * End of workaround for the vcpkg package manager.
- */
 #else
     #define SIMDJSON_DLLIMPORTEXPORT
 #endif
@@ -2362,16 +2379,25 @@ namespace std {
 // It could also wrongly set SIMDJSON_DEVELOPMENT_CHECKS (e.g., if the programmer
 // sets _DEBUG in a release build under Visual Studio, or if some compiler fails to
 // set the __OPTIMIZE__ macro).
+// We make it so that if NDEBUG is defined, then SIMDJSON_DEVELOPMENT_CHECKS
+// is not defined, irrespective of the compiler.
+// We recommend that users set NDEBUG in release builds, so that
+// SIMDJSON_DEVELOPMENT_CHECKS is not defined in release builds by default,
+// irrespective of the compiler.
 #ifndef SIMDJSON_DEVELOPMENT_CHECKS
 #ifdef _MSC_VER
 // Visual Studio seems to set _DEBUG for debug builds.
-#ifdef _DEBUG
+// We set SIMDJSON_DEVELOPMENT_CHECKS to 1 if _DEBUG is defined
+// and NDEBUG is not defined.
+#if defined(_DEBUG) && !defined(NDEBUG)
 #define SIMDJSON_DEVELOPMENT_CHECKS 1
 #endif // _DEBUG
 #else // _MSC_VER
 // All other compilers appear to set __OPTIMIZE__ to a positive integer
 // when the compiler is optimizing.
-#ifndef __OPTIMIZE__
+// We only set SIMDJSON_DEVELOPMENT_CHECKS if both __OPTIMIZE__
+// and NDEBUG are not defined.
+#if !defined(__OPTIMIZE__) && !defined(NDEBUG)
 #define SIMDJSON_DEVELOPMENT_CHECKS 1
 #endif // __OPTIMIZE__
 #endif // _MSC_VER
@@ -2427,6 +2453,18 @@ namespace std {
 #define SIMDJSON_AVX512_ALLOWED 1
 #endif
 
+
+#ifndef __has_cpp_attribute
+#define simdjson_lifetime_bound
+#elif __has_cpp_attribute(msvc::lifetimebound)
+#define simdjson_lifetime_bound [[msvc::lifetimebound]]
+#elif __has_cpp_attribute(clang::lifetimebound)
+#define simdjson_lifetime_bound [[clang::lifetimebound]]
+#elif __has_cpp_attribute(lifetimebound)
+#define simdjson_lifetime_bound [[lifetimebound]]
+#else
+#define simdjson_lifetime_bound
+#endif
 #endif // SIMDJSON_COMMON_DEFS_H
 /* end file simdjson/common_defs.h */
 
@@ -2440,18 +2478,18 @@ namespace std {
 #define SIMDJSON_SIMDJSON_VERSION_H
 
 /** The version of simdjson being used (major.minor.revision) */
-#define SIMDJSON_VERSION "3.13.0"
+#define SIMDJSON_VERSION "4.0.0"
 
 namespace simdjson {
 enum {
   /**
    * The major version (MAJOR.minor.revision) of simdjson being used.
    */
-  SIMDJSON_VERSION_MAJOR = 3,
+  SIMDJSON_VERSION_MAJOR = 4,
   /**
    * The minor version (major.MINOR.revision) of simdjson being used.
    */
-  SIMDJSON_VERSION_MINOR = 13,
+  SIMDJSON_VERSION_MINOR = 0,
   /**
    * The revision (major.minor.REVISION) of simdjson being used.
    */
@@ -2526,7 +2564,8 @@ enum error_code {
   SCALAR_DOCUMENT_AS_VALUE,   ///< A scalar document is treated as a value.
   OUT_OF_BOUNDS,              ///< Attempted to access location outside of document.
   TRAILING_CONTENT,           ///< Unexpected trailing content in the JSON input
-  NUM_ERROR_CODES
+  OUT_OF_CAPACITY,            ///< The capacity was exceeded, we cannot allocate enough memory.
+  NUM_ERROR_CODES             ///< Placeholder for end of error code list.
 };
 
 /**
@@ -2933,7 +2972,6 @@ concept optional_type = requires(std::remove_cvref_t<T> obj) {
   { obj.value() } -> std::same_as<typename std::remove_cvref_t<T>::value_type&>;
   requires requires(typename std::remove_cvref_t<T>::value_type &&val) {
     obj.emplace(std::move(val));
-    obj = std::move(val);
     {
       obj.value_or(val)
     } -> std::convertible_to<typename std::remove_cvref_t<T>::value_type>;
@@ -4242,9 +4280,9 @@ inline const char *padded_string::data() const noexcept { return data_ptr; }
 
 inline char *padded_string::data() noexcept { return data_ptr; }
 
-inline padded_string::operator std::string_view() const { return std::string_view(data(), length()); }
+inline padded_string::operator std::string_view() const simdjson_lifetime_bound { return std::string_view(data(), length()); }
 
-inline padded_string::operator padded_string_view() const noexcept {
+inline padded_string::operator padded_string_view() const noexcept simdjson_lifetime_bound {
   return padded_string_view(data(), length(), length() + SIMDJSON_PADDING);
 }
 
@@ -6705,6 +6743,9 @@ protected:
  * by a "formatter" which handles the details. Thus
  * the string_builder template could support both minification
  * and prettification, and various other tradeoffs.
+ *
+ * This is not to be confused with the simdjson::builder::string_builder
+ * which is a different class.
  */
 template <class formatter = mini_formatter>
 class string_builder {
@@ -10623,6 +10664,12 @@ namespace {
       tmp = vpaddq_u8(tmp, tmp);
       return vgetq_lane_u16(vreinterpretq_u16_u8(tmp), 0);
     }
+    // Returns 4-bit out of each byte, alternating between the high 4 bits and low
+    // bits result it is 64 bit.
+    simdjson_inline uint64_t to_bitmask64() const {
+      return vget_lane_u64(
+          vreinterpret_u64_u8(vshrn_n_u16(vreinterpretq_u16_u8(*this), 4)), 0);
+    }
     simdjson_inline bool any() const { return vmaxvq_u32(vreinterpretq_u32_u8(*this)) != 0; }
   };
 
@@ -10699,7 +10746,7 @@ namespace {
 
     // Bit-specific operations
     simdjson_inline simd8<bool> any_bits_set(simd8<uint8_t> bits) const { return vtstq_u8(*this, bits); }
-    simdjson_inline bool any_bits_set_anywhere() const { return this->max_val() != 0; }
+    simdjson_inline bool any_bits_set_anywhere() const { return vmaxvq_u32(vreinterpretq_u32_u8(*this)) != 0; }
     simdjson_inline bool any_bits_set_anywhere(simd8<uint8_t> bits) const { return (*this & bits).any_bits_set_anywhere(); }
     template<int N>
     simdjson_inline simd8<uint8_t> shr() const { return vshrq_n_u8(*this, N); }
@@ -10712,7 +10759,12 @@ namespace {
       return lookup_table.apply_lookup_16_to(*this);
     }
 
-
+    // Returns 4-bit out of each byte, alternating between the high 4 bits and low
+    // bits result it is 64 bit.
+    simdjson_inline uint64_t to_bitmask64() const {
+      return vget_lane_u64(
+          vreinterpret_u64_u8(vshrn_n_u16(vreinterpretq_u16_u8(*this), 4)), 0);
+    }
     // Copies to 'output" all bytes corresponding to a 0 in the mask (interpreted as a bitset).
     // Passing a 0 value for mask would be equivalent to writing out every byte to output.
     // Only the first 16 - count_ones(mask) bytes of the result are significant but 16 bytes
@@ -11034,6 +11086,32 @@ simdjson_inline backslash_and_quote backslash_and_quote::copy_and_find(const uin
     uint32_t(bs_and_quote >> 32) // quote_bits
   };
 }
+
+struct escaping {
+  static constexpr uint32_t BYTES_PROCESSED = 16;
+  simdjson_inline static escaping copy_and_find(const uint8_t *src, uint8_t *dst);
+
+  simdjson_inline bool has_escape() { return escape_bits != 0; }
+  simdjson_inline int escape_index() { return trailing_zeroes(escape_bits) / 4; }
+
+  uint64_t escape_bits;
+}; // struct escaping
+
+
+
+simdjson_inline escaping escaping::copy_and_find(const uint8_t *src, uint8_t *dst) {
+  static_assert(SIMDJSON_PADDING >= (BYTES_PROCESSED - 1), "escaping finder must process fewer than SIMDJSON_PADDING bytes");
+  simd8<uint8_t> v(src);
+  v.store(dst);
+  simd8<bool> is_quote = (v == '"');
+  simd8<bool> is_backslash = (v == '\\');
+  simd8<bool> is_control = (v < 32);
+  return {
+    (is_backslash | is_quote | is_control).to_bitmask64()
+  };
+}
+
+
 
 } // unnamed namespace
 } // namespace arm64
@@ -11509,6 +11587,7 @@ struct implementation_simdjson_result_base {
    * the error() method returns a value that evaluates to false.
    */
   simdjson_inline T&& value_unsafe() && noexcept;
+
 protected:
   /** users should never directly access first and second. **/
   T first{}; /** Users should never directly access 'first'. **/
@@ -13071,6 +13150,24 @@ simdjson_inline backslash_and_quote backslash_and_quote::copy_and_find(const uin
   return { src[0] };
 }
 
+
+struct escaping {
+  static constexpr uint32_t BYTES_PROCESSED = 1;
+  simdjson_inline static escaping copy_and_find(const uint8_t *src, uint8_t *dst);
+
+  simdjson_inline bool has_escape() { return escape_bits; }
+  simdjson_inline int escape_index() { return 0; }
+
+  bool escape_bits;
+}; // struct escaping
+
+
+
+simdjson_inline escaping escaping::copy_and_find(const uint8_t *src, uint8_t *dst) {
+  dst[0] = src[0];
+  return { (src[0] == '\\') || (src[0] == '"') || (src[0] < 32) };
+}
+
 } // unnamed namespace
 } // namespace fallback
 } // namespace simdjson
@@ -13632,6 +13729,7 @@ struct implementation_simdjson_result_base {
    * the error() method returns a value that evaluates to false.
    */
   simdjson_inline T&& value_unsafe() && noexcept;
+
 protected:
   /** users should never directly access first and second. **/
   T first{}; /** Users should never directly access 'first'. **/
@@ -15775,6 +15873,31 @@ simdjson_inline backslash_and_quote backslash_and_quote::copy_and_find(const uin
   };
 }
 
+
+struct escaping {
+  static constexpr uint32_t BYTES_PROCESSED = 32;
+  simdjson_inline static escaping copy_and_find(const uint8_t *src, uint8_t *dst);
+
+  simdjson_inline bool has_escape() { return escape_bits != 0; }
+  simdjson_inline int escape_index() { return trailing_zeroes(escape_bits); }
+
+  uint64_t escape_bits;
+}; // struct escaping
+
+
+
+simdjson_inline escaping escaping::copy_and_find(const uint8_t *src, uint8_t *dst) {
+  static_assert(SIMDJSON_PADDING >= (BYTES_PROCESSED - 1), "escaping finder must process fewer than SIMDJSON_PADDING bytes");
+  simd8<uint8_t> v(src);
+  v.store(dst);
+  simd8<bool> is_quote = (v == '"');
+  simd8<bool> is_backslash = (v == '\\');
+  simd8<bool> is_control = (v < 32);
+  return {
+    uint64_t((is_backslash | is_quote | is_control).to_bitmask())
+  };
+}
+
 } // unnamed namespace
 } // namespace haswell
 } // namespace simdjson
@@ -16247,6 +16370,7 @@ struct implementation_simdjson_result_base {
    * the error() method returns a value that evaluates to false.
    */
   simdjson_inline T&& value_unsafe() && noexcept;
+
 protected:
   /** users should never directly access first and second. **/
   T first{}; /** Users should never directly access 'first'. **/
@@ -17984,7 +18108,6 @@ namespace simd {
     friend simdjson_really_inline uint64_t operator==(const simd8<T> lhs, const simd8<T> rhs) {
       return _mm512_cmpeq_epi8_mask(lhs, rhs);
     }
-
     static const int SIZE = sizeof(base<T>::value);
 
     template<int N=1>
@@ -18326,6 +18449,35 @@ simdjson_inline backslash_and_quote backslash_and_quote::copy_and_find(const uin
       static_cast<uint64_t>(v == '"'), // quote_bits
   };
 }
+
+
+
+struct escaping {
+  static constexpr uint32_t BYTES_PROCESSED = 64;
+  simdjson_inline static escaping copy_and_find(const uint8_t *src, uint8_t *dst);
+
+  simdjson_inline bool has_escape() { return escape_bits != 0; }
+  simdjson_inline int escape_index() { return trailing_zeroes(uint64_t(escape_bits)); }
+
+  __mmask64 escape_bits;
+}; // struct escaping
+
+
+
+simdjson_inline escaping escaping::copy_and_find(const uint8_t *src, uint8_t *dst) {
+  static_assert(SIMDJSON_PADDING >= (BYTES_PROCESSED - 1), "escaping finder must process fewer than SIMDJSON_PADDING bytes");
+  simd8<uint8_t> v(src);
+  v.store(dst);
+  __mmask64 is_quote = _mm512_cmpeq_epi8_mask(v, _mm512_set1_epi8('"'));
+  __mmask64 is_backslash = _mm512_cmpeq_epi8_mask(v, _mm512_set1_epi8('\\'));
+  __mmask64 is_control = _mm512_cmplt_epi8_mask(v, _mm512_set1_epi8(32));
+  return {
+    (is_backslash | is_quote | is_control)
+  };
+}
+
+
+
 
 } // unnamed namespace
 } // namespace icelake
@@ -18859,6 +19011,7 @@ struct implementation_simdjson_result_base {
    * the error() method returns a value that evaluates to false.
    */
   simdjson_inline T&& value_unsafe() && noexcept;
+
 protected:
   /** users should never directly access first and second. **/
   T first{}; /** Users should never directly access 'first'. **/
@@ -21114,6 +21267,32 @@ backslash_and_quote::copy_and_find(const uint8_t *src, uint8_t *dst) {
   };
 }
 
+
+struct escaping {
+  static constexpr uint32_t BYTES_PROCESSED = 16;
+  simdjson_inline static escaping copy_and_find(const uint8_t *src, uint8_t *dst);
+
+  simdjson_inline bool has_escape() { return escape_bits != 0; }
+  simdjson_inline int escape_index() { return trailing_zeroes(escape_bits); }
+
+  uint64_t escape_bits;
+}; // struct escaping
+
+
+
+simdjson_inline escaping escaping::copy_and_find(const uint8_t *src, uint8_t *dst) {
+  static_assert(SIMDJSON_PADDING >= (BYTES_PROCESSED - 1), "escaping finder must process fewer than SIMDJSON_PADDING bytes");
+  simd8<uint8_t> v(src);
+  v.store(dst);
+  simd8<bool> is_quote = (v == '"');
+  simd8<bool> is_backslash = (v == '\\');
+  simd8<bool> is_control = (v < 32);
+  return {
+    // We store it as a 64-bit bitmask even though we only need 16 bits.
+    uint64_t((is_backslash | is_quote | is_control).to_bitmask())
+  };
+}
+
 } // unnamed namespace
 } // namespace ppc64
 } // namespace simdjson
@@ -21588,6 +21767,7 @@ struct implementation_simdjson_result_base {
    * the error() method returns a value that evaluates to false.
    */
   simdjson_inline T&& value_unsafe() && noexcept;
+
 protected:
   /** users should never directly access first and second. **/
   T first{}; /** Users should never directly access 'first'. **/
@@ -24162,6 +24342,31 @@ simdjson_inline backslash_and_quote backslash_and_quote::copy_and_find(const uin
   };
 }
 
+
+struct escaping {
+  static constexpr uint32_t BYTES_PROCESSED = 16;
+  simdjson_inline static escaping copy_and_find(const uint8_t *src, uint8_t *dst);
+
+  simdjson_inline bool has_escape() { return escape_bits != 0; }
+  simdjson_inline int escape_index() { return trailing_zeroes(escape_bits); }
+
+  uint64_t escape_bits;
+}; // struct escaping
+
+
+
+simdjson_inline escaping escaping::copy_and_find(const uint8_t *src, uint8_t *dst) {
+  static_assert(SIMDJSON_PADDING >= (BYTES_PROCESSED - 1), "escaping finder must process fewer than SIMDJSON_PADDING bytes");
+  simd8<uint8_t> v(src);
+  v.store(dst);
+  simd8<bool> is_quote = (v == '"');
+  simd8<bool> is_backslash = (v == '\\');
+  simd8<bool> is_control = (v < 32);
+  return {
+    uint64_t((is_backslash | is_quote | is_control).to_bitmask())
+  };
+}
+
 } // unnamed namespace
 } // namespace westmere
 } // namespace simdjson
@@ -24634,6 +24839,7 @@ struct implementation_simdjson_result_base {
    * the error() method returns a value that evaluates to false.
    */
   simdjson_inline T&& value_unsafe() && noexcept;
+
 protected:
   /** users should never directly access first and second. **/
   T first{}; /** Users should never directly access 'first'. **/
@@ -26683,6 +26889,31 @@ simdjson_inline backslash_and_quote backslash_and_quote::copy_and_find(const uin
   };
 }
 
+
+struct escaping {
+  static constexpr uint32_t BYTES_PROCESSED = 16;
+  simdjson_inline static escaping copy_and_find(const uint8_t *src, uint8_t *dst);
+
+  simdjson_inline bool has_escape() { return escape_bits != 0; }
+  simdjson_inline int escape_index() { return trailing_zeroes(escape_bits); }
+
+  uint64_t escape_bits;
+}; // struct escaping
+
+
+
+simdjson_inline escaping escaping::copy_and_find(const uint8_t *src, uint8_t *dst) {
+  static_assert(SIMDJSON_PADDING >= (BYTES_PROCESSED - 1), "escaping finder must process fewer than SIMDJSON_PADDING bytes");
+  simd8<uint8_t> v(src);
+  v.store(dst);
+  simd8<bool> is_quote = (v == '"');
+  simd8<bool> is_backslash = (v == '\\');
+  simd8<bool> is_control = (v < 32);
+  return {
+    (is_backslash | is_quote | is_control).to_bitmask()
+  };
+}
+
 } // unnamed namespace
 } // namespace lsx
 } // namespace simdjson
@@ -27157,6 +27388,7 @@ struct implementation_simdjson_result_base {
    * the error() method returns a value that evaluates to false.
    */
   simdjson_inline T&& value_unsafe() && noexcept;
+
 protected:
   /** users should never directly access first and second. **/
   T first{}; /** Users should never directly access 'first'. **/
@@ -29219,6 +29451,31 @@ simdjson_inline backslash_and_quote backslash_and_quote::copy_and_find(const uin
   };
 }
 
+
+struct escaping {
+  static constexpr uint32_t BYTES_PROCESSED = 16;
+  simdjson_inline static escaping copy_and_find(const uint8_t *src, uint8_t *dst);
+
+  simdjson_inline bool has_escape() { return escape_bits != 0; }
+  simdjson_inline int escape_index() { return trailing_zeroes(escape_bits); }
+
+  uint64_t escape_bits;
+}; // struct escaping
+
+
+
+simdjson_inline escaping escaping::copy_and_find(const uint8_t *src, uint8_t *dst) {
+  static_assert(SIMDJSON_PADDING >= (BYTES_PROCESSED - 1), "escaping finder must process fewer than SIMDJSON_PADDING bytes");
+  simd8<uint8_t> v(src);
+  v.store(dst);
+  simd8<bool> is_quote = (v == '"');
+  simd8<bool> is_backslash = (v == '\\');
+  simd8<bool> is_control = (v < 32);
+  return {
+    (is_backslash | is_quote | is_control).to_bitmask()
+  };
+}
+
 } // unnamed namespace
 } // namespace lasx
 } // namespace simdjson
@@ -29693,6 +29950,7 @@ struct implementation_simdjson_result_base {
    * the error() method returns a value that evaluates to false.
    */
   simdjson_inline T&& value_unsafe() && noexcept;
+
 protected:
   /** users should never directly access first and second. **/
   T first{}; /** Users should never directly access 'first'. **/
@@ -31162,6 +31420,7 @@ simdjson_inline implementation_simdjson_result_base<T>::implementation_simdjson_
 // Internal headers needed for ondemand generics.
 // All includes not under simdjson/generic/ondemand must be here!
 // Otherwise, amalgamation will fail.
+/* skipped duplicate #include "simdjson/concepts.h" */
 /* skipped duplicate #include "simdjson/dom/base.h" // for MINIMAL_DOCUMENT_CAPACITY */
 /* skipped duplicate #include "simdjson/implementation.h" */
 /* skipped duplicate #include "simdjson/padded_string.h" */
@@ -31596,6 +31855,12 @@ namespace {
       tmp = vpaddq_u8(tmp, tmp);
       return vgetq_lane_u16(vreinterpretq_u16_u8(tmp), 0);
     }
+    // Returns 4-bit out of each byte, alternating between the high 4 bits and low
+    // bits result it is 64 bit.
+    simdjson_inline uint64_t to_bitmask64() const {
+      return vget_lane_u64(
+          vreinterpret_u64_u8(vshrn_n_u16(vreinterpretq_u16_u8(*this), 4)), 0);
+    }
     simdjson_inline bool any() const { return vmaxvq_u32(vreinterpretq_u32_u8(*this)) != 0; }
   };
 
@@ -31672,7 +31937,7 @@ namespace {
 
     // Bit-specific operations
     simdjson_inline simd8<bool> any_bits_set(simd8<uint8_t> bits) const { return vtstq_u8(*this, bits); }
-    simdjson_inline bool any_bits_set_anywhere() const { return this->max_val() != 0; }
+    simdjson_inline bool any_bits_set_anywhere() const { return vmaxvq_u32(vreinterpretq_u32_u8(*this)) != 0; }
     simdjson_inline bool any_bits_set_anywhere(simd8<uint8_t> bits) const { return (*this & bits).any_bits_set_anywhere(); }
     template<int N>
     simdjson_inline simd8<uint8_t> shr() const { return vshrq_n_u8(*this, N); }
@@ -31685,7 +31950,12 @@ namespace {
       return lookup_table.apply_lookup_16_to(*this);
     }
 
-
+    // Returns 4-bit out of each byte, alternating between the high 4 bits and low
+    // bits result it is 64 bit.
+    simdjson_inline uint64_t to_bitmask64() const {
+      return vget_lane_u64(
+          vreinterpret_u64_u8(vshrn_n_u16(vreinterpretq_u16_u8(*this), 4)), 0);
+    }
     // Copies to 'output" all bytes corresponding to a 0 in the mask (interpreted as a bitset).
     // Passing a 0 value for mask would be equivalent to writing out every byte to output.
     // Only the first 16 - count_ones(mask) bytes of the result are significant but 16 bytes
@@ -32008,6 +32278,32 @@ simdjson_inline backslash_and_quote backslash_and_quote::copy_and_find(const uin
   };
 }
 
+struct escaping {
+  static constexpr uint32_t BYTES_PROCESSED = 16;
+  simdjson_inline static escaping copy_and_find(const uint8_t *src, uint8_t *dst);
+
+  simdjson_inline bool has_escape() { return escape_bits != 0; }
+  simdjson_inline int escape_index() { return trailing_zeroes(escape_bits) / 4; }
+
+  uint64_t escape_bits;
+}; // struct escaping
+
+
+
+simdjson_inline escaping escaping::copy_and_find(const uint8_t *src, uint8_t *dst) {
+  static_assert(SIMDJSON_PADDING >= (BYTES_PROCESSED - 1), "escaping finder must process fewer than SIMDJSON_PADDING bytes");
+  simd8<uint8_t> v(src);
+  v.store(dst);
+  simd8<bool> is_quote = (v == '"');
+  simd8<bool> is_backslash = (v == '\\');
+  simd8<bool> is_control = (v < 32);
+  return {
+    (is_backslash | is_quote | is_control).to_bitmask64()
+  };
+}
+
+
+
 } // unnamed namespace
 } // namespace arm64
 } // namespace simdjson
@@ -32155,7 +32451,7 @@ template <typename T, typename ValT = arm64::ondemand::value>
 concept custom_deserializable = tag_invocable<deserialize_tag, ValT&, T&>;
 
 template <typename T, typename ValT = arm64::ondemand::value>
-concept deserializable = custom_deserializable<T, ValT> || is_builtin_deserializable_v<T>;
+concept deserializable = custom_deserializable<T, ValT> || is_builtin_deserializable_v<T> || concepts::optional_type<T>;
 
 template <typename T, typename ValT = arm64::ondemand::value>
 concept nothrow_custom_deserializable = nothrow_tag_invocable<deserialize_tag, ValT&, T&>;
@@ -32166,9 +32462,25 @@ concept nothrow_deserializable = nothrow_custom_deserializable<T, ValT> || is_bu
 
 /// Deserialize Tag
 inline constexpr struct deserialize_tag {
+  using array_type = arm64::ondemand::array;
+  using object_type = arm64::ondemand::object;
   using value_type = arm64::ondemand::value;
   using document_type = arm64::ondemand::document;
   using document_reference_type = arm64::ondemand::document_reference;
+
+  // Customization Point for array
+  template <typename T>
+    requires custom_deserializable<T, value_type>
+  [[nodiscard]] constexpr /* error_code */ auto operator()(array_type &object, T& output) const noexcept(nothrow_custom_deserializable<T, value_type>) {
+    return tag_invoke(*this, object, output);
+  }
+
+  // Customization Point for object
+  template <typename T>
+    requires custom_deserializable<T, value_type>
+  [[nodiscard]] constexpr /* error_code */ auto operator()(object_type &object, T& output) const noexcept(nothrow_custom_deserializable<T, value_type>) {
+    return tag_invoke(*this, object, output);
+  }
 
   // Customization Point for value
   template <typename T>
@@ -32737,6 +33049,7 @@ public:
    *
    * You may use get_double(), get_bool(), get_uint64(), get_int64(),
    * get_object(), get_array(), get_raw_json_string(), or get_string() instead.
+   * When SIMDJSON_SUPPORTS_DESERIALIZATION is set, custom types are also supported.
    *
    * @returns A value of the given type, parsed from the JSON.
    * @returns INCORRECT_TYPE If the JSON value is not the given type.
@@ -32760,6 +33073,7 @@ public:
    * Get this value as the given type.
    *
    * Supported types: object, array, raw_json_string, string_view, uint64_t, int64_t, double, bool
+   * If the macro SIMDJSON_SUPPORTS_DESERIALIZATION is set, then custom types are also supported.
    *
    * @param out This is set to a value of the given type, parsed from the JSON. If there is an error, this may not be initialized.
    * @returns INCORRECT_TYPE If the JSON value is not an object.
@@ -32776,6 +33090,19 @@ public:
   #if SIMDJSON_SUPPORTS_DESERIALIZATION
   if constexpr (custom_deserializable<T, value>) {
       return deserialize(*this, out);
+  } else if constexpr (concepts::optional_type<T>) {
+      using value_type = typename std::remove_cvref_t<T>::value_type;
+
+      // Check if the value is null
+      if (is_null()) {
+        out.reset(); // Set to nullopt
+        return SUCCESS;
+      }
+
+      if (!out) {
+        out.emplace();
+      }
+      return get<value_type>(out.value());
   } else {
     static_assert(!sizeof(T), "The get<T> method with type T is not implemented by the simdjson library. "
       "And you do not seem to have added support for it. Indeed, we have that "
@@ -35002,6 +35329,37 @@ public:
    *         - INDEX_OUT_OF_BOUNDS if the array index is larger than an array length
    */
   simdjson_inline simdjson_result<value> at(size_t index) noexcept;
+
+#if SIMDJSON_SUPPORTS_DESERIALIZATION
+  /**
+   * Get this array as the given type.
+   *
+   * @param out This is set to a value of the given type, parsed from the JSON. If there is an error, this may not be initialized.
+   * @returns INCORRECT_TYPE If the JSON array is not of the given type.
+   * @returns SUCCESS If the parse succeeded and the out parameter was set to the value.
+   */
+  template <typename T>
+  simdjson_inline error_code get(T &out)
+     noexcept(custom_deserializable<T, array> ? nothrow_custom_deserializable<T, array> : true) {
+    static_assert(custom_deserializable<T, array>);
+    return deserialize(*this, out);
+  }
+  /**
+   * Get this array as the given type.
+   *
+   * @returns A value of the given type, parsed from the JSON.
+   * @returns INCORRECT_TYPE If the JSON value is not the given type.
+   */
+  template <typename T>
+  simdjson_inline simdjson_result<T> get()
+    noexcept(custom_deserializable<T, value> ? nothrow_custom_deserializable<T, value> : true)
+  {
+    static_assert(std::is_default_constructible<T>::value, "The specified type is not default constructible.");
+    T out{};
+    SIMDJSON_TRY(get<T>(out));
+    return out;
+  }
+#endif // SIMDJSON_SUPPORTS_DESERIALIZATION
 protected:
   /**
    * Go to the end of the array, no matter where you are right now.
@@ -35080,7 +35438,28 @@ public:
   simdjson_inline simdjson_result<arm64::ondemand::value> at_pointer(std::string_view json_pointer) noexcept;
   simdjson_inline simdjson_result<arm64::ondemand::value> at_path(std::string_view json_path) noexcept;
   simdjson_inline simdjson_result<std::string_view> raw_json() noexcept;
+#if SIMDJSON_SUPPORTS_DESERIALIZATION
+  // TODO: move this code into object-inl.h
 
+  template<typename T>
+  simdjson_inline simdjson_result<T> get() noexcept {
+    if (error()) { return error(); }
+    if constexpr (std::is_same_v<T, arm64::ondemand::array>) {
+      return first;
+    }
+    return first.get<T>();
+  }
+  template<typename T>
+  simdjson_inline error_code get(T& out) noexcept {
+    if (error()) { return error(); }
+    if constexpr (std::is_same_v<T, arm64::ondemand::array>) {
+      out = first;
+    } else {
+      SIMDJSON_TRY( first.get<T>(out) );
+    }
+    return SUCCESS;
+  }
+#endif // SIMDJSON_SUPPORTS_DESERIALIZATION
 };
 
 } // namespace simdjson
@@ -35125,7 +35504,8 @@ public:
    *
    * Part of the std::iterator interface.
    */
-  simdjson_inline simdjson_result<value> operator*() noexcept; // MUST ONLY BE CALLED ONCE PER ITERATION.
+  simdjson_inline simdjson_result<value>
+  operator*() noexcept; // MUST ONLY BE CALLED ONCE PER ITERATION.
   /**
    * Check if we are at the end of the JSON.
    *
@@ -35149,6 +35529,11 @@ public:
    */
   simdjson_inline array_iterator &operator++() noexcept;
 
+  /**
+   * Check if the array is at the end.
+   */
+  [[nodiscard]] simdjson_inline bool at_end() const noexcept;
+
 private:
   value_iterator iter{};
 
@@ -35167,7 +35552,6 @@ namespace simdjson {
 
 template<>
 struct simdjson_result<arm64::ondemand::array_iterator> : public arm64::implementation_simdjson_result_base<arm64::ondemand::array_iterator> {
-public:
   simdjson_inline simdjson_result(arm64::ondemand::array_iterator &&value) noexcept; ///< @private
   simdjson_inline simdjson_result(error_code error) noexcept; ///< @private
   simdjson_inline simdjson_result() noexcept = default;
@@ -35180,6 +35564,8 @@ public:
   simdjson_inline bool operator==(const simdjson_result<arm64::ondemand::array_iterator> &) const noexcept;
   simdjson_inline bool operator!=(const simdjson_result<arm64::ondemand::array_iterator> &) const noexcept;
   simdjson_inline simdjson_result<arm64::ondemand::array_iterator> &operator++() noexcept;
+
+  [[nodiscard]] simdjson_inline bool at_end() const noexcept;
 };
 
 } // namespace simdjson
@@ -35414,7 +35800,7 @@ public:
    * Be mindful that the document instance must remain in scope while you are accessing object, array and value instances.
    *
    * @param out This is set to a value of the given type, parsed from the JSON. If there is an error, this may not be initialized.
-   * @returns INCORRECT_TYPE If the JSON value is not an object.
+   * @returns INCORRECT_TYPE If the JSON value is of the given type.
    * @returns SUCCESS If the parse succeeded and the out parameter was set to the value.
    */
   template<typename T>
@@ -35512,7 +35898,7 @@ public:
    *          time it parses a document or when it is destroyed.
    * @exception simdjson_error(INCORRECT_TYPE) if the JSON value is not a string.
    */
-  simdjson_inline operator std::string_view() noexcept(false);
+  simdjson_inline operator std::string_view() noexcept(false) simdjson_lifetime_bound;
   /**
    * Cast this JSON value to a raw_json_string.
    *
@@ -35521,7 +35907,7 @@ public:
    * @returns A pointer to the raw JSON for the given string.
    * @exception simdjson_error(INCORRECT_TYPE) if the JSON value is not a string.
    */
-  simdjson_inline operator raw_json_string() noexcept(false);
+  simdjson_inline operator raw_json_string() noexcept(false) simdjson_lifetime_bound;
   /**
    * Cast this JSON value to a bool.
    *
@@ -36901,6 +37287,36 @@ public:
    */
   simdjson_inline simdjson_result<std::string_view> raw_json() noexcept;
 
+#if SIMDJSON_SUPPORTS_DESERIALIZATION
+  /**
+   * Get this object as the given type.
+   *
+   * @param out This is set to a value of the given type, parsed from the JSON. If there is an error, this may not be initialized.
+   * @returns INCORRECT_TYPE If the JSON object is not of the given type.
+   * @returns SUCCESS If the parse succeeded and the out parameter was set to the value.
+   */
+  template <typename T>
+  simdjson_inline error_code get(T &out)
+     noexcept(custom_deserializable<T, object> ? nothrow_custom_deserializable<T, object> : true) {
+    static_assert(custom_deserializable<T, object>);
+    return deserialize(*this, out);
+  }
+  /**
+   * Get this array as the given type.
+   *
+   * @returns A value of the given type, parsed from the JSON.
+   * @returns INCORRECT_TYPE If the JSON value is not the given type.
+   */
+  template <typename T>
+  simdjson_inline simdjson_result<T> get()
+    noexcept(custom_deserializable<T, value> ? nothrow_custom_deserializable<T, value> : true)
+  {
+    static_assert(std::is_default_constructible<T>::value, "The specified type is not default constructible.");
+    T out{};
+    SIMDJSON_TRY(get<T>(out));
+    return out;
+  }
+#endif // SIMDJSON_SUPPORTS_DESERIALIZATION
 protected:
   /**
    * Go to the end of the object, no matter where you are right now.
@@ -36944,12 +37360,32 @@ public:
   simdjson_inline simdjson_result<arm64::ondemand::value> operator[](std::string_view key) && noexcept;
   simdjson_inline simdjson_result<arm64::ondemand::value> at_pointer(std::string_view json_pointer) noexcept;
   simdjson_inline simdjson_result<arm64::ondemand::value> at_path(std::string_view json_path) noexcept;
-
   inline simdjson_result<bool> reset() noexcept;
   inline simdjson_result<bool> is_empty() noexcept;
   inline simdjson_result<size_t> count_fields() & noexcept;
   inline simdjson_result<std::string_view> raw_json() noexcept;
+  #if SIMDJSON_SUPPORTS_DESERIALIZATION
+  // TODO: move this code into object-inl.h
 
+  template<typename T>
+  simdjson_inline simdjson_result<T> get() noexcept {
+    if (error()) { return error(); }
+    if constexpr (std::is_same_v<T, arm64::ondemand::object>) {
+      return first;
+    }
+    return first.get<T>();
+  }
+  template<typename T>
+  simdjson_inline error_code get(T& out) noexcept {
+    if (error()) { return error(); }
+    if constexpr (std::is_same_v<T, arm64::ondemand::object>) {
+      out = first;
+    } else {
+      SIMDJSON_TRY( first.get<T>(out) );
+    }
+    return SUCCESS;
+  }
+#endif // SIMDJSON_SUPPORTS_DESERIALIZATION
 };
 
 } // namespace simdjson
@@ -37078,6 +37514,20 @@ inline simdjson_result<std::string_view> to_json_string(simdjson_result<arm64::o
 inline simdjson_result<std::string_view> to_json_string(simdjson_result<arm64::ondemand::value> x);
 inline simdjson_result<std::string_view> to_json_string(simdjson_result<arm64::ondemand::object> x);
 inline simdjson_result<std::string_view> to_json_string(simdjson_result<arm64::ondemand::array> x);
+
+#if SIMDJSON_STATIC_REFLECTION
+/**
+ * Create a JSON string from any user-defined type using static reflection.
+ * Only available when SIMDJSON_STATIC_REFLECTION is enabled.
+ */
+template<typename T>
+  requires(!std::same_as<T, arm64::ondemand::document> &&
+           !std::same_as<T, arm64::ondemand::value> &&
+           !std::same_as<T, arm64::ondemand::object> &&
+           !std::same_as<T, arm64::ondemand::array>)
+inline std::string to_json_string(const T& obj);
+#endif
+
 } // namespace simdjson
 
 /**
@@ -37154,12 +37604,17 @@ inline std::ostream& operator<<(std::ostream& out, simdjson::simdjson_result<sim
 #ifndef SIMDJSON_ONDEMAND_DESERIALIZE_H
 /* amalgamation skipped (editor-only): #ifndef SIMDJSON_CONDITIONAL_INCLUDE */
 /* amalgamation skipped (editor-only): #define SIMDJSON_ONDEMAND_DESERIALIZE_H */
+/* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/object.h" */
 /* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/array.h" */
 /* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/base.h" */
 /* amalgamation skipped (editor-only): #endif // SIMDJSON_CONDITIONAL_INCLUDE */
 
 #include <concepts>
 #include <limits>
+#if SIMDJSON_STATIC_REFLECTION
+#include <experimental/meta>
+// #include <static_reflection> // for std::define_static_string - header not available yet
+#endif
 
 namespace simdjson {
 template <typename T>
@@ -37206,6 +37661,22 @@ error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept {
   return SUCCESS;
 }
 
+//////////////////////////////
+// String deserialization
+//////////////////////////////
+
+// just a character!
+error_code tag_invoke(deserialize_tag, auto &val, char &out) noexcept {
+  std::string_view x;
+  SIMDJSON_TRY(val.get_string().get(x));
+  if(x.size() != 1) {
+    return INCORRECT_TYPE;
+  }
+  out = x[0];
+  return SUCCESS;
+}
+
+// any string-like type (can be constructed from std::string_view)
 template <concepts::constructible_from_string_view T, typename ValT>
   requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(std::is_nothrow_constructible_v<T, std::string_view>) {
@@ -37227,15 +37698,20 @@ template <concepts::appendable_containers T, typename ValT>
   requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(false) {
   using value_type = typename std::remove_cvref_t<T>::value_type;
-  static_assert(
+  /*static_assert(
       deserializable<value_type, ValT>,
-      "The specified type inside the container must itself be deserializable");
+      "The specified type inside the container must itself be deserializable");*/
   static_assert(
       std::is_default_constructible_v<value_type>,
       "The specified type inside the container must default constructible.");
 
   arm64::ondemand::array arr;
-  SIMDJSON_TRY(val.get_array().get(arr));
+  if constexpr (std::is_same_v<std::remove_cvref_t<ValT>, arm64::ondemand::array>) {
+    arr = val;
+  } else {
+    SIMDJSON_TRY(val.get_array().get(arr));
+  }
+
   for (auto v : arr) {
     if constexpr (concepts::returns_reference<T>) {
       if (auto const err = v.get<value_type>().get(concepts::emplace_one(out));
@@ -37292,7 +37768,45 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(false) {
  return SUCCESS;
 }
 
+template <concepts::string_view_keyed_map T>
+error_code tag_invoke(deserialize_tag, arm64::ondemand::object &obj, T &out) noexcept {
+  using value_type = typename std::remove_cvref_t<T>::mapped_type;
 
+  out.clear();
+  for (auto field : obj) {
+    std::string_view key;
+    SIMDJSON_TRY(field.unescaped_key().get(key));
+
+    arm64::ondemand::value value_obj;
+    SIMDJSON_TRY(field.value().get(value_obj));
+
+    value_type this_value;
+    SIMDJSON_TRY(value_obj.get(this_value));
+    out.emplace(typename T::key_type(key), std::move(this_value));
+  }
+  return SUCCESS;
+}
+
+template <concepts::string_view_keyed_map T>
+error_code tag_invoke(deserialize_tag, arm64::ondemand::value &val, T &out) noexcept {
+  arm64::ondemand::object obj;
+  SIMDJSON_TRY(val.get_object().get(obj));
+  return simdjson::deserialize(obj, out);
+}
+
+template <concepts::string_view_keyed_map T>
+error_code tag_invoke(deserialize_tag, arm64::ondemand::document &doc, T &out) noexcept {
+  arm64::ondemand::object obj;
+  SIMDJSON_TRY(doc.get_object().get(obj));
+  return simdjson::deserialize(obj, out);
+}
+
+template <concepts::string_view_keyed_map T>
+error_code tag_invoke(deserialize_tag, arm64::ondemand::document_reference &doc, T &out) noexcept {
+  arm64::ondemand::object obj;
+  SIMDJSON_TRY(doc.get_object().get(obj));
+  return simdjson::deserialize(obj, out);
+}
 
 
 /**
@@ -37335,22 +37849,334 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(nothrow_deser
 /**
  * This CPO (Customization Point Object) will help deserialize into optional types.
  */
-template <concepts::optional_type T, typename ValT>
+template <concepts::optional_type T>
   requires(!require_custom_serialization<T>)
-error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(nothrow_deserializable<typename std::remove_cvref_t<T>::value_type, ValT>) {
+error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept(nothrow_deserializable<typename std::remove_cvref_t<T>::value_type, decltype(val)>) {
   using value_type = typename std::remove_cvref_t<T>::value_type;
 
-  static_assert(
-      deserializable<value_type, ValT>,
-      "The specified type inside the unique_ptr must itself be deserializable");
-  static_assert(
-      std::is_default_constructible_v<value_type>,
-      "The specified type inside the unique_ptr must default constructible.");
+  // Check if the value is null
+  if (val.is_null()) {
+    out.reset(); // Set to nullopt
+    return SUCCESS;
+  }
 
   if (!out) {
     out.emplace();
   }
   SIMDJSON_TRY(val.template get<value_type>(out.value()));
+  return SUCCESS;
+}
+
+
+#if SIMDJSON_STATIC_REFLECTION
+
+
+template <typename T>
+constexpr bool user_defined_type = (std::is_class_v<T>
+&& !std::is_same_v<T, std::string> && !std::is_same_v<T, std::string_view> && !concepts::optional_type<T> &&
+!concepts::appendable_containers<T> && !require_custom_serialization<T>);
+
+
+// workaround from
+// https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2024/p2996r10.html#back-and-forth
+// for missing expansion statements
+namespace __impl {
+  template<auto... vals>
+  struct replicator_type {
+    template<typename F>
+      constexpr void operator>>(F body) const {
+        (body.template operator()<vals>(), ...);
+      }
+  };
+
+  template<auto... vals>
+  replicator_type<vals...> replicator = {};
+}
+
+template<typename R>
+consteval auto expand(R range) {
+  std::vector<std::meta::info> args;
+  for (auto r : range) {
+    args.push_back(reflect_constant(r));
+  }
+  return substitute(^^__impl::replicator, args);
+}
+// end of workaround
+
+template <typename T, typename ValT>
+  requires(user_defined_type<T> && std::is_class_v<T>)
+error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept {
+  arm64::ondemand::object obj;
+  if constexpr (std::is_same_v<std::remove_cvref_t<ValT>, arm64::ondemand::object>) {
+    obj = val;
+  } else {
+    SIMDJSON_TRY(val.get_object().get(obj));
+  }
+  error_code e = simdjson::SUCCESS;
+
+  [:expand(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked())):] >> [&]<auto mem>() {
+    if constexpr (!std::meta::is_const(mem) && std::meta::is_public(mem)) {
+      constexpr std::string_view key = std::define_static_string(std::meta::identifier_of(mem));
+      // Note: removed static assert as optional types are now handled generically
+      // as long we are succesful or the field is not found, we continue
+      if(e == simdjson::SUCCESS || e == simdjson::NO_SUCH_FIELD) {
+        e = obj[key].get(out.[:mem:]);
+      }
+    }
+  };
+  return e;
+}
+
+// Support for enum deserialization - deserialize from string representation using expand approach from P2996R12
+template <typename T, typename ValT>
+  requires(std::is_enum_v<T>)
+error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept {
+#if SIMDJSON_STATIC_REFLECTION
+  std::string_view str;
+  SIMDJSON_TRY(val.get_string().get(str));
+
+  bool found = false;
+  [:expand(std::meta::enumerators_of(^^T)):] >> [&]<auto enum_val>{
+    if (!found && str == std::meta::identifier_of(enum_val)) {
+      out = [:enum_val:];
+      found = true;
+    }
+  };
+
+  return found ? SUCCESS : INCORRECT_TYPE;
+#else
+  // Fallback: deserialize as integer if reflection not available
+  std::underlying_type_t<T> int_val;
+  SIMDJSON_TRY(val.get(int_val));
+  out = static_cast<T>(int_val);
+  return SUCCESS;
+#endif
+}
+
+template <typename simdjson_value, typename T>
+  requires(user_defined_type<std::remove_cvref_t<T>>)
+error_code tag_invoke(deserialize_tag, simdjson_value &val, std::unique_ptr<T> &out) noexcept {
+  if (!out) {
+    out = std::make_unique<T>();
+    if (!out) {
+      return MEMALLOC;
+    }
+  }
+  if (auto err = val.get(*out)) {
+    out.reset();
+    return err;
+  }
+  return SUCCESS;
+}
+
+template <typename simdjson_value, typename T>
+  requires(user_defined_type<std::remove_cvref_t<T>>)
+error_code tag_invoke(deserialize_tag, simdjson_value &val, std::shared_ptr<T> &out) noexcept {
+  if (!out) {
+    out = std::make_shared<T>();
+    if (!out) {
+      return MEMALLOC;
+    }
+  }
+  if (auto err = val.get(*out)) {
+    out.reset();
+    return err;
+  }
+  return SUCCESS;
+}
+
+#endif // SIMDJSON_STATIC_REFLECTION
+
+////////////////////////////////////////
+// Unique pointers
+////////////////////////////////////////
+error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<bool> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_unique<bool>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_bool().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<int64_t> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_unique<int64_t>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_int64().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<uint64_t> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_unique<uint64_t>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_uint64().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<double> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_unique<double>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_double().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<std::string_view> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_unique<std::string_view>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_string().get(*out));
+  return SUCCESS;
+}
+
+
+////////////////////////////////////////
+// Shared pointers
+////////////////////////////////////////
+error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<bool> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_shared<bool>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_bool().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<int64_t> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_shared<int64_t>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_int64().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<uint64_t> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_shared<uint64_t>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_uint64().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<double> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_shared<double>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_double().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<std::string_view> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_shared<std::string_view>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_string().get(*out));
+  return SUCCESS;
+}
+
+
+////////////////////////////////////////
+// Explicit optional specializations
+////////////////////////////////////////
+
+////////////////////////////////////////
+// Explicit smart pointer specializations for string and int types
+////////////////////////////////////////
+error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<std::string> &out) noexcept {
+  // Check if the value is null
+  if (val.is_null()) {
+    out.reset(); // Set to nullptr
+    return SUCCESS;
+  }
+
+  if (!out) {
+    out = std::make_unique<std::string>();
+  }
+  std::string_view str;
+  SIMDJSON_TRY(val.get_string().get(str));
+  *out = std::string{str};
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<std::string> &out) noexcept {
+  // Check if the value is null
+  if (val.is_null()) {
+    out.reset(); // Set to nullptr
+    return SUCCESS;
+  }
+
+  if (!out) {
+    out = std::make_shared<std::string>();
+  }
+  std::string_view str;
+  SIMDJSON_TRY(val.get_string().get(str));
+  *out = std::string{str};
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<int> &out) noexcept {
+  // Check if the value is null
+  if (val.is_null()) {
+    out.reset(); // Set to nullptr
+    return SUCCESS;
+  }
+
+  if (!out) {
+    out = std::make_unique<int>();
+  }
+  int64_t temp;
+  SIMDJSON_TRY(val.get_int64().get(temp));
+  *out = static_cast<int>(temp);
   return SUCCESS;
 }
 
@@ -37641,6 +38467,9 @@ simdjson_inline array_iterator &array_iterator::operator++() noexcept {
   return *this;
 }
 
+simdjson_inline bool array_iterator::at_end() const noexcept {
+  return iter.at_end();
+}
 } // namespace ondemand
 } // namespace arm64
 } // namespace simdjson
@@ -37677,7 +38506,9 @@ simdjson_inline simdjson_result<arm64::ondemand::array_iterator> &simdjson_resul
   ++(first);
   return *this;
 }
-
+simdjson_inline bool simdjson_result<arm64::ondemand::array_iterator>::at_end() const noexcept {
+  return !first.iter.is_valid() || first.at_end();
+}
 } // namespace simdjson
 
 #endif // SIMDJSON_GENERIC_ONDEMAND_ARRAY_ITERATOR_INL_H
@@ -38435,8 +39266,8 @@ simdjson_inline document::operator object() & noexcept(false) { return get_objec
 simdjson_inline document::operator uint64_t() noexcept(false) { return get_uint64(); }
 simdjson_inline document::operator int64_t() noexcept(false) { return get_int64(); }
 simdjson_inline document::operator double() noexcept(false) { return get_double(); }
-simdjson_inline document::operator std::string_view() noexcept(false) { return get_string(false); }
-simdjson_inline document::operator raw_json_string() noexcept(false) { return get_raw_json_string(); }
+simdjson_inline document::operator std::string_view() noexcept(false) simdjson_lifetime_bound { return get_string(false); }
+simdjson_inline document::operator raw_json_string() noexcept(false) simdjson_lifetime_bound { return get_raw_json_string(); }
 simdjson_inline document::operator bool() noexcept(false) { return get_bool(); }
 simdjson_inline document::operator value() noexcept(false) { return get_value(); }
 
@@ -39993,6 +40824,8 @@ simdjson_inline void json_iterator::assert_valid_position(token_position positio
 #ifndef SIMDJSON_CLANG_VISUAL_STUDIO
   SIMDJSON_ASSUME( position >= &parser->implementation->structural_indexes[0] );
   SIMDJSON_ASSUME( position < &parser->implementation->structural_indexes[parser->implementation->n_structural_indexes] );
+#else
+  (void)position; // Suppress unused parameter warning
 #endif
 }
 
@@ -40841,6 +41674,7 @@ simdjson_inline  simdjson_result<std::string_view> simdjson_result<arm64::ondema
   if (error()) { return error(); }
   return first.raw_json();
 }
+
 } // namespace simdjson
 
 #endif // SIMDJSON_GENERIC_ONDEMAND_OBJECT_INL_H
@@ -41416,6 +42250,9 @@ simdjson_inline simdjson_warn_unused simdjson_result<std::string_view> simdjson_
 /* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/object.h" */
 /* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/serialization.h" */
 /* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/value.h" */
+/* amalgamation skipped (editor-only): #if SIMDJSON_STATIC_REFLECTION */
+/* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/json_builder.h" */
+/* amalgamation skipped (editor-only): #endif */
 /* amalgamation skipped (editor-only): #endif // SIMDJSON_CONDITIONAL_INCLUDE */
 
 namespace simdjson {
@@ -42837,6 +43674,1151 @@ simdjson_inline simdjson_result<arm64::ondemand::value_iterator>::simdjson_resul
 #endif // SIMDJSON_GENERIC_ONDEMAND_VALUE_ITERATOR_INL_H
 /* end file simdjson/generic/ondemand/value_iterator-inl.h for arm64 */
 
+// JSON builder, ideally they should not be part of the ondemand directory
+// but it is convenient for now to have them here.
+/* including simdjson/generic/ondemand/json_string_builder.h for arm64: #include "simdjson/generic/ondemand/json_string_builder.h" */
+/* begin file simdjson/generic/ondemand/json_string_builder.h for arm64 */
+/**
+ * This file is part of the builder API. It is temporarily in the ondemand directory
+ * but we will move it to a builder directory later.
+ */
+#ifndef SIMDJSON_GENERIC_STRING_BUILDER_H
+
+/* amalgamation skipped (editor-only): #ifndef SIMDJSON_CONDITIONAL_INCLUDE */
+/* amalgamation skipped (editor-only): #define SIMDJSON_GENERIC_STRING_BUILDER_H */
+/* amalgamation skipped (editor-only): #include "simdjson/generic/implementation_simdjson_result_base.h" */
+/* amalgamation skipped (editor-only): #endif // SIMDJSON_CONDITIONAL_INCLUDE */
+
+namespace simdjson {
+namespace arm64 {
+namespace builder {
+
+/**
+ * A builder for JSON strings representing documents. This is a low-level
+ * builder that is not meant to be used directly by end-users. Though it
+ * supports atomic types (Booleans, strings), it does not support composed
+ * types (arrays and objects).
+ *
+ * Ultimately, this class can support kernel-specific optimizations. E.g.,
+ * it may make use of SIMD instructions to escape strings faster.
+ */
+class string_builder {
+public:
+  simdjson_inline string_builder(size_t initial_capacity = 1024);
+
+  /**
+   * Append number (includes Booleans). Booleans are mapped to the strings
+   * false and true. Numbers are converted to strings abiding by the JSON standard.
+   * Floating-point numbers are converted to the shortest string that 'correctly'
+   * represents the number.
+   */
+  template<typename number_type,
+         typename = typename std::enable_if<std::is_arithmetic<number_type>::value>::type>
+  simdjson_inline void append(number_type v) noexcept;
+
+  /**
+   * Append character c.
+   */
+  simdjson_inline void append(char c)  noexcept;
+
+  /**
+   * Append the string 'null'.
+   */
+  simdjson_inline void append_null()  noexcept;
+
+  /**
+   * Clear the content.
+   */
+  simdjson_inline void clear()  noexcept;
+
+  /**
+   * Append the std::string_view, after escaping it.
+   * There is no UTF-8 validation.
+   */
+  simdjson_inline void escape_and_append(std::string_view input)  noexcept;
+
+  /**
+   * Append the std::string_view surrounded by double quotes, after escaping it.
+   * There is no UTF-8 validation.
+   */
+  simdjson_inline void escape_and_append_with_quotes(std::string_view input)  noexcept;
+
+  /**
+   * Append the character surrounded by double quotes, after escaping it.
+   * There is no UTF-8 validation.
+   */
+  simdjson_inline void escape_and_append_with_quotes(char input)  noexcept;
+
+  /**
+   * Append the character surrounded by double quotes, after escaping it.
+   * There is no UTF-8 validation.
+   */
+   simdjson_inline void escape_and_append_with_quotes(const char* input)  noexcept;
+
+  /**
+   * Append the C string directly, without escaping.
+   * There is no UTF-8 validation.
+   */
+  simdjson_inline void append_raw(const char *c)  noexcept;
+
+  /**
+   * Append "{" to the buffer.
+   */
+  simdjson_inline void start_object()  noexcept;
+
+  /**
+   * Append "}" to the buffer.
+   */
+  simdjson_inline void end_object()  noexcept;
+
+  /**
+   * Append "[" to the buffer.
+   */
+  simdjson_inline void start_array()  noexcept;
+
+  /**
+   * Append "]" to the buffer.
+   */
+  simdjson_inline void end_array()  noexcept;
+
+  /**
+   * Append "," to the buffer.
+   */
+  simdjson_inline void append_comma()  noexcept;
+
+  /**
+   * Append ":" to the buffer.
+   */
+  simdjson_inline void append_colon()  noexcept;
+
+  /**
+   * Append a key-value pair to the buffer.
+   * The key is escaped and surrounded by double quotes.
+   * The value is escaped if it is a string.
+   */
+   template<typename key_type, typename value_type>
+  simdjson_inline void append_key_value(key_type key, value_type value) noexcept;
+  /**
+   * Append the std::string_view directly, without escaping.
+   * There is no UTF-8 validation.
+   */
+  simdjson_inline void append_raw(std::string_view input)  noexcept;
+
+  /**
+   * Append len characters from str.
+   * There is no UTF-8 validation.
+   */
+  simdjson_inline void append_raw(const char *str, size_t len) noexcept;
+#if SIMDJSON_EXCEPTIONS
+  /**
+   * Creates an std::string from the written JSON buffer.
+   * Throws if memory allocation failed
+   *
+   * The result may not be valid UTF-8 if some of your content was not valid UTF-8.
+   * Use validate_unicode() to check the content if needed.
+   */
+  simdjson_inline operator std::string() const noexcept(false);
+
+  /**
+   * Creates an std::string_view from the written JSON buffer.
+   * Throws if memory allocation failed.
+   *
+   * The result may not be valid UTF-8 if some of your content was not valid UTF-8.
+   * Use validate_unicode() to check the content if needed.
+   */
+  simdjson_inline operator std::string_view() const noexcept(false) simdjson_lifetime_bound;
+#endif
+
+  /**
+   * Returns a view on the written JSON buffer. Returns an error
+   * if memory allocation failed.
+   *
+   * The result may not be valid UTF-8 if some of your content was not valid UTF-8.
+   * Use validate_unicode() to check the content.
+   */
+  simdjson_inline simdjson_result<std::string_view> view() const noexcept;
+
+  /**
+   * Appends the null character to the buffer and returns
+   * a pointer to the beginning of the written JSON buffer.
+   * Returns an error if memory allocation failed.
+   * The result is null-terminated.
+   *
+   * The result may not be valid UTF-8 if some of your content was not valid UTF-8.
+   * Use validate_unicode() to check the content.
+   */
+  simdjson_inline simdjson_result<const char *> c_str() noexcept;
+
+  /**
+   * Return true if the content is valid UTF-8.
+   */
+  simdjson_inline bool validate_unicode() const noexcept;
+
+  /**
+   * Returns the current size of the written JSON buffer.
+   * If an error occurred, returns 0.
+   */
+  simdjson_inline size_t size() const noexcept;
+
+private:
+  /**
+   * Returns true if we can write at least upcoming_bytes bytes.
+   * The underlying buffer is reallocated if needed. It is designed
+   * to be called before writing to the buffer. It should be fast.
+   */
+  simdjson_inline bool capacity_check(size_t upcoming_bytes);
+
+  /**
+   * Grow the buffer to at least desired_capacity bytes.
+   * If the allocation fails, is_valid is set to false. We expect
+   * that this function would not be repeatedly called.
+   */
+  simdjson_inline void grow_buffer(size_t desired_capacity);
+
+  /**
+   * We use this helper function to make sure that is_valid is kept consistent.
+   */
+  simdjson_inline void set_valid(bool valid) noexcept;
+
+  std::unique_ptr<char[]> buffer{};
+  size_t position{0};
+  size_t capacity{0};
+  bool is_valid{true};
+};
+
+
+
+}
+}
+} // namespace simdjson
+
+#endif // SIMDJSON_GENERIC_STRING_BUILDER_H
+/* end file simdjson/generic/ondemand/json_string_builder.h for arm64 */
+/* including simdjson/generic/ondemand/json_string_builder-inl.h for arm64: #include "simdjson/generic/ondemand/json_string_builder-inl.h" */
+/* begin file simdjson/generic/ondemand/json_string_builder-inl.h for arm64 */
+/**
+ * This file is part of the builder API. It is temporarily in the ondemand
+ * directory but we will move it to a builder directory later.
+ */
+#include <array>
+#include <cstring>
+#include <type_traits>
+#ifndef SIMDJSON_GENERIC_STRING_BUILDER_INL_H
+
+/* amalgamation skipped (editor-only): #ifndef SIMDJSON_CONDITIONAL_INCLUDE */
+/* amalgamation skipped (editor-only): #define SIMDJSON_GENERIC_STRING_BUILDER_INL_H */
+/* amalgamation skipped (editor-only): #include "simdjson/generic/builder/json_string_builder.h" */
+/* amalgamation skipped (editor-only): #endif // SIMDJSON_CONDITIONAL_INCLUDE */
+
+/*
+ * Empirically, we have found that an inlined optimization is important for
+ * performance. The following macros are not ideal. We should find a better
+ * way to inline the code.
+ */
+
+#if defined(__SSE2__) || defined(__x86_64__) || defined(__x86_64) ||           \
+    (defined(_M_AMD64) || defined(_M_X64) ||                                   \
+     (defined(_M_IX86_FP) && _M_IX86_FP == 2))
+#ifndef SIMDJSON_EXPERIMENTAL_HAS_SSE2
+#define SIMDJSON_EXPERIMENTAL_HAS_SSE2 1
+#endif
+#endif
+
+#if defined(__aarch64__) || defined(_M_ARM64)
+#ifndef SIMDJSON_EXPERIMENTAL_HAS_NEON
+#define SIMDJSON_EXPERIMENTAL_HAS_NEON 1
+#endif
+#endif
+#if SIMDJSON_EXPERIMENTAL_HAS_NEON
+#include <arm_neon.h>
+#endif
+#if SIMDJSON_EXPERIMENTAL_HAS_SSE2
+#include <emmintrin.h>
+#endif
+
+namespace simdjson {
+namespace arm64 {
+namespace builder {
+
+static SIMDJSON_CONSTEXPR_LAMBDA std::array<uint8_t, 256> json_quotable_character = {
+  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+  1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+
+/**
+
+A possible SWAR implementation of has_json_escapable_byte. It is not used because
+it is slower than the current implementation. It is kept here for reference (to show
+that we tried it).
+
+inline bool has_json_escapable_byte(uint64_t x) {
+  uint64_t is_ascii = 0x8080808080808080ULL & ~x;
+  uint64_t xor2 = x ^ 0x0202020202020202ULL;
+  uint64_t lt32_or_eq34 = xor2 - 0x2121212121212121ULL;
+  uint64_t sub92 = x ^ 0x5C5C5C5C5C5C5C5CULL;
+  uint64_t eq92 = (sub92 - 0x0101010101010101ULL);
+  return ((lt32_or_eq34 | eq92) & is_ascii) != 0;
+}
+
+**/
+
+SIMDJSON_CONSTEXPR_LAMBDA simdjson_inline bool
+simple_needs_escaping(std::string_view v) {
+  for (char c : v) {
+    // a table lookup is faster than a series of comparisons
+    if(json_quotable_character[static_cast<uint8_t>(c)]) {
+      return true;
+    }
+  }
+  return false;
+}
+
+#if SIMDJSON_EXPERIMENTAL_HAS_NEON
+simdjson_inline bool fast_needs_escaping(std::string_view view) {
+  if (view.size() < 16) {
+    return simple_needs_escaping(view);
+  }
+  size_t i = 0;
+  uint8x16_t running = vdupq_n_u8(0);
+  uint8x16_t v34 = vdupq_n_u8(34);
+  uint8x16_t v92 = vdupq_n_u8(92);
+
+  for (; i + 15 < view.size(); i += 16) {
+    uint8x16_t word = vld1q_u8((const uint8_t *)view.data() + i);
+    running = vorrq_u8(running, vceqq_u8(word, v34));
+    running = vorrq_u8(running, vceqq_u8(word, v92));
+    running = vorrq_u8(running, vcltq_u8(word, vdupq_n_u8(32)));
+  }
+  if (i < view.size()) {
+    uint8x16_t word =
+        vld1q_u8((const uint8_t *)view.data() + view.length() - 16);
+    running = vorrq_u8(running, vceqq_u8(word, v34));
+    running = vorrq_u8(running, vceqq_u8(word, v92));
+    running = vorrq_u8(running, vcltq_u8(word, vdupq_n_u8(32)));
+  }
+  return vmaxvq_u32(vreinterpretq_u32_u8(running)) != 0;
+}
+#elif SIMDJSON_EXPERIMENTAL_HAS_SSE2
+simdjson_inline bool fast_needs_escaping(std::string_view view) {
+  if (view.size() < 16) {
+    return simple_needs_escaping(view);
+  }
+  size_t i = 0;
+  __m128i running = _mm_setzero_si128();
+  for (; i + 15 < view.size(); i += 16) {
+
+    __m128i word = _mm_loadu_si128(reinterpret_cast<const __m128i *>(view.data() + i));
+    running = _mm_or_si128(running, _mm_cmpeq_epi8(word, _mm_set1_epi8(34)));
+    running = _mm_or_si128(running, _mm_cmpeq_epi8(word, _mm_set1_epi8(92)));
+    running = _mm_or_si128(
+        running, _mm_cmpeq_epi8(_mm_subs_epu8(word, _mm_set1_epi8(31)),
+                                _mm_setzero_si128()));
+  }
+  if (i < view.size()) {
+    __m128i word =
+        _mm_loadu_si128(reinterpret_cast<const __m128i *>(view.data() + view.length() - 16));
+    running = _mm_or_si128(running, _mm_cmpeq_epi8(word, _mm_set1_epi8(34)));
+    running = _mm_or_si128(running, _mm_cmpeq_epi8(word, _mm_set1_epi8(92)));
+    running = _mm_or_si128(
+        running, _mm_cmpeq_epi8(_mm_subs_epu8(word, _mm_set1_epi8(31)),
+                                _mm_setzero_si128()));
+  }
+  return _mm_movemask_epi8(running) != 0;
+}
+#else
+simdjson_inline bool fast_needs_escaping(std::string_view view) {
+  return simple_needs_escaping(view);
+}
+#endif
+
+
+SIMDJSON_CONSTEXPR_LAMBDA inline size_t
+find_next_json_quotable_character(const std::string_view view,
+                                  size_t location) noexcept {
+
+  for (auto pos = view.begin() + location; pos != view.end(); ++pos) {
+    if (json_quotable_character[static_cast<uint8_t>(*pos)]) {
+      return pos - view.begin();
+    }
+  }
+  return size_t(view.size());
+}
+
+SIMDJSON_CONSTEXPR_LAMBDA static std::string_view control_chars[] = {
+    "\\x0000", "\\x0001", "\\x0002", "\\x0003", "\\x0004", "\\x0005", "\\x0006",
+    "\\x0007", "\\x0008", "\\t",     "\\n",     "\\x000b", "\\f",     "\\r",
+    "\\x000e", "\\x000f", "\\x0010", "\\x0011", "\\x0012", "\\x0013", "\\x0014",
+    "\\x0015", "\\x0016", "\\x0017", "\\x0018", "\\x0019", "\\x001a", "\\x001b",
+    "\\x001c", "\\x001d", "\\x001e", "\\x001f"};
+
+SIMDJSON_CONSTEXPR_LAMBDA void escape_json_char(char c, char *&out) {
+  if (c == '"') {
+    memcpy(out, "\\\"", 2);
+    out += 2;
+  } else if (c == '\\') {
+    memcpy(out, "\\\\", 2);
+    out += 2;
+  } else {
+    std::string_view v = control_chars[uint8_t(c)];
+    memcpy(out, v.data(), v.size());
+    out += v.size();
+  }
+}
+
+inline size_t write_string_escaped(const std::string_view input, char *out) {
+  size_t mysize = input.size();
+  if (!fast_needs_escaping(input)) { // fast path!
+    memcpy(out, input.data(), input.size());
+    return input.size();
+  }
+  const char *const initout = out;
+  size_t location = find_next_json_quotable_character(input, 0);
+  memcpy(out, input.data(), location);
+  out += location;
+  escape_json_char(input[location], out);
+  location += 1;
+  while (location < mysize) {
+    size_t newlocation = find_next_json_quotable_character(input, location);
+    memcpy(out, input.data() + location, newlocation - location);
+    out += newlocation - location;
+    location = newlocation;
+    if (location == mysize) {
+      break;
+    }
+    escape_json_char(input[location], out);
+    location += 1;
+  }
+  return out - initout;
+}
+
+#if SIMDJSON_CONSTEVAL
+// unoptimized, meant for compile-time execution
+consteval std::string consteval_to_quoted_escaped(std::string_view input) {
+  std::string out = "\"";
+  for (char c : input) {
+    if (json_quotable_character[uint8_t(c)]) {
+      if (c == '"') {
+        out.append("\\\"");
+      } else if (c == '\\') {
+        out.append("\\\\");
+      } else {
+        std::string_view v = control_chars[uint8_t(c)];
+        out.append(v);
+      }
+    } else {
+      out.push_back(c);
+    }
+  }
+  out.push_back('"');
+  return out;
+}
+#endif // SIMDJSON_CONSTEVAL
+
+simdjson_inline string_builder::string_builder(size_t initial_capacity)
+    : buffer(new(std::nothrow) char[initial_capacity]), position(0),
+      capacity(buffer.get() != nullptr ? initial_capacity : 0),
+      is_valid(buffer.get() != nullptr) {}
+
+simdjson_inline bool string_builder::capacity_check(size_t upcoming_bytes) {
+  // We use the convention that when is_valid is false, then the capacity and
+  // the position are 0.
+  // Most of the time, this function will return true.
+  if (simdjson_likely(upcoming_bytes <= capacity - position)) {
+    return true;
+  }
+  // check for overflow, most of the time there is no overflow
+  if (simdjson_likely(position + upcoming_bytes < position)) {
+    return false;
+  }
+  // We will rarely get here.
+  grow_buffer((std::max)(capacity * 2, position + upcoming_bytes));
+  // If the buffer allocation failed, we set is_valid to false.
+  return is_valid;
+}
+
+simdjson_inline void string_builder::grow_buffer(size_t desired_capacity) {
+  if (!is_valid) {
+    return;
+  }
+  std::unique_ptr<char[]> new_buffer(new (std::nothrow) char[desired_capacity]);
+  if (new_buffer.get() == nullptr) {
+    set_valid(false);
+    return;
+  }
+  std::memcpy(new_buffer.get(), buffer.get(), position);
+  buffer.swap(new_buffer);
+  capacity = desired_capacity;
+}
+
+simdjson_inline void string_builder::set_valid(bool valid) noexcept {
+  if (!valid) {
+    is_valid = false;
+    capacity = 0;
+    position = 0;
+    buffer.reset();
+  } else {
+    is_valid = true;
+  }
+}
+
+simdjson_inline size_t string_builder::size() const noexcept {
+  return position;
+}
+
+simdjson_inline void string_builder::append(char c) noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position++] = c;
+  }
+}
+
+simdjson_inline void string_builder::append_null() noexcept {
+  constexpr char null_literal[] = "null";
+  constexpr size_t null_len = sizeof(null_literal) - 1;
+  if (capacity_check(null_len)) {
+    std::memcpy(buffer.get() + position, null_literal, null_len);
+    position += null_len;
+  }
+}
+
+simdjson_inline void string_builder::clear() noexcept {
+  position = 0;
+  // if it was invalid, we should try to repair it
+  if (!is_valid) {
+    capacity = 0;
+    buffer.reset();
+    is_valid = true;
+  }
+}
+
+namespace internal {
+
+// We could specialize further for 32-bit integers.
+simdjson_really_inline int int_log2(uint32_t x) { return (63 - leading_zeroes(x | 1)); }
+
+simdjson_really_inline int fast_digit_count(uint32_t x) {
+  static uint64_t table[] = {
+      4294967296,  8589934582,  8589934582,  8589934582,  12884901788,
+      12884901788, 12884901788, 17179868184, 17179868184, 17179868184,
+      21474826480, 21474826480, 21474826480, 21474826480, 25769703776,
+      25769703776, 25769703776, 30063771072, 30063771072, 30063771072,
+      34349738368, 34349738368, 34349738368, 34349738368, 38554705664,
+      38554705664, 38554705664, 41949672960, 41949672960, 41949672960,
+      42949672960, 42949672960};
+  return uint32_t((x + table[int_log2(x)]) >> 32);
+}
+
+simdjson_really_inline int int_log2(uint64_t x) { return 63 - leading_zeroes(x | 1); }
+
+simdjson_really_inline int fast_digit_count(uint64_t x) {
+  static uint64_t table[] = {9,
+                             99,
+                             999,
+                             9999,
+                             99999,
+                             999999,
+                             9999999,
+                             99999999,
+                             999999999,
+                             9999999999,
+                             99999999999,
+                             999999999999,
+                             9999999999999,
+                             99999999999999,
+                             999999999999999ULL,
+                             9999999999999999ULL,
+                             99999999999999999ULL,
+                             999999999999999999ULL,
+                             9999999999999999999ULL};
+  int y = (19 * int_log2(x) >> 6);
+  y += x > table[y];
+  return y + 1;
+}
+
+template <typename number_type, typename = typename std::enable_if<
+                                    std::is_unsigned<number_type>::value>::type>
+simdjson_really_inline size_t digit_count(number_type v) noexcept {
+  static_assert(sizeof(number_type) == 8 || sizeof(number_type) == 4 ||
+                    sizeof(number_type) == 2 || sizeof(number_type) == 1,
+                "We only support 8-bit, 16-bit, 32-bit and 64-bit numbers");
+  return fast_digit_count(v);
+}
+static const char decimal_table[200] = {
+  0x30, 0x30, 0x30, 0x31, 0x30, 0x32, 0x30, 0x33, 0x30, 0x34, 0x30, 0x35,
+  0x30, 0x36, 0x30, 0x37, 0x30, 0x38, 0x30, 0x39, 0x31, 0x30, 0x31, 0x31,
+  0x31, 0x32, 0x31, 0x33, 0x31, 0x34, 0x31, 0x35, 0x31, 0x36, 0x31, 0x37,
+  0x31, 0x38, 0x31, 0x39, 0x32, 0x30, 0x32, 0x31, 0x32, 0x32, 0x32, 0x33,
+  0x32, 0x34, 0x32, 0x35, 0x32, 0x36, 0x32, 0x37, 0x32, 0x38, 0x32, 0x39,
+  0x33, 0x30, 0x33, 0x31, 0x33, 0x32, 0x33, 0x33, 0x33, 0x34, 0x33, 0x35,
+  0x33, 0x36, 0x33, 0x37, 0x33, 0x38, 0x33, 0x39, 0x34, 0x30, 0x34, 0x31,
+  0x34, 0x32, 0x34, 0x33, 0x34, 0x34, 0x34, 0x35, 0x34, 0x36, 0x34, 0x37,
+  0x34, 0x38, 0x34, 0x39, 0x35, 0x30, 0x35, 0x31, 0x35, 0x32, 0x35, 0x33,
+  0x35, 0x34, 0x35, 0x35, 0x35, 0x36, 0x35, 0x37, 0x35, 0x38, 0x35, 0x39,
+  0x36, 0x30, 0x36, 0x31, 0x36, 0x32, 0x36, 0x33, 0x36, 0x34, 0x36, 0x35,
+  0x36, 0x36, 0x36, 0x37, 0x36, 0x38, 0x36, 0x39, 0x37, 0x30, 0x37, 0x31,
+  0x37, 0x32, 0x37, 0x33, 0x37, 0x34, 0x37, 0x35, 0x37, 0x36, 0x37, 0x37,
+  0x37, 0x38, 0x37, 0x39, 0x38, 0x30, 0x38, 0x31, 0x38, 0x32, 0x38, 0x33,
+  0x38, 0x34, 0x38, 0x35, 0x38, 0x36, 0x38, 0x37, 0x38, 0x38, 0x38, 0x39,
+  0x39, 0x30, 0x39, 0x31, 0x39, 0x32, 0x39, 0x33, 0x39, 0x34, 0x39, 0x35,
+  0x39, 0x36, 0x39, 0x37, 0x39, 0x38, 0x39, 0x39,
+};
+} // namespace internal
+
+template <typename number_type, typename>
+simdjson_inline void string_builder::append(number_type v) noexcept {
+  static_assert(std::is_same<number_type, bool>::value ||
+                    std::is_integral<number_type>::value ||
+                    std::is_floating_point<number_type>::value,
+                "Unsupported number type");
+  // If C++17 is available, we can 'if constexpr' here.
+  SIMDJSON_IF_CONSTEXPR(std::is_same<number_type, bool>::value) {
+    if (v) {
+      constexpr char true_literal[] = "true";
+      constexpr size_t true_len = sizeof(true_literal) - 1;
+      if (capacity_check(true_len)) {
+        std::memcpy(buffer.get() + position, true_literal, true_len);
+        position += true_len;
+      }
+    } else {
+      constexpr char false_literal[] = "false";
+      constexpr size_t false_len = sizeof(false_literal) - 1;
+      if (capacity_check(false_len)) {
+        std::memcpy(buffer.get() + position, false_literal, false_len);
+        position += false_len;
+      }
+    }
+  }
+  else SIMDJSON_IF_CONSTEXPR(std::is_unsigned<number_type>::value) {
+    constexpr size_t max_number_size = 20;
+    if (capacity_check(max_number_size)) {
+      using unsigned_type = typename std::make_unsigned<number_type>::type;
+      unsigned_type pv = static_cast<unsigned_type>(v);
+      size_t dc = internal::digit_count(pv);
+      char *write_pointer = buffer.get() + position + dc - 1;
+      while (pv >= 100) {
+        memcpy(write_pointer - 1, &internal::decimal_table[(pv % 100)*2], 2);
+        write_pointer -= 2;
+        pv /= 100;
+      }
+      if (pv >= 10) {
+        *write_pointer-- = char('0' + (pv % 10));
+        pv /= 10;
+      }
+      *write_pointer = char('0' + pv);
+      position += dc;
+    }
+  }
+  else SIMDJSON_IF_CONSTEXPR(std::is_integral<number_type>::value) {
+    constexpr size_t max_number_size = 20;
+    if (capacity_check(max_number_size)) {
+      using unsigned_type = typename std::make_unsigned<number_type>::type;
+      bool negative = v < 0;
+      unsigned_type pv = static_cast<unsigned_type>(v);
+      if (negative) {
+        pv = 0 - pv; // the 0 is for Microsoft
+      }
+      size_t dc = internal::digit_count(pv);
+      if (negative) {
+        buffer.get()[position++] = '-';
+      }
+      char *write_pointer = buffer.get() + position + dc - 1;
+      while (pv >= 100) {
+        memcpy(write_pointer - 1, &internal::decimal_table[(pv % 100)*2], 2);
+        write_pointer -= 2;
+        pv /= 100;
+      }
+      if (pv >= 10) {
+        *write_pointer-- = char('0' + (pv % 10));
+        pv /= 10;
+      }
+      *write_pointer = char('0' + pv);
+      position += dc;
+    }
+  }
+  else SIMDJSON_IF_CONSTEXPR(std::is_floating_point<number_type>::value) {
+    constexpr size_t max_number_size = 24;
+    if (capacity_check(max_number_size)) {
+      // We could specialize for float.
+      char *end = simdjson::internal::to_chars(buffer.get() + position, nullptr,
+                                               double(v));
+      position = end - buffer.get();
+    }
+  }
+}
+
+simdjson_inline void
+string_builder::escape_and_append(std::string_view input) noexcept {
+  // escaping might turn a control character into \x00xx so 6 characters.
+  if (capacity_check(6 * input.size())) {
+    position += write_string_escaped(input, buffer.get() + position);
+  }
+}
+
+simdjson_inline void
+string_builder::escape_and_append_with_quotes(std::string_view input) noexcept {
+  // escaping might turn a control character into \x00xx so 6 characters.
+  if (capacity_check(2 + 6 * input.size())) {
+    buffer.get()[position++] = '"';
+    position += write_string_escaped(input, buffer.get() + position);
+    buffer.get()[position++] = '"';
+  }
+}
+
+simdjson_inline void
+string_builder::escape_and_append_with_quotes(char input) noexcept {
+  // escaping might turn a control character into \x00xx so 6 characters.
+  if (capacity_check(2 + 6 * 1)) {
+    buffer.get()[position++] = '"';
+    std::string_view cinput(&input, 1);
+    position += write_string_escaped(cinput, buffer.get() + position);
+    buffer.get()[position++] = '"';
+  }
+}
+
+simdjson_inline void string_builder::escape_and_append_with_quotes(const char* input)  noexcept {
+  std::string_view cinput(input);
+  escape_and_append_with_quotes(cinput);
+}
+
+simdjson_inline void string_builder::append_raw(const char *c) noexcept {
+  size_t len = std::strlen(c);
+  append_raw(c, len);
+}
+
+simdjson_inline void
+string_builder::append_raw(std::string_view input) noexcept {
+  if (capacity_check(input.size())) {
+    std::memcpy(buffer.get() + position, input.data(), input.size());
+    position += input.size();
+  }
+}
+
+simdjson_inline void string_builder::append_raw(const char *str,
+                                                size_t len) noexcept {
+  if (capacity_check(len)) {
+    std::memcpy(buffer.get() + position, str, len);
+    position += len;
+  }
+}
+
+#if SIMDJSON_EXCEPTIONS
+simdjson_inline string_builder::operator std::string() const noexcept(false) {
+  return std::string(std::string_view());
+}
+
+simdjson_inline string_builder::operator std::string_view() const
+    noexcept(false) simdjson_lifetime_bound {
+  return view();
+}
+#endif
+
+simdjson_inline simdjson_result<std::string_view>
+string_builder::view() const noexcept {
+  if (!is_valid) {
+    return simdjson::OUT_OF_CAPACITY;
+  }
+  return std::string_view(buffer.get(), position);
+}
+
+simdjson_inline simdjson_result<const char *> string_builder::c_str() noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position] = '\0';
+    return buffer.get();
+  }
+  return simdjson::OUT_OF_CAPACITY;
+}
+
+simdjson_inline bool string_builder::validate_unicode() const noexcept {
+  return simdjson::validate_utf8(buffer.get(), position);
+}
+
+simdjson_inline void string_builder::start_object()  noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position++] = '{';
+  }
+}
+
+
+simdjson_inline void string_builder::end_object()  noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position++] = '}';
+  }
+}
+
+
+simdjson_inline void string_builder::start_array()  noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position++] = '[';
+  }
+}
+
+
+simdjson_inline void string_builder::end_array()  noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position++] = ']';
+  }
+}
+
+
+simdjson_inline void string_builder::append_comma()  noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position++] = ',';
+  }
+}
+
+
+simdjson_inline void string_builder::append_colon()  noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position++] = ':';
+  }
+}
+
+template<typename key_type, typename value_type>
+simdjson_inline void string_builder::append_key_value(key_type key, value_type value) noexcept {
+  static_assert(
+    std::is_arithmetic<value_type>::value ||
+    std::is_same<value_type, char>::value ||
+    std::is_same<value_type, const char*>::value ||
+    std::is_convertible<value_type, std::string_view>::value ||
+    std::is_same<value_type, std::nullptr_t>::value,
+    "Unsupported value type");
+  static_assert(
+    std::is_same<key_type, const char*>::value ||
+    std::is_convertible<key_type, std::string_view>::value,
+    "Unsupported key type");
+  escape_and_append_with_quotes(key);
+  append_colon();
+  SIMDJSON_IF_CONSTEXPR(std::is_same<value_type, std::nullptr_t>::value) {
+    append_null();
+  } else SIMDJSON_IF_CONSTEXPR(std::is_same<value_type, char>::value) {
+    escape_and_append_with_quotes(value);
+  } else SIMDJSON_IF_CONSTEXPR(std::is_convertible<value_type, std::string_view>::value) {
+    escape_and_append_with_quotes(value);
+  } else SIMDJSON_IF_CONSTEXPR(std::is_same<value_type, const char*>::value) {
+    escape_and_append_with_quotes(value);
+  } else {
+    append(value);
+  }
+}
+
+} // namespace builder
+} // namespace arm64
+} // namespace simdjson
+
+#endif // SIMDJSON_GENERIC_STRING_BUILDER_INL_H
+/* end file simdjson/generic/ondemand/json_string_builder-inl.h for arm64 */
+/* including simdjson/generic/ondemand/json_builder.h for arm64: #include "simdjson/generic/ondemand/json_builder.h" */
+/* begin file simdjson/generic/ondemand/json_builder.h for arm64 */
+/**
+ * This file is part of the builder API. It is temporarily in the ondemand directory
+ * but we will move it to a builder directory later.
+ */
+#ifndef SIMDJSON_GENERIC_BUILDER_H
+
+/* amalgamation skipped (editor-only): #ifndef SIMDJSON_CONDITIONAL_INCLUDE */
+/* amalgamation skipped (editor-only): #define SIMDJSON_GENERIC_STRING_BUILDER_H */
+/* amalgamation skipped (editor-only): #include "simdjson/generic/builder/json_string_builder.h" */
+/* amalgamation skipped (editor-only): #include "simdjson/concepts.h" */
+/* amalgamation skipped (editor-only): #endif // SIMDJSON_CONDITIONAL_INCLUDE */
+#if SIMDJSON_STATIC_REFLECTION
+
+#include <charconv>
+#include <cstring>
+#include <experimental/meta>
+#include <memory>
+#include <optional>
+#include <string_view>
+#include <type_traits>
+#include <utility>
+// #include <static_reflection> // for std::define_static_string - header not available yet
+
+namespace simdjson {
+namespace arm64 {
+namespace builder {
+
+// Concept that checks if a type is a container but not a string (because
+// strings handling must be handled differently)
+template <typename T>
+concept container_but_not_string =
+    requires(T a) {
+      { a.size() } -> std::convertible_to<std::size_t>;
+      {
+        a[std::declval<std::size_t>()]
+      }; // check if elements are accessible for the subscript operator
+    } && !std::is_same_v<T, std::string> &&
+    !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char *>;
+
+template <class T>
+  requires(container_but_not_string<T>)
+constexpr void atom(string_builder &b, const T &t) {
+  if (t.size() == 0) {
+    b.append_raw("[]");
+    return;
+  }
+  b.append('[');
+  atom(b, t[0]);
+  for (size_t i = 1; i < t.size(); ++i) {
+    b.append(',');
+    atom(b, t[i]);
+  }
+  b.append(']');
+}
+
+template <class T>
+  requires(std::is_same_v<T, std::string> ||
+           std::is_same_v<T, std::string_view> ||
+           std::is_same_v<T, const char *> ||
+           std::is_same_v<T, char>)
+constexpr void atom(string_builder &b, const T &t) {
+  b.escape_and_append_with_quotes(t);
+}
+
+template <concepts::string_view_keyed_map T>
+constexpr void atom(string_builder &b, const T &m) {
+  if (m.empty()) {
+    b.append_raw("{}");
+    return;
+  }
+  b.append('{');
+  bool first = true;
+  for (const auto& [key, value] : m) {
+    if (!first) {
+      b.append(',');
+    }
+    first = false;
+    // Keys must be convertible to string_view per the concept
+    b.escape_and_append_with_quotes(key);
+    b.append(':');
+    atom(b, value);
+  }
+  b.append('}');
+}
+
+
+template<typename number_type,
+         typename = typename std::enable_if<std::is_arithmetic<number_type>::value && !std::is_same_v<number_type, char>>::type>
+constexpr void atom(string_builder &b, const number_type t) {
+  b.append(t);
+}
+#if SIMDJSON_CONSTEVAL
+consteval std::string consteval_to_quoted_escaped(std::string_view input);
+#endif
+
+template <class T>
+  requires(std::is_class_v<T> && !container_but_not_string<T> &&
+           !concepts::string_view_keyed_map<T> &&
+           !concepts::optional_type<T> &&
+           !concepts::smart_pointer<T> &&
+           !concepts::appendable_containers<T> &&
+           !std::is_same_v<T, std::string> &&
+           !std::is_same_v<T, std::string_view> &&
+           !std::is_same_v<T, const char*> &&
+           !std::is_same_v<T, char>)
+constexpr void atom(string_builder &b, const T &t) {
+  int i = 0;
+  b.append('{');
+  [:expand(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked())):] >> [&]<auto dm>() {
+    if (i != 0)
+      b.append(',');
+    constexpr auto key = std::define_static_string(consteval_to_quoted_escaped(std::meta::identifier_of(dm)));
+    b.append_raw(key);
+    b.append(':');
+    atom(b, t.[:dm:]);
+    i++;
+  };
+  b.append('}');
+}
+
+// Support for optional types (std::optional, etc.)
+template <concepts::optional_type T>
+constexpr void atom(string_builder &b, const T &opt) {
+  if (opt) {
+    atom(b, opt.value());
+  } else {
+    b.append_raw("null");
+  }
+}
+
+// Support for smart pointers (std::unique_ptr, std::shared_ptr, etc.)
+template <concepts::smart_pointer T>
+constexpr void atom(string_builder &b, const T &ptr) {
+  if (ptr) {
+    atom(b, *ptr);
+  } else {
+    b.append_raw("null");
+  }
+}
+
+// Support for enums - serialize as string representation using expand approach from P2996R12
+template <typename T>
+  requires(std::is_enum_v<T>)
+void atom(string_builder &b, const T &e) {
+#if SIMDJSON_STATIC_REFLECTION
+  std::string_view result = "<unnamed>";
+  [:expand(std::meta::enumerators_of(^^T)):] >> [&]<auto enum_val>{
+    if (e == [:enum_val:]) {
+      result = std::meta::identifier_of(enum_val);
+    }
+  };
+
+  if (result != "<unnamed>") {
+    b.append_raw("\"");
+    b.append_raw(result);
+    b.append_raw("\"");
+  } else {
+    // Fallback to integer if enum value not found
+    atom(b, static_cast<std::underlying_type_t<T>>(e));
+  }
+#else
+  // Fallback: serialize as integer if reflection not available
+  atom(b, static_cast<std::underlying_type_t<T>>(e));
+#endif
+}
+
+// Support for appendable containers that don't have operator[] (sets, etc.)
+template <concepts::appendable_containers T>
+  requires(!container_but_not_string<T> && !concepts::string_view_keyed_map<T> &&
+           !concepts::optional_type<T> && !concepts::smart_pointer<T> &&
+           !std::is_same_v<T, std::string> &&
+           !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char*>)
+constexpr void atom(string_builder &b, const T &container) {
+  if (container.empty()) {
+    b.append_raw("[]");
+    return;
+  }
+  b.append('[');
+  bool first = true;
+  for (const auto& item : container) {
+    if (!first) {
+      b.append(',');
+    }
+    first = false;
+    atom(b, item);
+  }
+  b.append(']');
+}
+
+// append functions that delegate to atom functions for primitive types
+template <class T>
+  requires(std::is_arithmetic_v<T> && !std::is_same_v<T, char>)
+void append(string_builder &b, const T &t) {
+  atom(b, t);
+}
+
+template <class T>
+  requires(std::is_same_v<T, std::string> ||
+           std::is_same_v<T, std::string_view> ||
+           std::is_same_v<T, const char *> ||
+           std::is_same_v<T, char>)
+void append(string_builder &b, const T &t) {
+  atom(b, t);
+}
+
+template <concepts::optional_type T>
+void append(string_builder &b, const T &t) {
+  atom(b, t);
+}
+
+template <concepts::smart_pointer T>
+void append(string_builder &b, const T &t) {
+  atom(b, t);
+}
+
+template <concepts::appendable_containers T>
+  requires(!container_but_not_string<T> && !concepts::string_view_keyed_map<T> &&
+           !concepts::optional_type<T> && !concepts::smart_pointer<T> &&
+           !std::is_same_v<T, std::string> &&
+           !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char*>)
+void append(string_builder &b, const T &t) {
+  atom(b, t);
+}
+
+template <concepts::string_view_keyed_map T>
+void append(string_builder &b, const T &t) {
+  atom(b, t);
+}
+
+// works for struct
+template <class Z>
+  requires(std::is_class_v<Z> && !container_but_not_string<Z> &&
+           !concepts::string_view_keyed_map<Z> &&
+           !concepts::optional_type<Z> &&
+           !concepts::smart_pointer<Z> &&
+           !concepts::appendable_containers<Z> &&
+           !std::is_same_v<Z, std::string> &&
+           !std::is_same_v<Z, std::string_view> &&
+           !std::is_same_v<Z, const char*> &&
+           !std::is_same_v<Z, char>)
+void append(string_builder &b, const Z &z) {
+  int i = 0;
+  b.append('{');
+  [:expand(std::meta::nonstatic_data_members_of(^^Z, std::meta::access_context::unchecked())):] >> [&]<auto dm>() {
+    if (i != 0)
+      b.append(',');
+    constexpr auto key = std::define_static_string(consteval_to_quoted_escaped(std::meta::identifier_of(dm)));
+    b.append_raw(key);
+    b.append(':');
+    atom(b, z.[:dm:]);
+    i++;
+  };
+  b.append('}');
+}
+
+// works for container
+template <class Z>
+  requires(container_but_not_string<Z>)
+void append(string_builder &b, const Z &z) {
+  if (z.size() == 0) {
+    b.append_raw("[]");
+    return;
+  }
+  b.append('[');
+  atom(b, z[0]);
+  for (size_t i = 1; i < z.size(); ++i) {
+    b.append(',');
+    atom(b, z[i]);
+  }
+  b.append(']');
+}
+
+template <class Z>
+simdjson_result<std::string> to_json_string(const Z &z, size_t initial_capacity = 1024) {
+  string_builder b(initial_capacity);
+  append(b, z);
+  std::string_view s;
+  if(auto e = b.view().get(s); e) { return e; }
+  return std::string(s);
+}
+
+template <class Z>
+simdjson_error to_json(const Z &z, std::string &s) {
+  string_builder b;
+  append(b, z);
+  std::string_view view;
+  if(auto e = b.view().get(view); e) { return e; }
+  s.assign(view);
+  return SUCCESS;
+}
+
+template <class Z>
+string_builder& operator<<(string_builder& b, const Z& z) {
+  append(b, z);
+  return b;
+}
+} // namespace builder
+} // namespace arm64
+} // namespace simdjson
+#endif // SIMDJSON_STATIC_REFLECTION
+
+#endif
+/* end file simdjson/generic/ondemand/json_builder.h for arm64 */
 
 /* end file simdjson/generic/ondemand/amalgamated.h for arm64 */
 /* including simdjson/arm64/end.h: #include "simdjson/arm64/end.h" */
@@ -42966,6 +44948,24 @@ simdjson_inline backslash_and_quote backslash_and_quote::copy_and_find(const uin
   // store to dest unconditionally - we can overwrite the bits we don't like later
   dst[0] = src[0];
   return { src[0] };
+}
+
+
+struct escaping {
+  static constexpr uint32_t BYTES_PROCESSED = 1;
+  simdjson_inline static escaping copy_and_find(const uint8_t *src, uint8_t *dst);
+
+  simdjson_inline bool has_escape() { return escape_bits; }
+  simdjson_inline int escape_index() { return 0; }
+
+  bool escape_bits;
+}; // struct escaping
+
+
+
+simdjson_inline escaping escaping::copy_and_find(const uint8_t *src, uint8_t *dst) {
+  dst[0] = src[0];
+  return { (src[0] == '\\') || (src[0] == '"') || (src[0] < 32) };
 }
 
 } // unnamed namespace
@@ -43202,7 +45202,7 @@ template <typename T, typename ValT = fallback::ondemand::value>
 concept custom_deserializable = tag_invocable<deserialize_tag, ValT&, T&>;
 
 template <typename T, typename ValT = fallback::ondemand::value>
-concept deserializable = custom_deserializable<T, ValT> || is_builtin_deserializable_v<T>;
+concept deserializable = custom_deserializable<T, ValT> || is_builtin_deserializable_v<T> || concepts::optional_type<T>;
 
 template <typename T, typename ValT = fallback::ondemand::value>
 concept nothrow_custom_deserializable = nothrow_tag_invocable<deserialize_tag, ValT&, T&>;
@@ -43213,9 +45213,25 @@ concept nothrow_deserializable = nothrow_custom_deserializable<T, ValT> || is_bu
 
 /// Deserialize Tag
 inline constexpr struct deserialize_tag {
+  using array_type = fallback::ondemand::array;
+  using object_type = fallback::ondemand::object;
   using value_type = fallback::ondemand::value;
   using document_type = fallback::ondemand::document;
   using document_reference_type = fallback::ondemand::document_reference;
+
+  // Customization Point for array
+  template <typename T>
+    requires custom_deserializable<T, value_type>
+  [[nodiscard]] constexpr /* error_code */ auto operator()(array_type &object, T& output) const noexcept(nothrow_custom_deserializable<T, value_type>) {
+    return tag_invoke(*this, object, output);
+  }
+
+  // Customization Point for object
+  template <typename T>
+    requires custom_deserializable<T, value_type>
+  [[nodiscard]] constexpr /* error_code */ auto operator()(object_type &object, T& output) const noexcept(nothrow_custom_deserializable<T, value_type>) {
+    return tag_invoke(*this, object, output);
+  }
 
   // Customization Point for value
   template <typename T>
@@ -43784,6 +45800,7 @@ public:
    *
    * You may use get_double(), get_bool(), get_uint64(), get_int64(),
    * get_object(), get_array(), get_raw_json_string(), or get_string() instead.
+   * When SIMDJSON_SUPPORTS_DESERIALIZATION is set, custom types are also supported.
    *
    * @returns A value of the given type, parsed from the JSON.
    * @returns INCORRECT_TYPE If the JSON value is not the given type.
@@ -43807,6 +45824,7 @@ public:
    * Get this value as the given type.
    *
    * Supported types: object, array, raw_json_string, string_view, uint64_t, int64_t, double, bool
+   * If the macro SIMDJSON_SUPPORTS_DESERIALIZATION is set, then custom types are also supported.
    *
    * @param out This is set to a value of the given type, parsed from the JSON. If there is an error, this may not be initialized.
    * @returns INCORRECT_TYPE If the JSON value is not an object.
@@ -43823,6 +45841,19 @@ public:
   #if SIMDJSON_SUPPORTS_DESERIALIZATION
   if constexpr (custom_deserializable<T, value>) {
       return deserialize(*this, out);
+  } else if constexpr (concepts::optional_type<T>) {
+      using value_type = typename std::remove_cvref_t<T>::value_type;
+
+      // Check if the value is null
+      if (is_null()) {
+        out.reset(); // Set to nullopt
+        return SUCCESS;
+      }
+
+      if (!out) {
+        out.emplace();
+      }
+      return get<value_type>(out.value());
   } else {
     static_assert(!sizeof(T), "The get<T> method with type T is not implemented by the simdjson library. "
       "And you do not seem to have added support for it. Indeed, we have that "
@@ -46049,6 +48080,37 @@ public:
    *         - INDEX_OUT_OF_BOUNDS if the array index is larger than an array length
    */
   simdjson_inline simdjson_result<value> at(size_t index) noexcept;
+
+#if SIMDJSON_SUPPORTS_DESERIALIZATION
+  /**
+   * Get this array as the given type.
+   *
+   * @param out This is set to a value of the given type, parsed from the JSON. If there is an error, this may not be initialized.
+   * @returns INCORRECT_TYPE If the JSON array is not of the given type.
+   * @returns SUCCESS If the parse succeeded and the out parameter was set to the value.
+   */
+  template <typename T>
+  simdjson_inline error_code get(T &out)
+     noexcept(custom_deserializable<T, array> ? nothrow_custom_deserializable<T, array> : true) {
+    static_assert(custom_deserializable<T, array>);
+    return deserialize(*this, out);
+  }
+  /**
+   * Get this array as the given type.
+   *
+   * @returns A value of the given type, parsed from the JSON.
+   * @returns INCORRECT_TYPE If the JSON value is not the given type.
+   */
+  template <typename T>
+  simdjson_inline simdjson_result<T> get()
+    noexcept(custom_deserializable<T, value> ? nothrow_custom_deserializable<T, value> : true)
+  {
+    static_assert(std::is_default_constructible<T>::value, "The specified type is not default constructible.");
+    T out{};
+    SIMDJSON_TRY(get<T>(out));
+    return out;
+  }
+#endif // SIMDJSON_SUPPORTS_DESERIALIZATION
 protected:
   /**
    * Go to the end of the array, no matter where you are right now.
@@ -46127,7 +48189,28 @@ public:
   simdjson_inline simdjson_result<fallback::ondemand::value> at_pointer(std::string_view json_pointer) noexcept;
   simdjson_inline simdjson_result<fallback::ondemand::value> at_path(std::string_view json_path) noexcept;
   simdjson_inline simdjson_result<std::string_view> raw_json() noexcept;
+#if SIMDJSON_SUPPORTS_DESERIALIZATION
+  // TODO: move this code into object-inl.h
 
+  template<typename T>
+  simdjson_inline simdjson_result<T> get() noexcept {
+    if (error()) { return error(); }
+    if constexpr (std::is_same_v<T, fallback::ondemand::array>) {
+      return first;
+    }
+    return first.get<T>();
+  }
+  template<typename T>
+  simdjson_inline error_code get(T& out) noexcept {
+    if (error()) { return error(); }
+    if constexpr (std::is_same_v<T, fallback::ondemand::array>) {
+      out = first;
+    } else {
+      SIMDJSON_TRY( first.get<T>(out) );
+    }
+    return SUCCESS;
+  }
+#endif // SIMDJSON_SUPPORTS_DESERIALIZATION
 };
 
 } // namespace simdjson
@@ -46172,7 +48255,8 @@ public:
    *
    * Part of the std::iterator interface.
    */
-  simdjson_inline simdjson_result<value> operator*() noexcept; // MUST ONLY BE CALLED ONCE PER ITERATION.
+  simdjson_inline simdjson_result<value>
+  operator*() noexcept; // MUST ONLY BE CALLED ONCE PER ITERATION.
   /**
    * Check if we are at the end of the JSON.
    *
@@ -46196,6 +48280,11 @@ public:
    */
   simdjson_inline array_iterator &operator++() noexcept;
 
+  /**
+   * Check if the array is at the end.
+   */
+  [[nodiscard]] simdjson_inline bool at_end() const noexcept;
+
 private:
   value_iterator iter{};
 
@@ -46214,7 +48303,6 @@ namespace simdjson {
 
 template<>
 struct simdjson_result<fallback::ondemand::array_iterator> : public fallback::implementation_simdjson_result_base<fallback::ondemand::array_iterator> {
-public:
   simdjson_inline simdjson_result(fallback::ondemand::array_iterator &&value) noexcept; ///< @private
   simdjson_inline simdjson_result(error_code error) noexcept; ///< @private
   simdjson_inline simdjson_result() noexcept = default;
@@ -46227,6 +48315,8 @@ public:
   simdjson_inline bool operator==(const simdjson_result<fallback::ondemand::array_iterator> &) const noexcept;
   simdjson_inline bool operator!=(const simdjson_result<fallback::ondemand::array_iterator> &) const noexcept;
   simdjson_inline simdjson_result<fallback::ondemand::array_iterator> &operator++() noexcept;
+
+  [[nodiscard]] simdjson_inline bool at_end() const noexcept;
 };
 
 } // namespace simdjson
@@ -46461,7 +48551,7 @@ public:
    * Be mindful that the document instance must remain in scope while you are accessing object, array and value instances.
    *
    * @param out This is set to a value of the given type, parsed from the JSON. If there is an error, this may not be initialized.
-   * @returns INCORRECT_TYPE If the JSON value is not an object.
+   * @returns INCORRECT_TYPE If the JSON value is of the given type.
    * @returns SUCCESS If the parse succeeded and the out parameter was set to the value.
    */
   template<typename T>
@@ -46559,7 +48649,7 @@ public:
    *          time it parses a document or when it is destroyed.
    * @exception simdjson_error(INCORRECT_TYPE) if the JSON value is not a string.
    */
-  simdjson_inline operator std::string_view() noexcept(false);
+  simdjson_inline operator std::string_view() noexcept(false) simdjson_lifetime_bound;
   /**
    * Cast this JSON value to a raw_json_string.
    *
@@ -46568,7 +48658,7 @@ public:
    * @returns A pointer to the raw JSON for the given string.
    * @exception simdjson_error(INCORRECT_TYPE) if the JSON value is not a string.
    */
-  simdjson_inline operator raw_json_string() noexcept(false);
+  simdjson_inline operator raw_json_string() noexcept(false) simdjson_lifetime_bound;
   /**
    * Cast this JSON value to a bool.
    *
@@ -47948,6 +50038,36 @@ public:
    */
   simdjson_inline simdjson_result<std::string_view> raw_json() noexcept;
 
+#if SIMDJSON_SUPPORTS_DESERIALIZATION
+  /**
+   * Get this object as the given type.
+   *
+   * @param out This is set to a value of the given type, parsed from the JSON. If there is an error, this may not be initialized.
+   * @returns INCORRECT_TYPE If the JSON object is not of the given type.
+   * @returns SUCCESS If the parse succeeded and the out parameter was set to the value.
+   */
+  template <typename T>
+  simdjson_inline error_code get(T &out)
+     noexcept(custom_deserializable<T, object> ? nothrow_custom_deserializable<T, object> : true) {
+    static_assert(custom_deserializable<T, object>);
+    return deserialize(*this, out);
+  }
+  /**
+   * Get this array as the given type.
+   *
+   * @returns A value of the given type, parsed from the JSON.
+   * @returns INCORRECT_TYPE If the JSON value is not the given type.
+   */
+  template <typename T>
+  simdjson_inline simdjson_result<T> get()
+    noexcept(custom_deserializable<T, value> ? nothrow_custom_deserializable<T, value> : true)
+  {
+    static_assert(std::is_default_constructible<T>::value, "The specified type is not default constructible.");
+    T out{};
+    SIMDJSON_TRY(get<T>(out));
+    return out;
+  }
+#endif // SIMDJSON_SUPPORTS_DESERIALIZATION
 protected:
   /**
    * Go to the end of the object, no matter where you are right now.
@@ -47991,12 +50111,32 @@ public:
   simdjson_inline simdjson_result<fallback::ondemand::value> operator[](std::string_view key) && noexcept;
   simdjson_inline simdjson_result<fallback::ondemand::value> at_pointer(std::string_view json_pointer) noexcept;
   simdjson_inline simdjson_result<fallback::ondemand::value> at_path(std::string_view json_path) noexcept;
-
   inline simdjson_result<bool> reset() noexcept;
   inline simdjson_result<bool> is_empty() noexcept;
   inline simdjson_result<size_t> count_fields() & noexcept;
   inline simdjson_result<std::string_view> raw_json() noexcept;
+  #if SIMDJSON_SUPPORTS_DESERIALIZATION
+  // TODO: move this code into object-inl.h
 
+  template<typename T>
+  simdjson_inline simdjson_result<T> get() noexcept {
+    if (error()) { return error(); }
+    if constexpr (std::is_same_v<T, fallback::ondemand::object>) {
+      return first;
+    }
+    return first.get<T>();
+  }
+  template<typename T>
+  simdjson_inline error_code get(T& out) noexcept {
+    if (error()) { return error(); }
+    if constexpr (std::is_same_v<T, fallback::ondemand::object>) {
+      out = first;
+    } else {
+      SIMDJSON_TRY( first.get<T>(out) );
+    }
+    return SUCCESS;
+  }
+#endif // SIMDJSON_SUPPORTS_DESERIALIZATION
 };
 
 } // namespace simdjson
@@ -48125,6 +50265,20 @@ inline simdjson_result<std::string_view> to_json_string(simdjson_result<fallback
 inline simdjson_result<std::string_view> to_json_string(simdjson_result<fallback::ondemand::value> x);
 inline simdjson_result<std::string_view> to_json_string(simdjson_result<fallback::ondemand::object> x);
 inline simdjson_result<std::string_view> to_json_string(simdjson_result<fallback::ondemand::array> x);
+
+#if SIMDJSON_STATIC_REFLECTION
+/**
+ * Create a JSON string from any user-defined type using static reflection.
+ * Only available when SIMDJSON_STATIC_REFLECTION is enabled.
+ */
+template<typename T>
+  requires(!std::same_as<T, fallback::ondemand::document> &&
+           !std::same_as<T, fallback::ondemand::value> &&
+           !std::same_as<T, fallback::ondemand::object> &&
+           !std::same_as<T, fallback::ondemand::array>)
+inline std::string to_json_string(const T& obj);
+#endif
+
 } // namespace simdjson
 
 /**
@@ -48201,12 +50355,17 @@ inline std::ostream& operator<<(std::ostream& out, simdjson::simdjson_result<sim
 #ifndef SIMDJSON_ONDEMAND_DESERIALIZE_H
 /* amalgamation skipped (editor-only): #ifndef SIMDJSON_CONDITIONAL_INCLUDE */
 /* amalgamation skipped (editor-only): #define SIMDJSON_ONDEMAND_DESERIALIZE_H */
+/* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/object.h" */
 /* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/array.h" */
 /* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/base.h" */
 /* amalgamation skipped (editor-only): #endif // SIMDJSON_CONDITIONAL_INCLUDE */
 
 #include <concepts>
 #include <limits>
+#if SIMDJSON_STATIC_REFLECTION
+#include <experimental/meta>
+// #include <static_reflection> // for std::define_static_string - header not available yet
+#endif
 
 namespace simdjson {
 template <typename T>
@@ -48253,6 +50412,22 @@ error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept {
   return SUCCESS;
 }
 
+//////////////////////////////
+// String deserialization
+//////////////////////////////
+
+// just a character!
+error_code tag_invoke(deserialize_tag, auto &val, char &out) noexcept {
+  std::string_view x;
+  SIMDJSON_TRY(val.get_string().get(x));
+  if(x.size() != 1) {
+    return INCORRECT_TYPE;
+  }
+  out = x[0];
+  return SUCCESS;
+}
+
+// any string-like type (can be constructed from std::string_view)
 template <concepts::constructible_from_string_view T, typename ValT>
   requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(std::is_nothrow_constructible_v<T, std::string_view>) {
@@ -48274,15 +50449,20 @@ template <concepts::appendable_containers T, typename ValT>
   requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(false) {
   using value_type = typename std::remove_cvref_t<T>::value_type;
-  static_assert(
+  /*static_assert(
       deserializable<value_type, ValT>,
-      "The specified type inside the container must itself be deserializable");
+      "The specified type inside the container must itself be deserializable");*/
   static_assert(
       std::is_default_constructible_v<value_type>,
       "The specified type inside the container must default constructible.");
 
   fallback::ondemand::array arr;
-  SIMDJSON_TRY(val.get_array().get(arr));
+  if constexpr (std::is_same_v<std::remove_cvref_t<ValT>, fallback::ondemand::array>) {
+    arr = val;
+  } else {
+    SIMDJSON_TRY(val.get_array().get(arr));
+  }
+
   for (auto v : arr) {
     if constexpr (concepts::returns_reference<T>) {
       if (auto const err = v.get<value_type>().get(concepts::emplace_one(out));
@@ -48339,7 +50519,45 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(false) {
  return SUCCESS;
 }
 
+template <concepts::string_view_keyed_map T>
+error_code tag_invoke(deserialize_tag, fallback::ondemand::object &obj, T &out) noexcept {
+  using value_type = typename std::remove_cvref_t<T>::mapped_type;
 
+  out.clear();
+  for (auto field : obj) {
+    std::string_view key;
+    SIMDJSON_TRY(field.unescaped_key().get(key));
+
+    fallback::ondemand::value value_obj;
+    SIMDJSON_TRY(field.value().get(value_obj));
+
+    value_type this_value;
+    SIMDJSON_TRY(value_obj.get(this_value));
+    out.emplace(typename T::key_type(key), std::move(this_value));
+  }
+  return SUCCESS;
+}
+
+template <concepts::string_view_keyed_map T>
+error_code tag_invoke(deserialize_tag, fallback::ondemand::value &val, T &out) noexcept {
+  fallback::ondemand::object obj;
+  SIMDJSON_TRY(val.get_object().get(obj));
+  return simdjson::deserialize(obj, out);
+}
+
+template <concepts::string_view_keyed_map T>
+error_code tag_invoke(deserialize_tag, fallback::ondemand::document &doc, T &out) noexcept {
+  fallback::ondemand::object obj;
+  SIMDJSON_TRY(doc.get_object().get(obj));
+  return simdjson::deserialize(obj, out);
+}
+
+template <concepts::string_view_keyed_map T>
+error_code tag_invoke(deserialize_tag, fallback::ondemand::document_reference &doc, T &out) noexcept {
+  fallback::ondemand::object obj;
+  SIMDJSON_TRY(doc.get_object().get(obj));
+  return simdjson::deserialize(obj, out);
+}
 
 
 /**
@@ -48382,22 +50600,334 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(nothrow_deser
 /**
  * This CPO (Customization Point Object) will help deserialize into optional types.
  */
-template <concepts::optional_type T, typename ValT>
+template <concepts::optional_type T>
   requires(!require_custom_serialization<T>)
-error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(nothrow_deserializable<typename std::remove_cvref_t<T>::value_type, ValT>) {
+error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept(nothrow_deserializable<typename std::remove_cvref_t<T>::value_type, decltype(val)>) {
   using value_type = typename std::remove_cvref_t<T>::value_type;
 
-  static_assert(
-      deserializable<value_type, ValT>,
-      "The specified type inside the unique_ptr must itself be deserializable");
-  static_assert(
-      std::is_default_constructible_v<value_type>,
-      "The specified type inside the unique_ptr must default constructible.");
+  // Check if the value is null
+  if (val.is_null()) {
+    out.reset(); // Set to nullopt
+    return SUCCESS;
+  }
 
   if (!out) {
     out.emplace();
   }
   SIMDJSON_TRY(val.template get<value_type>(out.value()));
+  return SUCCESS;
+}
+
+
+#if SIMDJSON_STATIC_REFLECTION
+
+
+template <typename T>
+constexpr bool user_defined_type = (std::is_class_v<T>
+&& !std::is_same_v<T, std::string> && !std::is_same_v<T, std::string_view> && !concepts::optional_type<T> &&
+!concepts::appendable_containers<T> && !require_custom_serialization<T>);
+
+
+// workaround from
+// https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2024/p2996r10.html#back-and-forth
+// for missing expansion statements
+namespace __impl {
+  template<auto... vals>
+  struct replicator_type {
+    template<typename F>
+      constexpr void operator>>(F body) const {
+        (body.template operator()<vals>(), ...);
+      }
+  };
+
+  template<auto... vals>
+  replicator_type<vals...> replicator = {};
+}
+
+template<typename R>
+consteval auto expand(R range) {
+  std::vector<std::meta::info> args;
+  for (auto r : range) {
+    args.push_back(reflect_constant(r));
+  }
+  return substitute(^^__impl::replicator, args);
+}
+// end of workaround
+
+template <typename T, typename ValT>
+  requires(user_defined_type<T> && std::is_class_v<T>)
+error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept {
+  fallback::ondemand::object obj;
+  if constexpr (std::is_same_v<std::remove_cvref_t<ValT>, fallback::ondemand::object>) {
+    obj = val;
+  } else {
+    SIMDJSON_TRY(val.get_object().get(obj));
+  }
+  error_code e = simdjson::SUCCESS;
+
+  [:expand(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked())):] >> [&]<auto mem>() {
+    if constexpr (!std::meta::is_const(mem) && std::meta::is_public(mem)) {
+      constexpr std::string_view key = std::define_static_string(std::meta::identifier_of(mem));
+      // Note: removed static assert as optional types are now handled generically
+      // as long we are succesful or the field is not found, we continue
+      if(e == simdjson::SUCCESS || e == simdjson::NO_SUCH_FIELD) {
+        e = obj[key].get(out.[:mem:]);
+      }
+    }
+  };
+  return e;
+}
+
+// Support for enum deserialization - deserialize from string representation using expand approach from P2996R12
+template <typename T, typename ValT>
+  requires(std::is_enum_v<T>)
+error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept {
+#if SIMDJSON_STATIC_REFLECTION
+  std::string_view str;
+  SIMDJSON_TRY(val.get_string().get(str));
+
+  bool found = false;
+  [:expand(std::meta::enumerators_of(^^T)):] >> [&]<auto enum_val>{
+    if (!found && str == std::meta::identifier_of(enum_val)) {
+      out = [:enum_val:];
+      found = true;
+    }
+  };
+
+  return found ? SUCCESS : INCORRECT_TYPE;
+#else
+  // Fallback: deserialize as integer if reflection not available
+  std::underlying_type_t<T> int_val;
+  SIMDJSON_TRY(val.get(int_val));
+  out = static_cast<T>(int_val);
+  return SUCCESS;
+#endif
+}
+
+template <typename simdjson_value, typename T>
+  requires(user_defined_type<std::remove_cvref_t<T>>)
+error_code tag_invoke(deserialize_tag, simdjson_value &val, std::unique_ptr<T> &out) noexcept {
+  if (!out) {
+    out = std::make_unique<T>();
+    if (!out) {
+      return MEMALLOC;
+    }
+  }
+  if (auto err = val.get(*out)) {
+    out.reset();
+    return err;
+  }
+  return SUCCESS;
+}
+
+template <typename simdjson_value, typename T>
+  requires(user_defined_type<std::remove_cvref_t<T>>)
+error_code tag_invoke(deserialize_tag, simdjson_value &val, std::shared_ptr<T> &out) noexcept {
+  if (!out) {
+    out = std::make_shared<T>();
+    if (!out) {
+      return MEMALLOC;
+    }
+  }
+  if (auto err = val.get(*out)) {
+    out.reset();
+    return err;
+  }
+  return SUCCESS;
+}
+
+#endif // SIMDJSON_STATIC_REFLECTION
+
+////////////////////////////////////////
+// Unique pointers
+////////////////////////////////////////
+error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<bool> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_unique<bool>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_bool().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<int64_t> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_unique<int64_t>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_int64().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<uint64_t> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_unique<uint64_t>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_uint64().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<double> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_unique<double>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_double().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<std::string_view> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_unique<std::string_view>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_string().get(*out));
+  return SUCCESS;
+}
+
+
+////////////////////////////////////////
+// Shared pointers
+////////////////////////////////////////
+error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<bool> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_shared<bool>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_bool().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<int64_t> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_shared<int64_t>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_int64().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<uint64_t> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_shared<uint64_t>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_uint64().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<double> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_shared<double>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_double().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<std::string_view> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_shared<std::string_view>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_string().get(*out));
+  return SUCCESS;
+}
+
+
+////////////////////////////////////////
+// Explicit optional specializations
+////////////////////////////////////////
+
+////////////////////////////////////////
+// Explicit smart pointer specializations for string and int types
+////////////////////////////////////////
+error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<std::string> &out) noexcept {
+  // Check if the value is null
+  if (val.is_null()) {
+    out.reset(); // Set to nullptr
+    return SUCCESS;
+  }
+
+  if (!out) {
+    out = std::make_unique<std::string>();
+  }
+  std::string_view str;
+  SIMDJSON_TRY(val.get_string().get(str));
+  *out = std::string{str};
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<std::string> &out) noexcept {
+  // Check if the value is null
+  if (val.is_null()) {
+    out.reset(); // Set to nullptr
+    return SUCCESS;
+  }
+
+  if (!out) {
+    out = std::make_shared<std::string>();
+  }
+  std::string_view str;
+  SIMDJSON_TRY(val.get_string().get(str));
+  *out = std::string{str};
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<int> &out) noexcept {
+  // Check if the value is null
+  if (val.is_null()) {
+    out.reset(); // Set to nullptr
+    return SUCCESS;
+  }
+
+  if (!out) {
+    out = std::make_unique<int>();
+  }
+  int64_t temp;
+  SIMDJSON_TRY(val.get_int64().get(temp));
+  *out = static_cast<int>(temp);
   return SUCCESS;
 }
 
@@ -48688,6 +51218,9 @@ simdjson_inline array_iterator &array_iterator::operator++() noexcept {
   return *this;
 }
 
+simdjson_inline bool array_iterator::at_end() const noexcept {
+  return iter.at_end();
+}
 } // namespace ondemand
 } // namespace fallback
 } // namespace simdjson
@@ -48724,7 +51257,9 @@ simdjson_inline simdjson_result<fallback::ondemand::array_iterator> &simdjson_re
   ++(first);
   return *this;
 }
-
+simdjson_inline bool simdjson_result<fallback::ondemand::array_iterator>::at_end() const noexcept {
+  return !first.iter.is_valid() || first.at_end();
+}
 } // namespace simdjson
 
 #endif // SIMDJSON_GENERIC_ONDEMAND_ARRAY_ITERATOR_INL_H
@@ -49482,8 +52017,8 @@ simdjson_inline document::operator object() & noexcept(false) { return get_objec
 simdjson_inline document::operator uint64_t() noexcept(false) { return get_uint64(); }
 simdjson_inline document::operator int64_t() noexcept(false) { return get_int64(); }
 simdjson_inline document::operator double() noexcept(false) { return get_double(); }
-simdjson_inline document::operator std::string_view() noexcept(false) { return get_string(false); }
-simdjson_inline document::operator raw_json_string() noexcept(false) { return get_raw_json_string(); }
+simdjson_inline document::operator std::string_view() noexcept(false) simdjson_lifetime_bound { return get_string(false); }
+simdjson_inline document::operator raw_json_string() noexcept(false) simdjson_lifetime_bound { return get_raw_json_string(); }
 simdjson_inline document::operator bool() noexcept(false) { return get_bool(); }
 simdjson_inline document::operator value() noexcept(false) { return get_value(); }
 
@@ -51040,6 +53575,8 @@ simdjson_inline void json_iterator::assert_valid_position(token_position positio
 #ifndef SIMDJSON_CLANG_VISUAL_STUDIO
   SIMDJSON_ASSUME( position >= &parser->implementation->structural_indexes[0] );
   SIMDJSON_ASSUME( position < &parser->implementation->structural_indexes[parser->implementation->n_structural_indexes] );
+#else
+  (void)position; // Suppress unused parameter warning
 #endif
 }
 
@@ -51888,6 +54425,7 @@ simdjson_inline  simdjson_result<std::string_view> simdjson_result<fallback::ond
   if (error()) { return error(); }
   return first.raw_json();
 }
+
 } // namespace simdjson
 
 #endif // SIMDJSON_GENERIC_ONDEMAND_OBJECT_INL_H
@@ -52463,6 +55001,9 @@ simdjson_inline simdjson_warn_unused simdjson_result<std::string_view> simdjson_
 /* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/object.h" */
 /* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/serialization.h" */
 /* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/value.h" */
+/* amalgamation skipped (editor-only): #if SIMDJSON_STATIC_REFLECTION */
+/* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/json_builder.h" */
+/* amalgamation skipped (editor-only): #endif */
 /* amalgamation skipped (editor-only): #endif // SIMDJSON_CONDITIONAL_INCLUDE */
 
 namespace simdjson {
@@ -53884,6 +56425,1151 @@ simdjson_inline simdjson_result<fallback::ondemand::value_iterator>::simdjson_re
 #endif // SIMDJSON_GENERIC_ONDEMAND_VALUE_ITERATOR_INL_H
 /* end file simdjson/generic/ondemand/value_iterator-inl.h for fallback */
 
+// JSON builder, ideally they should not be part of the ondemand directory
+// but it is convenient for now to have them here.
+/* including simdjson/generic/ondemand/json_string_builder.h for fallback: #include "simdjson/generic/ondemand/json_string_builder.h" */
+/* begin file simdjson/generic/ondemand/json_string_builder.h for fallback */
+/**
+ * This file is part of the builder API. It is temporarily in the ondemand directory
+ * but we will move it to a builder directory later.
+ */
+#ifndef SIMDJSON_GENERIC_STRING_BUILDER_H
+
+/* amalgamation skipped (editor-only): #ifndef SIMDJSON_CONDITIONAL_INCLUDE */
+/* amalgamation skipped (editor-only): #define SIMDJSON_GENERIC_STRING_BUILDER_H */
+/* amalgamation skipped (editor-only): #include "simdjson/generic/implementation_simdjson_result_base.h" */
+/* amalgamation skipped (editor-only): #endif // SIMDJSON_CONDITIONAL_INCLUDE */
+
+namespace simdjson {
+namespace fallback {
+namespace builder {
+
+/**
+ * A builder for JSON strings representing documents. This is a low-level
+ * builder that is not meant to be used directly by end-users. Though it
+ * supports atomic types (Booleans, strings), it does not support composed
+ * types (arrays and objects).
+ *
+ * Ultimately, this class can support kernel-specific optimizations. E.g.,
+ * it may make use of SIMD instructions to escape strings faster.
+ */
+class string_builder {
+public:
+  simdjson_inline string_builder(size_t initial_capacity = 1024);
+
+  /**
+   * Append number (includes Booleans). Booleans are mapped to the strings
+   * false and true. Numbers are converted to strings abiding by the JSON standard.
+   * Floating-point numbers are converted to the shortest string that 'correctly'
+   * represents the number.
+   */
+  template<typename number_type,
+         typename = typename std::enable_if<std::is_arithmetic<number_type>::value>::type>
+  simdjson_inline void append(number_type v) noexcept;
+
+  /**
+   * Append character c.
+   */
+  simdjson_inline void append(char c)  noexcept;
+
+  /**
+   * Append the string 'null'.
+   */
+  simdjson_inline void append_null()  noexcept;
+
+  /**
+   * Clear the content.
+   */
+  simdjson_inline void clear()  noexcept;
+
+  /**
+   * Append the std::string_view, after escaping it.
+   * There is no UTF-8 validation.
+   */
+  simdjson_inline void escape_and_append(std::string_view input)  noexcept;
+
+  /**
+   * Append the std::string_view surrounded by double quotes, after escaping it.
+   * There is no UTF-8 validation.
+   */
+  simdjson_inline void escape_and_append_with_quotes(std::string_view input)  noexcept;
+
+  /**
+   * Append the character surrounded by double quotes, after escaping it.
+   * There is no UTF-8 validation.
+   */
+  simdjson_inline void escape_and_append_with_quotes(char input)  noexcept;
+
+  /**
+   * Append the character surrounded by double quotes, after escaping it.
+   * There is no UTF-8 validation.
+   */
+   simdjson_inline void escape_and_append_with_quotes(const char* input)  noexcept;
+
+  /**
+   * Append the C string directly, without escaping.
+   * There is no UTF-8 validation.
+   */
+  simdjson_inline void append_raw(const char *c)  noexcept;
+
+  /**
+   * Append "{" to the buffer.
+   */
+  simdjson_inline void start_object()  noexcept;
+
+  /**
+   * Append "}" to the buffer.
+   */
+  simdjson_inline void end_object()  noexcept;
+
+  /**
+   * Append "[" to the buffer.
+   */
+  simdjson_inline void start_array()  noexcept;
+
+  /**
+   * Append "]" to the buffer.
+   */
+  simdjson_inline void end_array()  noexcept;
+
+  /**
+   * Append "," to the buffer.
+   */
+  simdjson_inline void append_comma()  noexcept;
+
+  /**
+   * Append ":" to the buffer.
+   */
+  simdjson_inline void append_colon()  noexcept;
+
+  /**
+   * Append a key-value pair to the buffer.
+   * The key is escaped and surrounded by double quotes.
+   * The value is escaped if it is a string.
+   */
+   template<typename key_type, typename value_type>
+  simdjson_inline void append_key_value(key_type key, value_type value) noexcept;
+  /**
+   * Append the std::string_view directly, without escaping.
+   * There is no UTF-8 validation.
+   */
+  simdjson_inline void append_raw(std::string_view input)  noexcept;
+
+  /**
+   * Append len characters from str.
+   * There is no UTF-8 validation.
+   */
+  simdjson_inline void append_raw(const char *str, size_t len) noexcept;
+#if SIMDJSON_EXCEPTIONS
+  /**
+   * Creates an std::string from the written JSON buffer.
+   * Throws if memory allocation failed
+   *
+   * The result may not be valid UTF-8 if some of your content was not valid UTF-8.
+   * Use validate_unicode() to check the content if needed.
+   */
+  simdjson_inline operator std::string() const noexcept(false);
+
+  /**
+   * Creates an std::string_view from the written JSON buffer.
+   * Throws if memory allocation failed.
+   *
+   * The result may not be valid UTF-8 if some of your content was not valid UTF-8.
+   * Use validate_unicode() to check the content if needed.
+   */
+  simdjson_inline operator std::string_view() const noexcept(false) simdjson_lifetime_bound;
+#endif
+
+  /**
+   * Returns a view on the written JSON buffer. Returns an error
+   * if memory allocation failed.
+   *
+   * The result may not be valid UTF-8 if some of your content was not valid UTF-8.
+   * Use validate_unicode() to check the content.
+   */
+  simdjson_inline simdjson_result<std::string_view> view() const noexcept;
+
+  /**
+   * Appends the null character to the buffer and returns
+   * a pointer to the beginning of the written JSON buffer.
+   * Returns an error if memory allocation failed.
+   * The result is null-terminated.
+   *
+   * The result may not be valid UTF-8 if some of your content was not valid UTF-8.
+   * Use validate_unicode() to check the content.
+   */
+  simdjson_inline simdjson_result<const char *> c_str() noexcept;
+
+  /**
+   * Return true if the content is valid UTF-8.
+   */
+  simdjson_inline bool validate_unicode() const noexcept;
+
+  /**
+   * Returns the current size of the written JSON buffer.
+   * If an error occurred, returns 0.
+   */
+  simdjson_inline size_t size() const noexcept;
+
+private:
+  /**
+   * Returns true if we can write at least upcoming_bytes bytes.
+   * The underlying buffer is reallocated if needed. It is designed
+   * to be called before writing to the buffer. It should be fast.
+   */
+  simdjson_inline bool capacity_check(size_t upcoming_bytes);
+
+  /**
+   * Grow the buffer to at least desired_capacity bytes.
+   * If the allocation fails, is_valid is set to false. We expect
+   * that this function would not be repeatedly called.
+   */
+  simdjson_inline void grow_buffer(size_t desired_capacity);
+
+  /**
+   * We use this helper function to make sure that is_valid is kept consistent.
+   */
+  simdjson_inline void set_valid(bool valid) noexcept;
+
+  std::unique_ptr<char[]> buffer{};
+  size_t position{0};
+  size_t capacity{0};
+  bool is_valid{true};
+};
+
+
+
+}
+}
+} // namespace simdjson
+
+#endif // SIMDJSON_GENERIC_STRING_BUILDER_H
+/* end file simdjson/generic/ondemand/json_string_builder.h for fallback */
+/* including simdjson/generic/ondemand/json_string_builder-inl.h for fallback: #include "simdjson/generic/ondemand/json_string_builder-inl.h" */
+/* begin file simdjson/generic/ondemand/json_string_builder-inl.h for fallback */
+/**
+ * This file is part of the builder API. It is temporarily in the ondemand
+ * directory but we will move it to a builder directory later.
+ */
+#include <array>
+#include <cstring>
+#include <type_traits>
+#ifndef SIMDJSON_GENERIC_STRING_BUILDER_INL_H
+
+/* amalgamation skipped (editor-only): #ifndef SIMDJSON_CONDITIONAL_INCLUDE */
+/* amalgamation skipped (editor-only): #define SIMDJSON_GENERIC_STRING_BUILDER_INL_H */
+/* amalgamation skipped (editor-only): #include "simdjson/generic/builder/json_string_builder.h" */
+/* amalgamation skipped (editor-only): #endif // SIMDJSON_CONDITIONAL_INCLUDE */
+
+/*
+ * Empirically, we have found that an inlined optimization is important for
+ * performance. The following macros are not ideal. We should find a better
+ * way to inline the code.
+ */
+
+#if defined(__SSE2__) || defined(__x86_64__) || defined(__x86_64) ||           \
+    (defined(_M_AMD64) || defined(_M_X64) ||                                   \
+     (defined(_M_IX86_FP) && _M_IX86_FP == 2))
+#ifndef SIMDJSON_EXPERIMENTAL_HAS_SSE2
+#define SIMDJSON_EXPERIMENTAL_HAS_SSE2 1
+#endif
+#endif
+
+#if defined(__aarch64__) || defined(_M_ARM64)
+#ifndef SIMDJSON_EXPERIMENTAL_HAS_NEON
+#define SIMDJSON_EXPERIMENTAL_HAS_NEON 1
+#endif
+#endif
+#if SIMDJSON_EXPERIMENTAL_HAS_NEON
+#include <arm_neon.h>
+#endif
+#if SIMDJSON_EXPERIMENTAL_HAS_SSE2
+#include <emmintrin.h>
+#endif
+
+namespace simdjson {
+namespace fallback {
+namespace builder {
+
+static SIMDJSON_CONSTEXPR_LAMBDA std::array<uint8_t, 256> json_quotable_character = {
+  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+  1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+
+/**
+
+A possible SWAR implementation of has_json_escapable_byte. It is not used because
+it is slower than the current implementation. It is kept here for reference (to show
+that we tried it).
+
+inline bool has_json_escapable_byte(uint64_t x) {
+  uint64_t is_ascii = 0x8080808080808080ULL & ~x;
+  uint64_t xor2 = x ^ 0x0202020202020202ULL;
+  uint64_t lt32_or_eq34 = xor2 - 0x2121212121212121ULL;
+  uint64_t sub92 = x ^ 0x5C5C5C5C5C5C5C5CULL;
+  uint64_t eq92 = (sub92 - 0x0101010101010101ULL);
+  return ((lt32_or_eq34 | eq92) & is_ascii) != 0;
+}
+
+**/
+
+SIMDJSON_CONSTEXPR_LAMBDA simdjson_inline bool
+simple_needs_escaping(std::string_view v) {
+  for (char c : v) {
+    // a table lookup is faster than a series of comparisons
+    if(json_quotable_character[static_cast<uint8_t>(c)]) {
+      return true;
+    }
+  }
+  return false;
+}
+
+#if SIMDJSON_EXPERIMENTAL_HAS_NEON
+simdjson_inline bool fast_needs_escaping(std::string_view view) {
+  if (view.size() < 16) {
+    return simple_needs_escaping(view);
+  }
+  size_t i = 0;
+  uint8x16_t running = vdupq_n_u8(0);
+  uint8x16_t v34 = vdupq_n_u8(34);
+  uint8x16_t v92 = vdupq_n_u8(92);
+
+  for (; i + 15 < view.size(); i += 16) {
+    uint8x16_t word = vld1q_u8((const uint8_t *)view.data() + i);
+    running = vorrq_u8(running, vceqq_u8(word, v34));
+    running = vorrq_u8(running, vceqq_u8(word, v92));
+    running = vorrq_u8(running, vcltq_u8(word, vdupq_n_u8(32)));
+  }
+  if (i < view.size()) {
+    uint8x16_t word =
+        vld1q_u8((const uint8_t *)view.data() + view.length() - 16);
+    running = vorrq_u8(running, vceqq_u8(word, v34));
+    running = vorrq_u8(running, vceqq_u8(word, v92));
+    running = vorrq_u8(running, vcltq_u8(word, vdupq_n_u8(32)));
+  }
+  return vmaxvq_u32(vreinterpretq_u32_u8(running)) != 0;
+}
+#elif SIMDJSON_EXPERIMENTAL_HAS_SSE2
+simdjson_inline bool fast_needs_escaping(std::string_view view) {
+  if (view.size() < 16) {
+    return simple_needs_escaping(view);
+  }
+  size_t i = 0;
+  __m128i running = _mm_setzero_si128();
+  for (; i + 15 < view.size(); i += 16) {
+
+    __m128i word = _mm_loadu_si128(reinterpret_cast<const __m128i *>(view.data() + i));
+    running = _mm_or_si128(running, _mm_cmpeq_epi8(word, _mm_set1_epi8(34)));
+    running = _mm_or_si128(running, _mm_cmpeq_epi8(word, _mm_set1_epi8(92)));
+    running = _mm_or_si128(
+        running, _mm_cmpeq_epi8(_mm_subs_epu8(word, _mm_set1_epi8(31)),
+                                _mm_setzero_si128()));
+  }
+  if (i < view.size()) {
+    __m128i word =
+        _mm_loadu_si128(reinterpret_cast<const __m128i *>(view.data() + view.length() - 16));
+    running = _mm_or_si128(running, _mm_cmpeq_epi8(word, _mm_set1_epi8(34)));
+    running = _mm_or_si128(running, _mm_cmpeq_epi8(word, _mm_set1_epi8(92)));
+    running = _mm_or_si128(
+        running, _mm_cmpeq_epi8(_mm_subs_epu8(word, _mm_set1_epi8(31)),
+                                _mm_setzero_si128()));
+  }
+  return _mm_movemask_epi8(running) != 0;
+}
+#else
+simdjson_inline bool fast_needs_escaping(std::string_view view) {
+  return simple_needs_escaping(view);
+}
+#endif
+
+
+SIMDJSON_CONSTEXPR_LAMBDA inline size_t
+find_next_json_quotable_character(const std::string_view view,
+                                  size_t location) noexcept {
+
+  for (auto pos = view.begin() + location; pos != view.end(); ++pos) {
+    if (json_quotable_character[static_cast<uint8_t>(*pos)]) {
+      return pos - view.begin();
+    }
+  }
+  return size_t(view.size());
+}
+
+SIMDJSON_CONSTEXPR_LAMBDA static std::string_view control_chars[] = {
+    "\\x0000", "\\x0001", "\\x0002", "\\x0003", "\\x0004", "\\x0005", "\\x0006",
+    "\\x0007", "\\x0008", "\\t",     "\\n",     "\\x000b", "\\f",     "\\r",
+    "\\x000e", "\\x000f", "\\x0010", "\\x0011", "\\x0012", "\\x0013", "\\x0014",
+    "\\x0015", "\\x0016", "\\x0017", "\\x0018", "\\x0019", "\\x001a", "\\x001b",
+    "\\x001c", "\\x001d", "\\x001e", "\\x001f"};
+
+SIMDJSON_CONSTEXPR_LAMBDA void escape_json_char(char c, char *&out) {
+  if (c == '"') {
+    memcpy(out, "\\\"", 2);
+    out += 2;
+  } else if (c == '\\') {
+    memcpy(out, "\\\\", 2);
+    out += 2;
+  } else {
+    std::string_view v = control_chars[uint8_t(c)];
+    memcpy(out, v.data(), v.size());
+    out += v.size();
+  }
+}
+
+inline size_t write_string_escaped(const std::string_view input, char *out) {
+  size_t mysize = input.size();
+  if (!fast_needs_escaping(input)) { // fast path!
+    memcpy(out, input.data(), input.size());
+    return input.size();
+  }
+  const char *const initout = out;
+  size_t location = find_next_json_quotable_character(input, 0);
+  memcpy(out, input.data(), location);
+  out += location;
+  escape_json_char(input[location], out);
+  location += 1;
+  while (location < mysize) {
+    size_t newlocation = find_next_json_quotable_character(input, location);
+    memcpy(out, input.data() + location, newlocation - location);
+    out += newlocation - location;
+    location = newlocation;
+    if (location == mysize) {
+      break;
+    }
+    escape_json_char(input[location], out);
+    location += 1;
+  }
+  return out - initout;
+}
+
+#if SIMDJSON_CONSTEVAL
+// unoptimized, meant for compile-time execution
+consteval std::string consteval_to_quoted_escaped(std::string_view input) {
+  std::string out = "\"";
+  for (char c : input) {
+    if (json_quotable_character[uint8_t(c)]) {
+      if (c == '"') {
+        out.append("\\\"");
+      } else if (c == '\\') {
+        out.append("\\\\");
+      } else {
+        std::string_view v = control_chars[uint8_t(c)];
+        out.append(v);
+      }
+    } else {
+      out.push_back(c);
+    }
+  }
+  out.push_back('"');
+  return out;
+}
+#endif // SIMDJSON_CONSTEVAL
+
+simdjson_inline string_builder::string_builder(size_t initial_capacity)
+    : buffer(new(std::nothrow) char[initial_capacity]), position(0),
+      capacity(buffer.get() != nullptr ? initial_capacity : 0),
+      is_valid(buffer.get() != nullptr) {}
+
+simdjson_inline bool string_builder::capacity_check(size_t upcoming_bytes) {
+  // We use the convention that when is_valid is false, then the capacity and
+  // the position are 0.
+  // Most of the time, this function will return true.
+  if (simdjson_likely(upcoming_bytes <= capacity - position)) {
+    return true;
+  }
+  // check for overflow, most of the time there is no overflow
+  if (simdjson_likely(position + upcoming_bytes < position)) {
+    return false;
+  }
+  // We will rarely get here.
+  grow_buffer((std::max)(capacity * 2, position + upcoming_bytes));
+  // If the buffer allocation failed, we set is_valid to false.
+  return is_valid;
+}
+
+simdjson_inline void string_builder::grow_buffer(size_t desired_capacity) {
+  if (!is_valid) {
+    return;
+  }
+  std::unique_ptr<char[]> new_buffer(new (std::nothrow) char[desired_capacity]);
+  if (new_buffer.get() == nullptr) {
+    set_valid(false);
+    return;
+  }
+  std::memcpy(new_buffer.get(), buffer.get(), position);
+  buffer.swap(new_buffer);
+  capacity = desired_capacity;
+}
+
+simdjson_inline void string_builder::set_valid(bool valid) noexcept {
+  if (!valid) {
+    is_valid = false;
+    capacity = 0;
+    position = 0;
+    buffer.reset();
+  } else {
+    is_valid = true;
+  }
+}
+
+simdjson_inline size_t string_builder::size() const noexcept {
+  return position;
+}
+
+simdjson_inline void string_builder::append(char c) noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position++] = c;
+  }
+}
+
+simdjson_inline void string_builder::append_null() noexcept {
+  constexpr char null_literal[] = "null";
+  constexpr size_t null_len = sizeof(null_literal) - 1;
+  if (capacity_check(null_len)) {
+    std::memcpy(buffer.get() + position, null_literal, null_len);
+    position += null_len;
+  }
+}
+
+simdjson_inline void string_builder::clear() noexcept {
+  position = 0;
+  // if it was invalid, we should try to repair it
+  if (!is_valid) {
+    capacity = 0;
+    buffer.reset();
+    is_valid = true;
+  }
+}
+
+namespace internal {
+
+// We could specialize further for 32-bit integers.
+simdjson_really_inline int int_log2(uint32_t x) { return (63 - leading_zeroes(x | 1)); }
+
+simdjson_really_inline int fast_digit_count(uint32_t x) {
+  static uint64_t table[] = {
+      4294967296,  8589934582,  8589934582,  8589934582,  12884901788,
+      12884901788, 12884901788, 17179868184, 17179868184, 17179868184,
+      21474826480, 21474826480, 21474826480, 21474826480, 25769703776,
+      25769703776, 25769703776, 30063771072, 30063771072, 30063771072,
+      34349738368, 34349738368, 34349738368, 34349738368, 38554705664,
+      38554705664, 38554705664, 41949672960, 41949672960, 41949672960,
+      42949672960, 42949672960};
+  return uint32_t((x + table[int_log2(x)]) >> 32);
+}
+
+simdjson_really_inline int int_log2(uint64_t x) { return 63 - leading_zeroes(x | 1); }
+
+simdjson_really_inline int fast_digit_count(uint64_t x) {
+  static uint64_t table[] = {9,
+                             99,
+                             999,
+                             9999,
+                             99999,
+                             999999,
+                             9999999,
+                             99999999,
+                             999999999,
+                             9999999999,
+                             99999999999,
+                             999999999999,
+                             9999999999999,
+                             99999999999999,
+                             999999999999999ULL,
+                             9999999999999999ULL,
+                             99999999999999999ULL,
+                             999999999999999999ULL,
+                             9999999999999999999ULL};
+  int y = (19 * int_log2(x) >> 6);
+  y += x > table[y];
+  return y + 1;
+}
+
+template <typename number_type, typename = typename std::enable_if<
+                                    std::is_unsigned<number_type>::value>::type>
+simdjson_really_inline size_t digit_count(number_type v) noexcept {
+  static_assert(sizeof(number_type) == 8 || sizeof(number_type) == 4 ||
+                    sizeof(number_type) == 2 || sizeof(number_type) == 1,
+                "We only support 8-bit, 16-bit, 32-bit and 64-bit numbers");
+  return fast_digit_count(v);
+}
+static const char decimal_table[200] = {
+  0x30, 0x30, 0x30, 0x31, 0x30, 0x32, 0x30, 0x33, 0x30, 0x34, 0x30, 0x35,
+  0x30, 0x36, 0x30, 0x37, 0x30, 0x38, 0x30, 0x39, 0x31, 0x30, 0x31, 0x31,
+  0x31, 0x32, 0x31, 0x33, 0x31, 0x34, 0x31, 0x35, 0x31, 0x36, 0x31, 0x37,
+  0x31, 0x38, 0x31, 0x39, 0x32, 0x30, 0x32, 0x31, 0x32, 0x32, 0x32, 0x33,
+  0x32, 0x34, 0x32, 0x35, 0x32, 0x36, 0x32, 0x37, 0x32, 0x38, 0x32, 0x39,
+  0x33, 0x30, 0x33, 0x31, 0x33, 0x32, 0x33, 0x33, 0x33, 0x34, 0x33, 0x35,
+  0x33, 0x36, 0x33, 0x37, 0x33, 0x38, 0x33, 0x39, 0x34, 0x30, 0x34, 0x31,
+  0x34, 0x32, 0x34, 0x33, 0x34, 0x34, 0x34, 0x35, 0x34, 0x36, 0x34, 0x37,
+  0x34, 0x38, 0x34, 0x39, 0x35, 0x30, 0x35, 0x31, 0x35, 0x32, 0x35, 0x33,
+  0x35, 0x34, 0x35, 0x35, 0x35, 0x36, 0x35, 0x37, 0x35, 0x38, 0x35, 0x39,
+  0x36, 0x30, 0x36, 0x31, 0x36, 0x32, 0x36, 0x33, 0x36, 0x34, 0x36, 0x35,
+  0x36, 0x36, 0x36, 0x37, 0x36, 0x38, 0x36, 0x39, 0x37, 0x30, 0x37, 0x31,
+  0x37, 0x32, 0x37, 0x33, 0x37, 0x34, 0x37, 0x35, 0x37, 0x36, 0x37, 0x37,
+  0x37, 0x38, 0x37, 0x39, 0x38, 0x30, 0x38, 0x31, 0x38, 0x32, 0x38, 0x33,
+  0x38, 0x34, 0x38, 0x35, 0x38, 0x36, 0x38, 0x37, 0x38, 0x38, 0x38, 0x39,
+  0x39, 0x30, 0x39, 0x31, 0x39, 0x32, 0x39, 0x33, 0x39, 0x34, 0x39, 0x35,
+  0x39, 0x36, 0x39, 0x37, 0x39, 0x38, 0x39, 0x39,
+};
+} // namespace internal
+
+template <typename number_type, typename>
+simdjson_inline void string_builder::append(number_type v) noexcept {
+  static_assert(std::is_same<number_type, bool>::value ||
+                    std::is_integral<number_type>::value ||
+                    std::is_floating_point<number_type>::value,
+                "Unsupported number type");
+  // If C++17 is available, we can 'if constexpr' here.
+  SIMDJSON_IF_CONSTEXPR(std::is_same<number_type, bool>::value) {
+    if (v) {
+      constexpr char true_literal[] = "true";
+      constexpr size_t true_len = sizeof(true_literal) - 1;
+      if (capacity_check(true_len)) {
+        std::memcpy(buffer.get() + position, true_literal, true_len);
+        position += true_len;
+      }
+    } else {
+      constexpr char false_literal[] = "false";
+      constexpr size_t false_len = sizeof(false_literal) - 1;
+      if (capacity_check(false_len)) {
+        std::memcpy(buffer.get() + position, false_literal, false_len);
+        position += false_len;
+      }
+    }
+  }
+  else SIMDJSON_IF_CONSTEXPR(std::is_unsigned<number_type>::value) {
+    constexpr size_t max_number_size = 20;
+    if (capacity_check(max_number_size)) {
+      using unsigned_type = typename std::make_unsigned<number_type>::type;
+      unsigned_type pv = static_cast<unsigned_type>(v);
+      size_t dc = internal::digit_count(pv);
+      char *write_pointer = buffer.get() + position + dc - 1;
+      while (pv >= 100) {
+        memcpy(write_pointer - 1, &internal::decimal_table[(pv % 100)*2], 2);
+        write_pointer -= 2;
+        pv /= 100;
+      }
+      if (pv >= 10) {
+        *write_pointer-- = char('0' + (pv % 10));
+        pv /= 10;
+      }
+      *write_pointer = char('0' + pv);
+      position += dc;
+    }
+  }
+  else SIMDJSON_IF_CONSTEXPR(std::is_integral<number_type>::value) {
+    constexpr size_t max_number_size = 20;
+    if (capacity_check(max_number_size)) {
+      using unsigned_type = typename std::make_unsigned<number_type>::type;
+      bool negative = v < 0;
+      unsigned_type pv = static_cast<unsigned_type>(v);
+      if (negative) {
+        pv = 0 - pv; // the 0 is for Microsoft
+      }
+      size_t dc = internal::digit_count(pv);
+      if (negative) {
+        buffer.get()[position++] = '-';
+      }
+      char *write_pointer = buffer.get() + position + dc - 1;
+      while (pv >= 100) {
+        memcpy(write_pointer - 1, &internal::decimal_table[(pv % 100)*2], 2);
+        write_pointer -= 2;
+        pv /= 100;
+      }
+      if (pv >= 10) {
+        *write_pointer-- = char('0' + (pv % 10));
+        pv /= 10;
+      }
+      *write_pointer = char('0' + pv);
+      position += dc;
+    }
+  }
+  else SIMDJSON_IF_CONSTEXPR(std::is_floating_point<number_type>::value) {
+    constexpr size_t max_number_size = 24;
+    if (capacity_check(max_number_size)) {
+      // We could specialize for float.
+      char *end = simdjson::internal::to_chars(buffer.get() + position, nullptr,
+                                               double(v));
+      position = end - buffer.get();
+    }
+  }
+}
+
+simdjson_inline void
+string_builder::escape_and_append(std::string_view input) noexcept {
+  // escaping might turn a control character into \x00xx so 6 characters.
+  if (capacity_check(6 * input.size())) {
+    position += write_string_escaped(input, buffer.get() + position);
+  }
+}
+
+simdjson_inline void
+string_builder::escape_and_append_with_quotes(std::string_view input) noexcept {
+  // escaping might turn a control character into \x00xx so 6 characters.
+  if (capacity_check(2 + 6 * input.size())) {
+    buffer.get()[position++] = '"';
+    position += write_string_escaped(input, buffer.get() + position);
+    buffer.get()[position++] = '"';
+  }
+}
+
+simdjson_inline void
+string_builder::escape_and_append_with_quotes(char input) noexcept {
+  // escaping might turn a control character into \x00xx so 6 characters.
+  if (capacity_check(2 + 6 * 1)) {
+    buffer.get()[position++] = '"';
+    std::string_view cinput(&input, 1);
+    position += write_string_escaped(cinput, buffer.get() + position);
+    buffer.get()[position++] = '"';
+  }
+}
+
+simdjson_inline void string_builder::escape_and_append_with_quotes(const char* input)  noexcept {
+  std::string_view cinput(input);
+  escape_and_append_with_quotes(cinput);
+}
+
+simdjson_inline void string_builder::append_raw(const char *c) noexcept {
+  size_t len = std::strlen(c);
+  append_raw(c, len);
+}
+
+simdjson_inline void
+string_builder::append_raw(std::string_view input) noexcept {
+  if (capacity_check(input.size())) {
+    std::memcpy(buffer.get() + position, input.data(), input.size());
+    position += input.size();
+  }
+}
+
+simdjson_inline void string_builder::append_raw(const char *str,
+                                                size_t len) noexcept {
+  if (capacity_check(len)) {
+    std::memcpy(buffer.get() + position, str, len);
+    position += len;
+  }
+}
+
+#if SIMDJSON_EXCEPTIONS
+simdjson_inline string_builder::operator std::string() const noexcept(false) {
+  return std::string(std::string_view());
+}
+
+simdjson_inline string_builder::operator std::string_view() const
+    noexcept(false) simdjson_lifetime_bound {
+  return view();
+}
+#endif
+
+simdjson_inline simdjson_result<std::string_view>
+string_builder::view() const noexcept {
+  if (!is_valid) {
+    return simdjson::OUT_OF_CAPACITY;
+  }
+  return std::string_view(buffer.get(), position);
+}
+
+simdjson_inline simdjson_result<const char *> string_builder::c_str() noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position] = '\0';
+    return buffer.get();
+  }
+  return simdjson::OUT_OF_CAPACITY;
+}
+
+simdjson_inline bool string_builder::validate_unicode() const noexcept {
+  return simdjson::validate_utf8(buffer.get(), position);
+}
+
+simdjson_inline void string_builder::start_object()  noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position++] = '{';
+  }
+}
+
+
+simdjson_inline void string_builder::end_object()  noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position++] = '}';
+  }
+}
+
+
+simdjson_inline void string_builder::start_array()  noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position++] = '[';
+  }
+}
+
+
+simdjson_inline void string_builder::end_array()  noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position++] = ']';
+  }
+}
+
+
+simdjson_inline void string_builder::append_comma()  noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position++] = ',';
+  }
+}
+
+
+simdjson_inline void string_builder::append_colon()  noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position++] = ':';
+  }
+}
+
+template<typename key_type, typename value_type>
+simdjson_inline void string_builder::append_key_value(key_type key, value_type value) noexcept {
+  static_assert(
+    std::is_arithmetic<value_type>::value ||
+    std::is_same<value_type, char>::value ||
+    std::is_same<value_type, const char*>::value ||
+    std::is_convertible<value_type, std::string_view>::value ||
+    std::is_same<value_type, std::nullptr_t>::value,
+    "Unsupported value type");
+  static_assert(
+    std::is_same<key_type, const char*>::value ||
+    std::is_convertible<key_type, std::string_view>::value,
+    "Unsupported key type");
+  escape_and_append_with_quotes(key);
+  append_colon();
+  SIMDJSON_IF_CONSTEXPR(std::is_same<value_type, std::nullptr_t>::value) {
+    append_null();
+  } else SIMDJSON_IF_CONSTEXPR(std::is_same<value_type, char>::value) {
+    escape_and_append_with_quotes(value);
+  } else SIMDJSON_IF_CONSTEXPR(std::is_convertible<value_type, std::string_view>::value) {
+    escape_and_append_with_quotes(value);
+  } else SIMDJSON_IF_CONSTEXPR(std::is_same<value_type, const char*>::value) {
+    escape_and_append_with_quotes(value);
+  } else {
+    append(value);
+  }
+}
+
+} // namespace builder
+} // namespace fallback
+} // namespace simdjson
+
+#endif // SIMDJSON_GENERIC_STRING_BUILDER_INL_H
+/* end file simdjson/generic/ondemand/json_string_builder-inl.h for fallback */
+/* including simdjson/generic/ondemand/json_builder.h for fallback: #include "simdjson/generic/ondemand/json_builder.h" */
+/* begin file simdjson/generic/ondemand/json_builder.h for fallback */
+/**
+ * This file is part of the builder API. It is temporarily in the ondemand directory
+ * but we will move it to a builder directory later.
+ */
+#ifndef SIMDJSON_GENERIC_BUILDER_H
+
+/* amalgamation skipped (editor-only): #ifndef SIMDJSON_CONDITIONAL_INCLUDE */
+/* amalgamation skipped (editor-only): #define SIMDJSON_GENERIC_STRING_BUILDER_H */
+/* amalgamation skipped (editor-only): #include "simdjson/generic/builder/json_string_builder.h" */
+/* amalgamation skipped (editor-only): #include "simdjson/concepts.h" */
+/* amalgamation skipped (editor-only): #endif // SIMDJSON_CONDITIONAL_INCLUDE */
+#if SIMDJSON_STATIC_REFLECTION
+
+#include <charconv>
+#include <cstring>
+#include <experimental/meta>
+#include <memory>
+#include <optional>
+#include <string_view>
+#include <type_traits>
+#include <utility>
+// #include <static_reflection> // for std::define_static_string - header not available yet
+
+namespace simdjson {
+namespace fallback {
+namespace builder {
+
+// Concept that checks if a type is a container but not a string (because
+// strings handling must be handled differently)
+template <typename T>
+concept container_but_not_string =
+    requires(T a) {
+      { a.size() } -> std::convertible_to<std::size_t>;
+      {
+        a[std::declval<std::size_t>()]
+      }; // check if elements are accessible for the subscript operator
+    } && !std::is_same_v<T, std::string> &&
+    !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char *>;
+
+template <class T>
+  requires(container_but_not_string<T>)
+constexpr void atom(string_builder &b, const T &t) {
+  if (t.size() == 0) {
+    b.append_raw("[]");
+    return;
+  }
+  b.append('[');
+  atom(b, t[0]);
+  for (size_t i = 1; i < t.size(); ++i) {
+    b.append(',');
+    atom(b, t[i]);
+  }
+  b.append(']');
+}
+
+template <class T>
+  requires(std::is_same_v<T, std::string> ||
+           std::is_same_v<T, std::string_view> ||
+           std::is_same_v<T, const char *> ||
+           std::is_same_v<T, char>)
+constexpr void atom(string_builder &b, const T &t) {
+  b.escape_and_append_with_quotes(t);
+}
+
+template <concepts::string_view_keyed_map T>
+constexpr void atom(string_builder &b, const T &m) {
+  if (m.empty()) {
+    b.append_raw("{}");
+    return;
+  }
+  b.append('{');
+  bool first = true;
+  for (const auto& [key, value] : m) {
+    if (!first) {
+      b.append(',');
+    }
+    first = false;
+    // Keys must be convertible to string_view per the concept
+    b.escape_and_append_with_quotes(key);
+    b.append(':');
+    atom(b, value);
+  }
+  b.append('}');
+}
+
+
+template<typename number_type,
+         typename = typename std::enable_if<std::is_arithmetic<number_type>::value && !std::is_same_v<number_type, char>>::type>
+constexpr void atom(string_builder &b, const number_type t) {
+  b.append(t);
+}
+#if SIMDJSON_CONSTEVAL
+consteval std::string consteval_to_quoted_escaped(std::string_view input);
+#endif
+
+template <class T>
+  requires(std::is_class_v<T> && !container_but_not_string<T> &&
+           !concepts::string_view_keyed_map<T> &&
+           !concepts::optional_type<T> &&
+           !concepts::smart_pointer<T> &&
+           !concepts::appendable_containers<T> &&
+           !std::is_same_v<T, std::string> &&
+           !std::is_same_v<T, std::string_view> &&
+           !std::is_same_v<T, const char*> &&
+           !std::is_same_v<T, char>)
+constexpr void atom(string_builder &b, const T &t) {
+  int i = 0;
+  b.append('{');
+  [:expand(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked())):] >> [&]<auto dm>() {
+    if (i != 0)
+      b.append(',');
+    constexpr auto key = std::define_static_string(consteval_to_quoted_escaped(std::meta::identifier_of(dm)));
+    b.append_raw(key);
+    b.append(':');
+    atom(b, t.[:dm:]);
+    i++;
+  };
+  b.append('}');
+}
+
+// Support for optional types (std::optional, etc.)
+template <concepts::optional_type T>
+constexpr void atom(string_builder &b, const T &opt) {
+  if (opt) {
+    atom(b, opt.value());
+  } else {
+    b.append_raw("null");
+  }
+}
+
+// Support for smart pointers (std::unique_ptr, std::shared_ptr, etc.)
+template <concepts::smart_pointer T>
+constexpr void atom(string_builder &b, const T &ptr) {
+  if (ptr) {
+    atom(b, *ptr);
+  } else {
+    b.append_raw("null");
+  }
+}
+
+// Support for enums - serialize as string representation using expand approach from P2996R12
+template <typename T>
+  requires(std::is_enum_v<T>)
+void atom(string_builder &b, const T &e) {
+#if SIMDJSON_STATIC_REFLECTION
+  std::string_view result = "<unnamed>";
+  [:expand(std::meta::enumerators_of(^^T)):] >> [&]<auto enum_val>{
+    if (e == [:enum_val:]) {
+      result = std::meta::identifier_of(enum_val);
+    }
+  };
+
+  if (result != "<unnamed>") {
+    b.append_raw("\"");
+    b.append_raw(result);
+    b.append_raw("\"");
+  } else {
+    // Fallback to integer if enum value not found
+    atom(b, static_cast<std::underlying_type_t<T>>(e));
+  }
+#else
+  // Fallback: serialize as integer if reflection not available
+  atom(b, static_cast<std::underlying_type_t<T>>(e));
+#endif
+}
+
+// Support for appendable containers that don't have operator[] (sets, etc.)
+template <concepts::appendable_containers T>
+  requires(!container_but_not_string<T> && !concepts::string_view_keyed_map<T> &&
+           !concepts::optional_type<T> && !concepts::smart_pointer<T> &&
+           !std::is_same_v<T, std::string> &&
+           !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char*>)
+constexpr void atom(string_builder &b, const T &container) {
+  if (container.empty()) {
+    b.append_raw("[]");
+    return;
+  }
+  b.append('[');
+  bool first = true;
+  for (const auto& item : container) {
+    if (!first) {
+      b.append(',');
+    }
+    first = false;
+    atom(b, item);
+  }
+  b.append(']');
+}
+
+// append functions that delegate to atom functions for primitive types
+template <class T>
+  requires(std::is_arithmetic_v<T> && !std::is_same_v<T, char>)
+void append(string_builder &b, const T &t) {
+  atom(b, t);
+}
+
+template <class T>
+  requires(std::is_same_v<T, std::string> ||
+           std::is_same_v<T, std::string_view> ||
+           std::is_same_v<T, const char *> ||
+           std::is_same_v<T, char>)
+void append(string_builder &b, const T &t) {
+  atom(b, t);
+}
+
+template <concepts::optional_type T>
+void append(string_builder &b, const T &t) {
+  atom(b, t);
+}
+
+template <concepts::smart_pointer T>
+void append(string_builder &b, const T &t) {
+  atom(b, t);
+}
+
+template <concepts::appendable_containers T>
+  requires(!container_but_not_string<T> && !concepts::string_view_keyed_map<T> &&
+           !concepts::optional_type<T> && !concepts::smart_pointer<T> &&
+           !std::is_same_v<T, std::string> &&
+           !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char*>)
+void append(string_builder &b, const T &t) {
+  atom(b, t);
+}
+
+template <concepts::string_view_keyed_map T>
+void append(string_builder &b, const T &t) {
+  atom(b, t);
+}
+
+// works for struct
+template <class Z>
+  requires(std::is_class_v<Z> && !container_but_not_string<Z> &&
+           !concepts::string_view_keyed_map<Z> &&
+           !concepts::optional_type<Z> &&
+           !concepts::smart_pointer<Z> &&
+           !concepts::appendable_containers<Z> &&
+           !std::is_same_v<Z, std::string> &&
+           !std::is_same_v<Z, std::string_view> &&
+           !std::is_same_v<Z, const char*> &&
+           !std::is_same_v<Z, char>)
+void append(string_builder &b, const Z &z) {
+  int i = 0;
+  b.append('{');
+  [:expand(std::meta::nonstatic_data_members_of(^^Z, std::meta::access_context::unchecked())):] >> [&]<auto dm>() {
+    if (i != 0)
+      b.append(',');
+    constexpr auto key = std::define_static_string(consteval_to_quoted_escaped(std::meta::identifier_of(dm)));
+    b.append_raw(key);
+    b.append(':');
+    atom(b, z.[:dm:]);
+    i++;
+  };
+  b.append('}');
+}
+
+// works for container
+template <class Z>
+  requires(container_but_not_string<Z>)
+void append(string_builder &b, const Z &z) {
+  if (z.size() == 0) {
+    b.append_raw("[]");
+    return;
+  }
+  b.append('[');
+  atom(b, z[0]);
+  for (size_t i = 1; i < z.size(); ++i) {
+    b.append(',');
+    atom(b, z[i]);
+  }
+  b.append(']');
+}
+
+template <class Z>
+simdjson_result<std::string> to_json_string(const Z &z, size_t initial_capacity = 1024) {
+  string_builder b(initial_capacity);
+  append(b, z);
+  std::string_view s;
+  if(auto e = b.view().get(s); e) { return e; }
+  return std::string(s);
+}
+
+template <class Z>
+simdjson_error to_json(const Z &z, std::string &s) {
+  string_builder b;
+  append(b, z);
+  std::string_view view;
+  if(auto e = b.view().get(view); e) { return e; }
+  s.assign(view);
+  return SUCCESS;
+}
+
+template <class Z>
+string_builder& operator<<(string_builder& b, const Z& z) {
+  append(b, z);
+  return b;
+}
+} // namespace builder
+} // namespace fallback
+} // namespace simdjson
+#endif // SIMDJSON_STATIC_REFLECTION
+
+#endif
+/* end file simdjson/generic/ondemand/json_builder.h for fallback */
 
 /* end file simdjson/generic/ondemand/amalgamated.h for fallback */
 /* including simdjson/fallback/end.h: #include "simdjson/fallback/end.h" */
@@ -54596,6 +58282,31 @@ simdjson_inline backslash_and_quote backslash_and_quote::copy_and_find(const uin
   };
 }
 
+
+struct escaping {
+  static constexpr uint32_t BYTES_PROCESSED = 32;
+  simdjson_inline static escaping copy_and_find(const uint8_t *src, uint8_t *dst);
+
+  simdjson_inline bool has_escape() { return escape_bits != 0; }
+  simdjson_inline int escape_index() { return trailing_zeroes(escape_bits); }
+
+  uint64_t escape_bits;
+}; // struct escaping
+
+
+
+simdjson_inline escaping escaping::copy_and_find(const uint8_t *src, uint8_t *dst) {
+  static_assert(SIMDJSON_PADDING >= (BYTES_PROCESSED - 1), "escaping finder must process fewer than SIMDJSON_PADDING bytes");
+  simd8<uint8_t> v(src);
+  v.store(dst);
+  simd8<bool> is_quote = (v == '"');
+  simd8<bool> is_backslash = (v == '\\');
+  simd8<bool> is_control = (v < 32);
+  return {
+    uint64_t((is_backslash | is_quote | is_control).to_bitmask())
+  };
+}
+
 } // unnamed namespace
 } // namespace haswell
 } // namespace simdjson
@@ -54741,7 +58452,7 @@ template <typename T, typename ValT = haswell::ondemand::value>
 concept custom_deserializable = tag_invocable<deserialize_tag, ValT&, T&>;
 
 template <typename T, typename ValT = haswell::ondemand::value>
-concept deserializable = custom_deserializable<T, ValT> || is_builtin_deserializable_v<T>;
+concept deserializable = custom_deserializable<T, ValT> || is_builtin_deserializable_v<T> || concepts::optional_type<T>;
 
 template <typename T, typename ValT = haswell::ondemand::value>
 concept nothrow_custom_deserializable = nothrow_tag_invocable<deserialize_tag, ValT&, T&>;
@@ -54752,9 +58463,25 @@ concept nothrow_deserializable = nothrow_custom_deserializable<T, ValT> || is_bu
 
 /// Deserialize Tag
 inline constexpr struct deserialize_tag {
+  using array_type = haswell::ondemand::array;
+  using object_type = haswell::ondemand::object;
   using value_type = haswell::ondemand::value;
   using document_type = haswell::ondemand::document;
   using document_reference_type = haswell::ondemand::document_reference;
+
+  // Customization Point for array
+  template <typename T>
+    requires custom_deserializable<T, value_type>
+  [[nodiscard]] constexpr /* error_code */ auto operator()(array_type &object, T& output) const noexcept(nothrow_custom_deserializable<T, value_type>) {
+    return tag_invoke(*this, object, output);
+  }
+
+  // Customization Point for object
+  template <typename T>
+    requires custom_deserializable<T, value_type>
+  [[nodiscard]] constexpr /* error_code */ auto operator()(object_type &object, T& output) const noexcept(nothrow_custom_deserializable<T, value_type>) {
+    return tag_invoke(*this, object, output);
+  }
 
   // Customization Point for value
   template <typename T>
@@ -55323,6 +59050,7 @@ public:
    *
    * You may use get_double(), get_bool(), get_uint64(), get_int64(),
    * get_object(), get_array(), get_raw_json_string(), or get_string() instead.
+   * When SIMDJSON_SUPPORTS_DESERIALIZATION is set, custom types are also supported.
    *
    * @returns A value of the given type, parsed from the JSON.
    * @returns INCORRECT_TYPE If the JSON value is not the given type.
@@ -55346,6 +59074,7 @@ public:
    * Get this value as the given type.
    *
    * Supported types: object, array, raw_json_string, string_view, uint64_t, int64_t, double, bool
+   * If the macro SIMDJSON_SUPPORTS_DESERIALIZATION is set, then custom types are also supported.
    *
    * @param out This is set to a value of the given type, parsed from the JSON. If there is an error, this may not be initialized.
    * @returns INCORRECT_TYPE If the JSON value is not an object.
@@ -55362,6 +59091,19 @@ public:
   #if SIMDJSON_SUPPORTS_DESERIALIZATION
   if constexpr (custom_deserializable<T, value>) {
       return deserialize(*this, out);
+  } else if constexpr (concepts::optional_type<T>) {
+      using value_type = typename std::remove_cvref_t<T>::value_type;
+
+      // Check if the value is null
+      if (is_null()) {
+        out.reset(); // Set to nullopt
+        return SUCCESS;
+      }
+
+      if (!out) {
+        out.emplace();
+      }
+      return get<value_type>(out.value());
   } else {
     static_assert(!sizeof(T), "The get<T> method with type T is not implemented by the simdjson library. "
       "And you do not seem to have added support for it. Indeed, we have that "
@@ -57588,6 +61330,37 @@ public:
    *         - INDEX_OUT_OF_BOUNDS if the array index is larger than an array length
    */
   simdjson_inline simdjson_result<value> at(size_t index) noexcept;
+
+#if SIMDJSON_SUPPORTS_DESERIALIZATION
+  /**
+   * Get this array as the given type.
+   *
+   * @param out This is set to a value of the given type, parsed from the JSON. If there is an error, this may not be initialized.
+   * @returns INCORRECT_TYPE If the JSON array is not of the given type.
+   * @returns SUCCESS If the parse succeeded and the out parameter was set to the value.
+   */
+  template <typename T>
+  simdjson_inline error_code get(T &out)
+     noexcept(custom_deserializable<T, array> ? nothrow_custom_deserializable<T, array> : true) {
+    static_assert(custom_deserializable<T, array>);
+    return deserialize(*this, out);
+  }
+  /**
+   * Get this array as the given type.
+   *
+   * @returns A value of the given type, parsed from the JSON.
+   * @returns INCORRECT_TYPE If the JSON value is not the given type.
+   */
+  template <typename T>
+  simdjson_inline simdjson_result<T> get()
+    noexcept(custom_deserializable<T, value> ? nothrow_custom_deserializable<T, value> : true)
+  {
+    static_assert(std::is_default_constructible<T>::value, "The specified type is not default constructible.");
+    T out{};
+    SIMDJSON_TRY(get<T>(out));
+    return out;
+  }
+#endif // SIMDJSON_SUPPORTS_DESERIALIZATION
 protected:
   /**
    * Go to the end of the array, no matter where you are right now.
@@ -57666,7 +61439,28 @@ public:
   simdjson_inline simdjson_result<haswell::ondemand::value> at_pointer(std::string_view json_pointer) noexcept;
   simdjson_inline simdjson_result<haswell::ondemand::value> at_path(std::string_view json_path) noexcept;
   simdjson_inline simdjson_result<std::string_view> raw_json() noexcept;
+#if SIMDJSON_SUPPORTS_DESERIALIZATION
+  // TODO: move this code into object-inl.h
 
+  template<typename T>
+  simdjson_inline simdjson_result<T> get() noexcept {
+    if (error()) { return error(); }
+    if constexpr (std::is_same_v<T, haswell::ondemand::array>) {
+      return first;
+    }
+    return first.get<T>();
+  }
+  template<typename T>
+  simdjson_inline error_code get(T& out) noexcept {
+    if (error()) { return error(); }
+    if constexpr (std::is_same_v<T, haswell::ondemand::array>) {
+      out = first;
+    } else {
+      SIMDJSON_TRY( first.get<T>(out) );
+    }
+    return SUCCESS;
+  }
+#endif // SIMDJSON_SUPPORTS_DESERIALIZATION
 };
 
 } // namespace simdjson
@@ -57711,7 +61505,8 @@ public:
    *
    * Part of the std::iterator interface.
    */
-  simdjson_inline simdjson_result<value> operator*() noexcept; // MUST ONLY BE CALLED ONCE PER ITERATION.
+  simdjson_inline simdjson_result<value>
+  operator*() noexcept; // MUST ONLY BE CALLED ONCE PER ITERATION.
   /**
    * Check if we are at the end of the JSON.
    *
@@ -57735,6 +61530,11 @@ public:
    */
   simdjson_inline array_iterator &operator++() noexcept;
 
+  /**
+   * Check if the array is at the end.
+   */
+  [[nodiscard]] simdjson_inline bool at_end() const noexcept;
+
 private:
   value_iterator iter{};
 
@@ -57753,7 +61553,6 @@ namespace simdjson {
 
 template<>
 struct simdjson_result<haswell::ondemand::array_iterator> : public haswell::implementation_simdjson_result_base<haswell::ondemand::array_iterator> {
-public:
   simdjson_inline simdjson_result(haswell::ondemand::array_iterator &&value) noexcept; ///< @private
   simdjson_inline simdjson_result(error_code error) noexcept; ///< @private
   simdjson_inline simdjson_result() noexcept = default;
@@ -57766,6 +61565,8 @@ public:
   simdjson_inline bool operator==(const simdjson_result<haswell::ondemand::array_iterator> &) const noexcept;
   simdjson_inline bool operator!=(const simdjson_result<haswell::ondemand::array_iterator> &) const noexcept;
   simdjson_inline simdjson_result<haswell::ondemand::array_iterator> &operator++() noexcept;
+
+  [[nodiscard]] simdjson_inline bool at_end() const noexcept;
 };
 
 } // namespace simdjson
@@ -58000,7 +61801,7 @@ public:
    * Be mindful that the document instance must remain in scope while you are accessing object, array and value instances.
    *
    * @param out This is set to a value of the given type, parsed from the JSON. If there is an error, this may not be initialized.
-   * @returns INCORRECT_TYPE If the JSON value is not an object.
+   * @returns INCORRECT_TYPE If the JSON value is of the given type.
    * @returns SUCCESS If the parse succeeded and the out parameter was set to the value.
    */
   template<typename T>
@@ -58098,7 +61899,7 @@ public:
    *          time it parses a document or when it is destroyed.
    * @exception simdjson_error(INCORRECT_TYPE) if the JSON value is not a string.
    */
-  simdjson_inline operator std::string_view() noexcept(false);
+  simdjson_inline operator std::string_view() noexcept(false) simdjson_lifetime_bound;
   /**
    * Cast this JSON value to a raw_json_string.
    *
@@ -58107,7 +61908,7 @@ public:
    * @returns A pointer to the raw JSON for the given string.
    * @exception simdjson_error(INCORRECT_TYPE) if the JSON value is not a string.
    */
-  simdjson_inline operator raw_json_string() noexcept(false);
+  simdjson_inline operator raw_json_string() noexcept(false) simdjson_lifetime_bound;
   /**
    * Cast this JSON value to a bool.
    *
@@ -59487,6 +63288,36 @@ public:
    */
   simdjson_inline simdjson_result<std::string_view> raw_json() noexcept;
 
+#if SIMDJSON_SUPPORTS_DESERIALIZATION
+  /**
+   * Get this object as the given type.
+   *
+   * @param out This is set to a value of the given type, parsed from the JSON. If there is an error, this may not be initialized.
+   * @returns INCORRECT_TYPE If the JSON object is not of the given type.
+   * @returns SUCCESS If the parse succeeded and the out parameter was set to the value.
+   */
+  template <typename T>
+  simdjson_inline error_code get(T &out)
+     noexcept(custom_deserializable<T, object> ? nothrow_custom_deserializable<T, object> : true) {
+    static_assert(custom_deserializable<T, object>);
+    return deserialize(*this, out);
+  }
+  /**
+   * Get this array as the given type.
+   *
+   * @returns A value of the given type, parsed from the JSON.
+   * @returns INCORRECT_TYPE If the JSON value is not the given type.
+   */
+  template <typename T>
+  simdjson_inline simdjson_result<T> get()
+    noexcept(custom_deserializable<T, value> ? nothrow_custom_deserializable<T, value> : true)
+  {
+    static_assert(std::is_default_constructible<T>::value, "The specified type is not default constructible.");
+    T out{};
+    SIMDJSON_TRY(get<T>(out));
+    return out;
+  }
+#endif // SIMDJSON_SUPPORTS_DESERIALIZATION
 protected:
   /**
    * Go to the end of the object, no matter where you are right now.
@@ -59530,12 +63361,32 @@ public:
   simdjson_inline simdjson_result<haswell::ondemand::value> operator[](std::string_view key) && noexcept;
   simdjson_inline simdjson_result<haswell::ondemand::value> at_pointer(std::string_view json_pointer) noexcept;
   simdjson_inline simdjson_result<haswell::ondemand::value> at_path(std::string_view json_path) noexcept;
-
   inline simdjson_result<bool> reset() noexcept;
   inline simdjson_result<bool> is_empty() noexcept;
   inline simdjson_result<size_t> count_fields() & noexcept;
   inline simdjson_result<std::string_view> raw_json() noexcept;
+  #if SIMDJSON_SUPPORTS_DESERIALIZATION
+  // TODO: move this code into object-inl.h
 
+  template<typename T>
+  simdjson_inline simdjson_result<T> get() noexcept {
+    if (error()) { return error(); }
+    if constexpr (std::is_same_v<T, haswell::ondemand::object>) {
+      return first;
+    }
+    return first.get<T>();
+  }
+  template<typename T>
+  simdjson_inline error_code get(T& out) noexcept {
+    if (error()) { return error(); }
+    if constexpr (std::is_same_v<T, haswell::ondemand::object>) {
+      out = first;
+    } else {
+      SIMDJSON_TRY( first.get<T>(out) );
+    }
+    return SUCCESS;
+  }
+#endif // SIMDJSON_SUPPORTS_DESERIALIZATION
 };
 
 } // namespace simdjson
@@ -59664,6 +63515,20 @@ inline simdjson_result<std::string_view> to_json_string(simdjson_result<haswell:
 inline simdjson_result<std::string_view> to_json_string(simdjson_result<haswell::ondemand::value> x);
 inline simdjson_result<std::string_view> to_json_string(simdjson_result<haswell::ondemand::object> x);
 inline simdjson_result<std::string_view> to_json_string(simdjson_result<haswell::ondemand::array> x);
+
+#if SIMDJSON_STATIC_REFLECTION
+/**
+ * Create a JSON string from any user-defined type using static reflection.
+ * Only available when SIMDJSON_STATIC_REFLECTION is enabled.
+ */
+template<typename T>
+  requires(!std::same_as<T, haswell::ondemand::document> &&
+           !std::same_as<T, haswell::ondemand::value> &&
+           !std::same_as<T, haswell::ondemand::object> &&
+           !std::same_as<T, haswell::ondemand::array>)
+inline std::string to_json_string(const T& obj);
+#endif
+
 } // namespace simdjson
 
 /**
@@ -59740,12 +63605,17 @@ inline std::ostream& operator<<(std::ostream& out, simdjson::simdjson_result<sim
 #ifndef SIMDJSON_ONDEMAND_DESERIALIZE_H
 /* amalgamation skipped (editor-only): #ifndef SIMDJSON_CONDITIONAL_INCLUDE */
 /* amalgamation skipped (editor-only): #define SIMDJSON_ONDEMAND_DESERIALIZE_H */
+/* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/object.h" */
 /* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/array.h" */
 /* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/base.h" */
 /* amalgamation skipped (editor-only): #endif // SIMDJSON_CONDITIONAL_INCLUDE */
 
 #include <concepts>
 #include <limits>
+#if SIMDJSON_STATIC_REFLECTION
+#include <experimental/meta>
+// #include <static_reflection> // for std::define_static_string - header not available yet
+#endif
 
 namespace simdjson {
 template <typename T>
@@ -59792,6 +63662,22 @@ error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept {
   return SUCCESS;
 }
 
+//////////////////////////////
+// String deserialization
+//////////////////////////////
+
+// just a character!
+error_code tag_invoke(deserialize_tag, auto &val, char &out) noexcept {
+  std::string_view x;
+  SIMDJSON_TRY(val.get_string().get(x));
+  if(x.size() != 1) {
+    return INCORRECT_TYPE;
+  }
+  out = x[0];
+  return SUCCESS;
+}
+
+// any string-like type (can be constructed from std::string_view)
 template <concepts::constructible_from_string_view T, typename ValT>
   requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(std::is_nothrow_constructible_v<T, std::string_view>) {
@@ -59813,15 +63699,20 @@ template <concepts::appendable_containers T, typename ValT>
   requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(false) {
   using value_type = typename std::remove_cvref_t<T>::value_type;
-  static_assert(
+  /*static_assert(
       deserializable<value_type, ValT>,
-      "The specified type inside the container must itself be deserializable");
+      "The specified type inside the container must itself be deserializable");*/
   static_assert(
       std::is_default_constructible_v<value_type>,
       "The specified type inside the container must default constructible.");
 
   haswell::ondemand::array arr;
-  SIMDJSON_TRY(val.get_array().get(arr));
+  if constexpr (std::is_same_v<std::remove_cvref_t<ValT>, haswell::ondemand::array>) {
+    arr = val;
+  } else {
+    SIMDJSON_TRY(val.get_array().get(arr));
+  }
+
   for (auto v : arr) {
     if constexpr (concepts::returns_reference<T>) {
       if (auto const err = v.get<value_type>().get(concepts::emplace_one(out));
@@ -59878,7 +63769,45 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(false) {
  return SUCCESS;
 }
 
+template <concepts::string_view_keyed_map T>
+error_code tag_invoke(deserialize_tag, haswell::ondemand::object &obj, T &out) noexcept {
+  using value_type = typename std::remove_cvref_t<T>::mapped_type;
 
+  out.clear();
+  for (auto field : obj) {
+    std::string_view key;
+    SIMDJSON_TRY(field.unescaped_key().get(key));
+
+    haswell::ondemand::value value_obj;
+    SIMDJSON_TRY(field.value().get(value_obj));
+
+    value_type this_value;
+    SIMDJSON_TRY(value_obj.get(this_value));
+    out.emplace(typename T::key_type(key), std::move(this_value));
+  }
+  return SUCCESS;
+}
+
+template <concepts::string_view_keyed_map T>
+error_code tag_invoke(deserialize_tag, haswell::ondemand::value &val, T &out) noexcept {
+  haswell::ondemand::object obj;
+  SIMDJSON_TRY(val.get_object().get(obj));
+  return simdjson::deserialize(obj, out);
+}
+
+template <concepts::string_view_keyed_map T>
+error_code tag_invoke(deserialize_tag, haswell::ondemand::document &doc, T &out) noexcept {
+  haswell::ondemand::object obj;
+  SIMDJSON_TRY(doc.get_object().get(obj));
+  return simdjson::deserialize(obj, out);
+}
+
+template <concepts::string_view_keyed_map T>
+error_code tag_invoke(deserialize_tag, haswell::ondemand::document_reference &doc, T &out) noexcept {
+  haswell::ondemand::object obj;
+  SIMDJSON_TRY(doc.get_object().get(obj));
+  return simdjson::deserialize(obj, out);
+}
 
 
 /**
@@ -59921,22 +63850,334 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(nothrow_deser
 /**
  * This CPO (Customization Point Object) will help deserialize into optional types.
  */
-template <concepts::optional_type T, typename ValT>
+template <concepts::optional_type T>
   requires(!require_custom_serialization<T>)
-error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(nothrow_deserializable<typename std::remove_cvref_t<T>::value_type, ValT>) {
+error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept(nothrow_deserializable<typename std::remove_cvref_t<T>::value_type, decltype(val)>) {
   using value_type = typename std::remove_cvref_t<T>::value_type;
 
-  static_assert(
-      deserializable<value_type, ValT>,
-      "The specified type inside the unique_ptr must itself be deserializable");
-  static_assert(
-      std::is_default_constructible_v<value_type>,
-      "The specified type inside the unique_ptr must default constructible.");
+  // Check if the value is null
+  if (val.is_null()) {
+    out.reset(); // Set to nullopt
+    return SUCCESS;
+  }
 
   if (!out) {
     out.emplace();
   }
   SIMDJSON_TRY(val.template get<value_type>(out.value()));
+  return SUCCESS;
+}
+
+
+#if SIMDJSON_STATIC_REFLECTION
+
+
+template <typename T>
+constexpr bool user_defined_type = (std::is_class_v<T>
+&& !std::is_same_v<T, std::string> && !std::is_same_v<T, std::string_view> && !concepts::optional_type<T> &&
+!concepts::appendable_containers<T> && !require_custom_serialization<T>);
+
+
+// workaround from
+// https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2024/p2996r10.html#back-and-forth
+// for missing expansion statements
+namespace __impl {
+  template<auto... vals>
+  struct replicator_type {
+    template<typename F>
+      constexpr void operator>>(F body) const {
+        (body.template operator()<vals>(), ...);
+      }
+  };
+
+  template<auto... vals>
+  replicator_type<vals...> replicator = {};
+}
+
+template<typename R>
+consteval auto expand(R range) {
+  std::vector<std::meta::info> args;
+  for (auto r : range) {
+    args.push_back(reflect_constant(r));
+  }
+  return substitute(^^__impl::replicator, args);
+}
+// end of workaround
+
+template <typename T, typename ValT>
+  requires(user_defined_type<T> && std::is_class_v<T>)
+error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept {
+  haswell::ondemand::object obj;
+  if constexpr (std::is_same_v<std::remove_cvref_t<ValT>, haswell::ondemand::object>) {
+    obj = val;
+  } else {
+    SIMDJSON_TRY(val.get_object().get(obj));
+  }
+  error_code e = simdjson::SUCCESS;
+
+  [:expand(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked())):] >> [&]<auto mem>() {
+    if constexpr (!std::meta::is_const(mem) && std::meta::is_public(mem)) {
+      constexpr std::string_view key = std::define_static_string(std::meta::identifier_of(mem));
+      // Note: removed static assert as optional types are now handled generically
+      // as long we are succesful or the field is not found, we continue
+      if(e == simdjson::SUCCESS || e == simdjson::NO_SUCH_FIELD) {
+        e = obj[key].get(out.[:mem:]);
+      }
+    }
+  };
+  return e;
+}
+
+// Support for enum deserialization - deserialize from string representation using expand approach from P2996R12
+template <typename T, typename ValT>
+  requires(std::is_enum_v<T>)
+error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept {
+#if SIMDJSON_STATIC_REFLECTION
+  std::string_view str;
+  SIMDJSON_TRY(val.get_string().get(str));
+
+  bool found = false;
+  [:expand(std::meta::enumerators_of(^^T)):] >> [&]<auto enum_val>{
+    if (!found && str == std::meta::identifier_of(enum_val)) {
+      out = [:enum_val:];
+      found = true;
+    }
+  };
+
+  return found ? SUCCESS : INCORRECT_TYPE;
+#else
+  // Fallback: deserialize as integer if reflection not available
+  std::underlying_type_t<T> int_val;
+  SIMDJSON_TRY(val.get(int_val));
+  out = static_cast<T>(int_val);
+  return SUCCESS;
+#endif
+}
+
+template <typename simdjson_value, typename T>
+  requires(user_defined_type<std::remove_cvref_t<T>>)
+error_code tag_invoke(deserialize_tag, simdjson_value &val, std::unique_ptr<T> &out) noexcept {
+  if (!out) {
+    out = std::make_unique<T>();
+    if (!out) {
+      return MEMALLOC;
+    }
+  }
+  if (auto err = val.get(*out)) {
+    out.reset();
+    return err;
+  }
+  return SUCCESS;
+}
+
+template <typename simdjson_value, typename T>
+  requires(user_defined_type<std::remove_cvref_t<T>>)
+error_code tag_invoke(deserialize_tag, simdjson_value &val, std::shared_ptr<T> &out) noexcept {
+  if (!out) {
+    out = std::make_shared<T>();
+    if (!out) {
+      return MEMALLOC;
+    }
+  }
+  if (auto err = val.get(*out)) {
+    out.reset();
+    return err;
+  }
+  return SUCCESS;
+}
+
+#endif // SIMDJSON_STATIC_REFLECTION
+
+////////////////////////////////////////
+// Unique pointers
+////////////////////////////////////////
+error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<bool> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_unique<bool>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_bool().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<int64_t> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_unique<int64_t>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_int64().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<uint64_t> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_unique<uint64_t>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_uint64().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<double> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_unique<double>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_double().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<std::string_view> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_unique<std::string_view>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_string().get(*out));
+  return SUCCESS;
+}
+
+
+////////////////////////////////////////
+// Shared pointers
+////////////////////////////////////////
+error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<bool> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_shared<bool>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_bool().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<int64_t> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_shared<int64_t>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_int64().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<uint64_t> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_shared<uint64_t>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_uint64().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<double> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_shared<double>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_double().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<std::string_view> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_shared<std::string_view>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_string().get(*out));
+  return SUCCESS;
+}
+
+
+////////////////////////////////////////
+// Explicit optional specializations
+////////////////////////////////////////
+
+////////////////////////////////////////
+// Explicit smart pointer specializations for string and int types
+////////////////////////////////////////
+error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<std::string> &out) noexcept {
+  // Check if the value is null
+  if (val.is_null()) {
+    out.reset(); // Set to nullptr
+    return SUCCESS;
+  }
+
+  if (!out) {
+    out = std::make_unique<std::string>();
+  }
+  std::string_view str;
+  SIMDJSON_TRY(val.get_string().get(str));
+  *out = std::string{str};
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<std::string> &out) noexcept {
+  // Check if the value is null
+  if (val.is_null()) {
+    out.reset(); // Set to nullptr
+    return SUCCESS;
+  }
+
+  if (!out) {
+    out = std::make_shared<std::string>();
+  }
+  std::string_view str;
+  SIMDJSON_TRY(val.get_string().get(str));
+  *out = std::string{str};
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<int> &out) noexcept {
+  // Check if the value is null
+  if (val.is_null()) {
+    out.reset(); // Set to nullptr
+    return SUCCESS;
+  }
+
+  if (!out) {
+    out = std::make_unique<int>();
+  }
+  int64_t temp;
+  SIMDJSON_TRY(val.get_int64().get(temp));
+  *out = static_cast<int>(temp);
   return SUCCESS;
 }
 
@@ -60227,6 +64468,9 @@ simdjson_inline array_iterator &array_iterator::operator++() noexcept {
   return *this;
 }
 
+simdjson_inline bool array_iterator::at_end() const noexcept {
+  return iter.at_end();
+}
 } // namespace ondemand
 } // namespace haswell
 } // namespace simdjson
@@ -60263,7 +64507,9 @@ simdjson_inline simdjson_result<haswell::ondemand::array_iterator> &simdjson_res
   ++(first);
   return *this;
 }
-
+simdjson_inline bool simdjson_result<haswell::ondemand::array_iterator>::at_end() const noexcept {
+  return !first.iter.is_valid() || first.at_end();
+}
 } // namespace simdjson
 
 #endif // SIMDJSON_GENERIC_ONDEMAND_ARRAY_ITERATOR_INL_H
@@ -61021,8 +65267,8 @@ simdjson_inline document::operator object() & noexcept(false) { return get_objec
 simdjson_inline document::operator uint64_t() noexcept(false) { return get_uint64(); }
 simdjson_inline document::operator int64_t() noexcept(false) { return get_int64(); }
 simdjson_inline document::operator double() noexcept(false) { return get_double(); }
-simdjson_inline document::operator std::string_view() noexcept(false) { return get_string(false); }
-simdjson_inline document::operator raw_json_string() noexcept(false) { return get_raw_json_string(); }
+simdjson_inline document::operator std::string_view() noexcept(false) simdjson_lifetime_bound { return get_string(false); }
+simdjson_inline document::operator raw_json_string() noexcept(false) simdjson_lifetime_bound { return get_raw_json_string(); }
 simdjson_inline document::operator bool() noexcept(false) { return get_bool(); }
 simdjson_inline document::operator value() noexcept(false) { return get_value(); }
 
@@ -62579,6 +66825,8 @@ simdjson_inline void json_iterator::assert_valid_position(token_position positio
 #ifndef SIMDJSON_CLANG_VISUAL_STUDIO
   SIMDJSON_ASSUME( position >= &parser->implementation->structural_indexes[0] );
   SIMDJSON_ASSUME( position < &parser->implementation->structural_indexes[parser->implementation->n_structural_indexes] );
+#else
+  (void)position; // Suppress unused parameter warning
 #endif
 }
 
@@ -63427,6 +67675,7 @@ simdjson_inline  simdjson_result<std::string_view> simdjson_result<haswell::onde
   if (error()) { return error(); }
   return first.raw_json();
 }
+
 } // namespace simdjson
 
 #endif // SIMDJSON_GENERIC_ONDEMAND_OBJECT_INL_H
@@ -64002,6 +68251,9 @@ simdjson_inline simdjson_warn_unused simdjson_result<std::string_view> simdjson_
 /* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/object.h" */
 /* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/serialization.h" */
 /* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/value.h" */
+/* amalgamation skipped (editor-only): #if SIMDJSON_STATIC_REFLECTION */
+/* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/json_builder.h" */
+/* amalgamation skipped (editor-only): #endif */
 /* amalgamation skipped (editor-only): #endif // SIMDJSON_CONDITIONAL_INCLUDE */
 
 namespace simdjson {
@@ -65423,6 +69675,1151 @@ simdjson_inline simdjson_result<haswell::ondemand::value_iterator>::simdjson_res
 #endif // SIMDJSON_GENERIC_ONDEMAND_VALUE_ITERATOR_INL_H
 /* end file simdjson/generic/ondemand/value_iterator-inl.h for haswell */
 
+// JSON builder, ideally they should not be part of the ondemand directory
+// but it is convenient for now to have them here.
+/* including simdjson/generic/ondemand/json_string_builder.h for haswell: #include "simdjson/generic/ondemand/json_string_builder.h" */
+/* begin file simdjson/generic/ondemand/json_string_builder.h for haswell */
+/**
+ * This file is part of the builder API. It is temporarily in the ondemand directory
+ * but we will move it to a builder directory later.
+ */
+#ifndef SIMDJSON_GENERIC_STRING_BUILDER_H
+
+/* amalgamation skipped (editor-only): #ifndef SIMDJSON_CONDITIONAL_INCLUDE */
+/* amalgamation skipped (editor-only): #define SIMDJSON_GENERIC_STRING_BUILDER_H */
+/* amalgamation skipped (editor-only): #include "simdjson/generic/implementation_simdjson_result_base.h" */
+/* amalgamation skipped (editor-only): #endif // SIMDJSON_CONDITIONAL_INCLUDE */
+
+namespace simdjson {
+namespace haswell {
+namespace builder {
+
+/**
+ * A builder for JSON strings representing documents. This is a low-level
+ * builder that is not meant to be used directly by end-users. Though it
+ * supports atomic types (Booleans, strings), it does not support composed
+ * types (arrays and objects).
+ *
+ * Ultimately, this class can support kernel-specific optimizations. E.g.,
+ * it may make use of SIMD instructions to escape strings faster.
+ */
+class string_builder {
+public:
+  simdjson_inline string_builder(size_t initial_capacity = 1024);
+
+  /**
+   * Append number (includes Booleans). Booleans are mapped to the strings
+   * false and true. Numbers are converted to strings abiding by the JSON standard.
+   * Floating-point numbers are converted to the shortest string that 'correctly'
+   * represents the number.
+   */
+  template<typename number_type,
+         typename = typename std::enable_if<std::is_arithmetic<number_type>::value>::type>
+  simdjson_inline void append(number_type v) noexcept;
+
+  /**
+   * Append character c.
+   */
+  simdjson_inline void append(char c)  noexcept;
+
+  /**
+   * Append the string 'null'.
+   */
+  simdjson_inline void append_null()  noexcept;
+
+  /**
+   * Clear the content.
+   */
+  simdjson_inline void clear()  noexcept;
+
+  /**
+   * Append the std::string_view, after escaping it.
+   * There is no UTF-8 validation.
+   */
+  simdjson_inline void escape_and_append(std::string_view input)  noexcept;
+
+  /**
+   * Append the std::string_view surrounded by double quotes, after escaping it.
+   * There is no UTF-8 validation.
+   */
+  simdjson_inline void escape_and_append_with_quotes(std::string_view input)  noexcept;
+
+  /**
+   * Append the character surrounded by double quotes, after escaping it.
+   * There is no UTF-8 validation.
+   */
+  simdjson_inline void escape_and_append_with_quotes(char input)  noexcept;
+
+  /**
+   * Append the character surrounded by double quotes, after escaping it.
+   * There is no UTF-8 validation.
+   */
+   simdjson_inline void escape_and_append_with_quotes(const char* input)  noexcept;
+
+  /**
+   * Append the C string directly, without escaping.
+   * There is no UTF-8 validation.
+   */
+  simdjson_inline void append_raw(const char *c)  noexcept;
+
+  /**
+   * Append "{" to the buffer.
+   */
+  simdjson_inline void start_object()  noexcept;
+
+  /**
+   * Append "}" to the buffer.
+   */
+  simdjson_inline void end_object()  noexcept;
+
+  /**
+   * Append "[" to the buffer.
+   */
+  simdjson_inline void start_array()  noexcept;
+
+  /**
+   * Append "]" to the buffer.
+   */
+  simdjson_inline void end_array()  noexcept;
+
+  /**
+   * Append "," to the buffer.
+   */
+  simdjson_inline void append_comma()  noexcept;
+
+  /**
+   * Append ":" to the buffer.
+   */
+  simdjson_inline void append_colon()  noexcept;
+
+  /**
+   * Append a key-value pair to the buffer.
+   * The key is escaped and surrounded by double quotes.
+   * The value is escaped if it is a string.
+   */
+   template<typename key_type, typename value_type>
+  simdjson_inline void append_key_value(key_type key, value_type value) noexcept;
+  /**
+   * Append the std::string_view directly, without escaping.
+   * There is no UTF-8 validation.
+   */
+  simdjson_inline void append_raw(std::string_view input)  noexcept;
+
+  /**
+   * Append len characters from str.
+   * There is no UTF-8 validation.
+   */
+  simdjson_inline void append_raw(const char *str, size_t len) noexcept;
+#if SIMDJSON_EXCEPTIONS
+  /**
+   * Creates an std::string from the written JSON buffer.
+   * Throws if memory allocation failed
+   *
+   * The result may not be valid UTF-8 if some of your content was not valid UTF-8.
+   * Use validate_unicode() to check the content if needed.
+   */
+  simdjson_inline operator std::string() const noexcept(false);
+
+  /**
+   * Creates an std::string_view from the written JSON buffer.
+   * Throws if memory allocation failed.
+   *
+   * The result may not be valid UTF-8 if some of your content was not valid UTF-8.
+   * Use validate_unicode() to check the content if needed.
+   */
+  simdjson_inline operator std::string_view() const noexcept(false) simdjson_lifetime_bound;
+#endif
+
+  /**
+   * Returns a view on the written JSON buffer. Returns an error
+   * if memory allocation failed.
+   *
+   * The result may not be valid UTF-8 if some of your content was not valid UTF-8.
+   * Use validate_unicode() to check the content.
+   */
+  simdjson_inline simdjson_result<std::string_view> view() const noexcept;
+
+  /**
+   * Appends the null character to the buffer and returns
+   * a pointer to the beginning of the written JSON buffer.
+   * Returns an error if memory allocation failed.
+   * The result is null-terminated.
+   *
+   * The result may not be valid UTF-8 if some of your content was not valid UTF-8.
+   * Use validate_unicode() to check the content.
+   */
+  simdjson_inline simdjson_result<const char *> c_str() noexcept;
+
+  /**
+   * Return true if the content is valid UTF-8.
+   */
+  simdjson_inline bool validate_unicode() const noexcept;
+
+  /**
+   * Returns the current size of the written JSON buffer.
+   * If an error occurred, returns 0.
+   */
+  simdjson_inline size_t size() const noexcept;
+
+private:
+  /**
+   * Returns true if we can write at least upcoming_bytes bytes.
+   * The underlying buffer is reallocated if needed. It is designed
+   * to be called before writing to the buffer. It should be fast.
+   */
+  simdjson_inline bool capacity_check(size_t upcoming_bytes);
+
+  /**
+   * Grow the buffer to at least desired_capacity bytes.
+   * If the allocation fails, is_valid is set to false. We expect
+   * that this function would not be repeatedly called.
+   */
+  simdjson_inline void grow_buffer(size_t desired_capacity);
+
+  /**
+   * We use this helper function to make sure that is_valid is kept consistent.
+   */
+  simdjson_inline void set_valid(bool valid) noexcept;
+
+  std::unique_ptr<char[]> buffer{};
+  size_t position{0};
+  size_t capacity{0};
+  bool is_valid{true};
+};
+
+
+
+}
+}
+} // namespace simdjson
+
+#endif // SIMDJSON_GENERIC_STRING_BUILDER_H
+/* end file simdjson/generic/ondemand/json_string_builder.h for haswell */
+/* including simdjson/generic/ondemand/json_string_builder-inl.h for haswell: #include "simdjson/generic/ondemand/json_string_builder-inl.h" */
+/* begin file simdjson/generic/ondemand/json_string_builder-inl.h for haswell */
+/**
+ * This file is part of the builder API. It is temporarily in the ondemand
+ * directory but we will move it to a builder directory later.
+ */
+#include <array>
+#include <cstring>
+#include <type_traits>
+#ifndef SIMDJSON_GENERIC_STRING_BUILDER_INL_H
+
+/* amalgamation skipped (editor-only): #ifndef SIMDJSON_CONDITIONAL_INCLUDE */
+/* amalgamation skipped (editor-only): #define SIMDJSON_GENERIC_STRING_BUILDER_INL_H */
+/* amalgamation skipped (editor-only): #include "simdjson/generic/builder/json_string_builder.h" */
+/* amalgamation skipped (editor-only): #endif // SIMDJSON_CONDITIONAL_INCLUDE */
+
+/*
+ * Empirically, we have found that an inlined optimization is important for
+ * performance. The following macros are not ideal. We should find a better
+ * way to inline the code.
+ */
+
+#if defined(__SSE2__) || defined(__x86_64__) || defined(__x86_64) ||           \
+    (defined(_M_AMD64) || defined(_M_X64) ||                                   \
+     (defined(_M_IX86_FP) && _M_IX86_FP == 2))
+#ifndef SIMDJSON_EXPERIMENTAL_HAS_SSE2
+#define SIMDJSON_EXPERIMENTAL_HAS_SSE2 1
+#endif
+#endif
+
+#if defined(__aarch64__) || defined(_M_ARM64)
+#ifndef SIMDJSON_EXPERIMENTAL_HAS_NEON
+#define SIMDJSON_EXPERIMENTAL_HAS_NEON 1
+#endif
+#endif
+#if SIMDJSON_EXPERIMENTAL_HAS_NEON
+#include <arm_neon.h>
+#endif
+#if SIMDJSON_EXPERIMENTAL_HAS_SSE2
+#include <emmintrin.h>
+#endif
+
+namespace simdjson {
+namespace haswell {
+namespace builder {
+
+static SIMDJSON_CONSTEXPR_LAMBDA std::array<uint8_t, 256> json_quotable_character = {
+  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+  1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+
+/**
+
+A possible SWAR implementation of has_json_escapable_byte. It is not used because
+it is slower than the current implementation. It is kept here for reference (to show
+that we tried it).
+
+inline bool has_json_escapable_byte(uint64_t x) {
+  uint64_t is_ascii = 0x8080808080808080ULL & ~x;
+  uint64_t xor2 = x ^ 0x0202020202020202ULL;
+  uint64_t lt32_or_eq34 = xor2 - 0x2121212121212121ULL;
+  uint64_t sub92 = x ^ 0x5C5C5C5C5C5C5C5CULL;
+  uint64_t eq92 = (sub92 - 0x0101010101010101ULL);
+  return ((lt32_or_eq34 | eq92) & is_ascii) != 0;
+}
+
+**/
+
+SIMDJSON_CONSTEXPR_LAMBDA simdjson_inline bool
+simple_needs_escaping(std::string_view v) {
+  for (char c : v) {
+    // a table lookup is faster than a series of comparisons
+    if(json_quotable_character[static_cast<uint8_t>(c)]) {
+      return true;
+    }
+  }
+  return false;
+}
+
+#if SIMDJSON_EXPERIMENTAL_HAS_NEON
+simdjson_inline bool fast_needs_escaping(std::string_view view) {
+  if (view.size() < 16) {
+    return simple_needs_escaping(view);
+  }
+  size_t i = 0;
+  uint8x16_t running = vdupq_n_u8(0);
+  uint8x16_t v34 = vdupq_n_u8(34);
+  uint8x16_t v92 = vdupq_n_u8(92);
+
+  for (; i + 15 < view.size(); i += 16) {
+    uint8x16_t word = vld1q_u8((const uint8_t *)view.data() + i);
+    running = vorrq_u8(running, vceqq_u8(word, v34));
+    running = vorrq_u8(running, vceqq_u8(word, v92));
+    running = vorrq_u8(running, vcltq_u8(word, vdupq_n_u8(32)));
+  }
+  if (i < view.size()) {
+    uint8x16_t word =
+        vld1q_u8((const uint8_t *)view.data() + view.length() - 16);
+    running = vorrq_u8(running, vceqq_u8(word, v34));
+    running = vorrq_u8(running, vceqq_u8(word, v92));
+    running = vorrq_u8(running, vcltq_u8(word, vdupq_n_u8(32)));
+  }
+  return vmaxvq_u32(vreinterpretq_u32_u8(running)) != 0;
+}
+#elif SIMDJSON_EXPERIMENTAL_HAS_SSE2
+simdjson_inline bool fast_needs_escaping(std::string_view view) {
+  if (view.size() < 16) {
+    return simple_needs_escaping(view);
+  }
+  size_t i = 0;
+  __m128i running = _mm_setzero_si128();
+  for (; i + 15 < view.size(); i += 16) {
+
+    __m128i word = _mm_loadu_si128(reinterpret_cast<const __m128i *>(view.data() + i));
+    running = _mm_or_si128(running, _mm_cmpeq_epi8(word, _mm_set1_epi8(34)));
+    running = _mm_or_si128(running, _mm_cmpeq_epi8(word, _mm_set1_epi8(92)));
+    running = _mm_or_si128(
+        running, _mm_cmpeq_epi8(_mm_subs_epu8(word, _mm_set1_epi8(31)),
+                                _mm_setzero_si128()));
+  }
+  if (i < view.size()) {
+    __m128i word =
+        _mm_loadu_si128(reinterpret_cast<const __m128i *>(view.data() + view.length() - 16));
+    running = _mm_or_si128(running, _mm_cmpeq_epi8(word, _mm_set1_epi8(34)));
+    running = _mm_or_si128(running, _mm_cmpeq_epi8(word, _mm_set1_epi8(92)));
+    running = _mm_or_si128(
+        running, _mm_cmpeq_epi8(_mm_subs_epu8(word, _mm_set1_epi8(31)),
+                                _mm_setzero_si128()));
+  }
+  return _mm_movemask_epi8(running) != 0;
+}
+#else
+simdjson_inline bool fast_needs_escaping(std::string_view view) {
+  return simple_needs_escaping(view);
+}
+#endif
+
+
+SIMDJSON_CONSTEXPR_LAMBDA inline size_t
+find_next_json_quotable_character(const std::string_view view,
+                                  size_t location) noexcept {
+
+  for (auto pos = view.begin() + location; pos != view.end(); ++pos) {
+    if (json_quotable_character[static_cast<uint8_t>(*pos)]) {
+      return pos - view.begin();
+    }
+  }
+  return size_t(view.size());
+}
+
+SIMDJSON_CONSTEXPR_LAMBDA static std::string_view control_chars[] = {
+    "\\x0000", "\\x0001", "\\x0002", "\\x0003", "\\x0004", "\\x0005", "\\x0006",
+    "\\x0007", "\\x0008", "\\t",     "\\n",     "\\x000b", "\\f",     "\\r",
+    "\\x000e", "\\x000f", "\\x0010", "\\x0011", "\\x0012", "\\x0013", "\\x0014",
+    "\\x0015", "\\x0016", "\\x0017", "\\x0018", "\\x0019", "\\x001a", "\\x001b",
+    "\\x001c", "\\x001d", "\\x001e", "\\x001f"};
+
+SIMDJSON_CONSTEXPR_LAMBDA void escape_json_char(char c, char *&out) {
+  if (c == '"') {
+    memcpy(out, "\\\"", 2);
+    out += 2;
+  } else if (c == '\\') {
+    memcpy(out, "\\\\", 2);
+    out += 2;
+  } else {
+    std::string_view v = control_chars[uint8_t(c)];
+    memcpy(out, v.data(), v.size());
+    out += v.size();
+  }
+}
+
+inline size_t write_string_escaped(const std::string_view input, char *out) {
+  size_t mysize = input.size();
+  if (!fast_needs_escaping(input)) { // fast path!
+    memcpy(out, input.data(), input.size());
+    return input.size();
+  }
+  const char *const initout = out;
+  size_t location = find_next_json_quotable_character(input, 0);
+  memcpy(out, input.data(), location);
+  out += location;
+  escape_json_char(input[location], out);
+  location += 1;
+  while (location < mysize) {
+    size_t newlocation = find_next_json_quotable_character(input, location);
+    memcpy(out, input.data() + location, newlocation - location);
+    out += newlocation - location;
+    location = newlocation;
+    if (location == mysize) {
+      break;
+    }
+    escape_json_char(input[location], out);
+    location += 1;
+  }
+  return out - initout;
+}
+
+#if SIMDJSON_CONSTEVAL
+// unoptimized, meant for compile-time execution
+consteval std::string consteval_to_quoted_escaped(std::string_view input) {
+  std::string out = "\"";
+  for (char c : input) {
+    if (json_quotable_character[uint8_t(c)]) {
+      if (c == '"') {
+        out.append("\\\"");
+      } else if (c == '\\') {
+        out.append("\\\\");
+      } else {
+        std::string_view v = control_chars[uint8_t(c)];
+        out.append(v);
+      }
+    } else {
+      out.push_back(c);
+    }
+  }
+  out.push_back('"');
+  return out;
+}
+#endif // SIMDJSON_CONSTEVAL
+
+simdjson_inline string_builder::string_builder(size_t initial_capacity)
+    : buffer(new(std::nothrow) char[initial_capacity]), position(0),
+      capacity(buffer.get() != nullptr ? initial_capacity : 0),
+      is_valid(buffer.get() != nullptr) {}
+
+simdjson_inline bool string_builder::capacity_check(size_t upcoming_bytes) {
+  // We use the convention that when is_valid is false, then the capacity and
+  // the position are 0.
+  // Most of the time, this function will return true.
+  if (simdjson_likely(upcoming_bytes <= capacity - position)) {
+    return true;
+  }
+  // check for overflow, most of the time there is no overflow
+  if (simdjson_likely(position + upcoming_bytes < position)) {
+    return false;
+  }
+  // We will rarely get here.
+  grow_buffer((std::max)(capacity * 2, position + upcoming_bytes));
+  // If the buffer allocation failed, we set is_valid to false.
+  return is_valid;
+}
+
+simdjson_inline void string_builder::grow_buffer(size_t desired_capacity) {
+  if (!is_valid) {
+    return;
+  }
+  std::unique_ptr<char[]> new_buffer(new (std::nothrow) char[desired_capacity]);
+  if (new_buffer.get() == nullptr) {
+    set_valid(false);
+    return;
+  }
+  std::memcpy(new_buffer.get(), buffer.get(), position);
+  buffer.swap(new_buffer);
+  capacity = desired_capacity;
+}
+
+simdjson_inline void string_builder::set_valid(bool valid) noexcept {
+  if (!valid) {
+    is_valid = false;
+    capacity = 0;
+    position = 0;
+    buffer.reset();
+  } else {
+    is_valid = true;
+  }
+}
+
+simdjson_inline size_t string_builder::size() const noexcept {
+  return position;
+}
+
+simdjson_inline void string_builder::append(char c) noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position++] = c;
+  }
+}
+
+simdjson_inline void string_builder::append_null() noexcept {
+  constexpr char null_literal[] = "null";
+  constexpr size_t null_len = sizeof(null_literal) - 1;
+  if (capacity_check(null_len)) {
+    std::memcpy(buffer.get() + position, null_literal, null_len);
+    position += null_len;
+  }
+}
+
+simdjson_inline void string_builder::clear() noexcept {
+  position = 0;
+  // if it was invalid, we should try to repair it
+  if (!is_valid) {
+    capacity = 0;
+    buffer.reset();
+    is_valid = true;
+  }
+}
+
+namespace internal {
+
+// We could specialize further for 32-bit integers.
+simdjson_really_inline int int_log2(uint32_t x) { return (63 - leading_zeroes(x | 1)); }
+
+simdjson_really_inline int fast_digit_count(uint32_t x) {
+  static uint64_t table[] = {
+      4294967296,  8589934582,  8589934582,  8589934582,  12884901788,
+      12884901788, 12884901788, 17179868184, 17179868184, 17179868184,
+      21474826480, 21474826480, 21474826480, 21474826480, 25769703776,
+      25769703776, 25769703776, 30063771072, 30063771072, 30063771072,
+      34349738368, 34349738368, 34349738368, 34349738368, 38554705664,
+      38554705664, 38554705664, 41949672960, 41949672960, 41949672960,
+      42949672960, 42949672960};
+  return uint32_t((x + table[int_log2(x)]) >> 32);
+}
+
+simdjson_really_inline int int_log2(uint64_t x) { return 63 - leading_zeroes(x | 1); }
+
+simdjson_really_inline int fast_digit_count(uint64_t x) {
+  static uint64_t table[] = {9,
+                             99,
+                             999,
+                             9999,
+                             99999,
+                             999999,
+                             9999999,
+                             99999999,
+                             999999999,
+                             9999999999,
+                             99999999999,
+                             999999999999,
+                             9999999999999,
+                             99999999999999,
+                             999999999999999ULL,
+                             9999999999999999ULL,
+                             99999999999999999ULL,
+                             999999999999999999ULL,
+                             9999999999999999999ULL};
+  int y = (19 * int_log2(x) >> 6);
+  y += x > table[y];
+  return y + 1;
+}
+
+template <typename number_type, typename = typename std::enable_if<
+                                    std::is_unsigned<number_type>::value>::type>
+simdjson_really_inline size_t digit_count(number_type v) noexcept {
+  static_assert(sizeof(number_type) == 8 || sizeof(number_type) == 4 ||
+                    sizeof(number_type) == 2 || sizeof(number_type) == 1,
+                "We only support 8-bit, 16-bit, 32-bit and 64-bit numbers");
+  return fast_digit_count(v);
+}
+static const char decimal_table[200] = {
+  0x30, 0x30, 0x30, 0x31, 0x30, 0x32, 0x30, 0x33, 0x30, 0x34, 0x30, 0x35,
+  0x30, 0x36, 0x30, 0x37, 0x30, 0x38, 0x30, 0x39, 0x31, 0x30, 0x31, 0x31,
+  0x31, 0x32, 0x31, 0x33, 0x31, 0x34, 0x31, 0x35, 0x31, 0x36, 0x31, 0x37,
+  0x31, 0x38, 0x31, 0x39, 0x32, 0x30, 0x32, 0x31, 0x32, 0x32, 0x32, 0x33,
+  0x32, 0x34, 0x32, 0x35, 0x32, 0x36, 0x32, 0x37, 0x32, 0x38, 0x32, 0x39,
+  0x33, 0x30, 0x33, 0x31, 0x33, 0x32, 0x33, 0x33, 0x33, 0x34, 0x33, 0x35,
+  0x33, 0x36, 0x33, 0x37, 0x33, 0x38, 0x33, 0x39, 0x34, 0x30, 0x34, 0x31,
+  0x34, 0x32, 0x34, 0x33, 0x34, 0x34, 0x34, 0x35, 0x34, 0x36, 0x34, 0x37,
+  0x34, 0x38, 0x34, 0x39, 0x35, 0x30, 0x35, 0x31, 0x35, 0x32, 0x35, 0x33,
+  0x35, 0x34, 0x35, 0x35, 0x35, 0x36, 0x35, 0x37, 0x35, 0x38, 0x35, 0x39,
+  0x36, 0x30, 0x36, 0x31, 0x36, 0x32, 0x36, 0x33, 0x36, 0x34, 0x36, 0x35,
+  0x36, 0x36, 0x36, 0x37, 0x36, 0x38, 0x36, 0x39, 0x37, 0x30, 0x37, 0x31,
+  0x37, 0x32, 0x37, 0x33, 0x37, 0x34, 0x37, 0x35, 0x37, 0x36, 0x37, 0x37,
+  0x37, 0x38, 0x37, 0x39, 0x38, 0x30, 0x38, 0x31, 0x38, 0x32, 0x38, 0x33,
+  0x38, 0x34, 0x38, 0x35, 0x38, 0x36, 0x38, 0x37, 0x38, 0x38, 0x38, 0x39,
+  0x39, 0x30, 0x39, 0x31, 0x39, 0x32, 0x39, 0x33, 0x39, 0x34, 0x39, 0x35,
+  0x39, 0x36, 0x39, 0x37, 0x39, 0x38, 0x39, 0x39,
+};
+} // namespace internal
+
+template <typename number_type, typename>
+simdjson_inline void string_builder::append(number_type v) noexcept {
+  static_assert(std::is_same<number_type, bool>::value ||
+                    std::is_integral<number_type>::value ||
+                    std::is_floating_point<number_type>::value,
+                "Unsupported number type");
+  // If C++17 is available, we can 'if constexpr' here.
+  SIMDJSON_IF_CONSTEXPR(std::is_same<number_type, bool>::value) {
+    if (v) {
+      constexpr char true_literal[] = "true";
+      constexpr size_t true_len = sizeof(true_literal) - 1;
+      if (capacity_check(true_len)) {
+        std::memcpy(buffer.get() + position, true_literal, true_len);
+        position += true_len;
+      }
+    } else {
+      constexpr char false_literal[] = "false";
+      constexpr size_t false_len = sizeof(false_literal) - 1;
+      if (capacity_check(false_len)) {
+        std::memcpy(buffer.get() + position, false_literal, false_len);
+        position += false_len;
+      }
+    }
+  }
+  else SIMDJSON_IF_CONSTEXPR(std::is_unsigned<number_type>::value) {
+    constexpr size_t max_number_size = 20;
+    if (capacity_check(max_number_size)) {
+      using unsigned_type = typename std::make_unsigned<number_type>::type;
+      unsigned_type pv = static_cast<unsigned_type>(v);
+      size_t dc = internal::digit_count(pv);
+      char *write_pointer = buffer.get() + position + dc - 1;
+      while (pv >= 100) {
+        memcpy(write_pointer - 1, &internal::decimal_table[(pv % 100)*2], 2);
+        write_pointer -= 2;
+        pv /= 100;
+      }
+      if (pv >= 10) {
+        *write_pointer-- = char('0' + (pv % 10));
+        pv /= 10;
+      }
+      *write_pointer = char('0' + pv);
+      position += dc;
+    }
+  }
+  else SIMDJSON_IF_CONSTEXPR(std::is_integral<number_type>::value) {
+    constexpr size_t max_number_size = 20;
+    if (capacity_check(max_number_size)) {
+      using unsigned_type = typename std::make_unsigned<number_type>::type;
+      bool negative = v < 0;
+      unsigned_type pv = static_cast<unsigned_type>(v);
+      if (negative) {
+        pv = 0 - pv; // the 0 is for Microsoft
+      }
+      size_t dc = internal::digit_count(pv);
+      if (negative) {
+        buffer.get()[position++] = '-';
+      }
+      char *write_pointer = buffer.get() + position + dc - 1;
+      while (pv >= 100) {
+        memcpy(write_pointer - 1, &internal::decimal_table[(pv % 100)*2], 2);
+        write_pointer -= 2;
+        pv /= 100;
+      }
+      if (pv >= 10) {
+        *write_pointer-- = char('0' + (pv % 10));
+        pv /= 10;
+      }
+      *write_pointer = char('0' + pv);
+      position += dc;
+    }
+  }
+  else SIMDJSON_IF_CONSTEXPR(std::is_floating_point<number_type>::value) {
+    constexpr size_t max_number_size = 24;
+    if (capacity_check(max_number_size)) {
+      // We could specialize for float.
+      char *end = simdjson::internal::to_chars(buffer.get() + position, nullptr,
+                                               double(v));
+      position = end - buffer.get();
+    }
+  }
+}
+
+simdjson_inline void
+string_builder::escape_and_append(std::string_view input) noexcept {
+  // escaping might turn a control character into \x00xx so 6 characters.
+  if (capacity_check(6 * input.size())) {
+    position += write_string_escaped(input, buffer.get() + position);
+  }
+}
+
+simdjson_inline void
+string_builder::escape_and_append_with_quotes(std::string_view input) noexcept {
+  // escaping might turn a control character into \x00xx so 6 characters.
+  if (capacity_check(2 + 6 * input.size())) {
+    buffer.get()[position++] = '"';
+    position += write_string_escaped(input, buffer.get() + position);
+    buffer.get()[position++] = '"';
+  }
+}
+
+simdjson_inline void
+string_builder::escape_and_append_with_quotes(char input) noexcept {
+  // escaping might turn a control character into \x00xx so 6 characters.
+  if (capacity_check(2 + 6 * 1)) {
+    buffer.get()[position++] = '"';
+    std::string_view cinput(&input, 1);
+    position += write_string_escaped(cinput, buffer.get() + position);
+    buffer.get()[position++] = '"';
+  }
+}
+
+simdjson_inline void string_builder::escape_and_append_with_quotes(const char* input)  noexcept {
+  std::string_view cinput(input);
+  escape_and_append_with_quotes(cinput);
+}
+
+simdjson_inline void string_builder::append_raw(const char *c) noexcept {
+  size_t len = std::strlen(c);
+  append_raw(c, len);
+}
+
+simdjson_inline void
+string_builder::append_raw(std::string_view input) noexcept {
+  if (capacity_check(input.size())) {
+    std::memcpy(buffer.get() + position, input.data(), input.size());
+    position += input.size();
+  }
+}
+
+simdjson_inline void string_builder::append_raw(const char *str,
+                                                size_t len) noexcept {
+  if (capacity_check(len)) {
+    std::memcpy(buffer.get() + position, str, len);
+    position += len;
+  }
+}
+
+#if SIMDJSON_EXCEPTIONS
+simdjson_inline string_builder::operator std::string() const noexcept(false) {
+  return std::string(std::string_view());
+}
+
+simdjson_inline string_builder::operator std::string_view() const
+    noexcept(false) simdjson_lifetime_bound {
+  return view();
+}
+#endif
+
+simdjson_inline simdjson_result<std::string_view>
+string_builder::view() const noexcept {
+  if (!is_valid) {
+    return simdjson::OUT_OF_CAPACITY;
+  }
+  return std::string_view(buffer.get(), position);
+}
+
+simdjson_inline simdjson_result<const char *> string_builder::c_str() noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position] = '\0';
+    return buffer.get();
+  }
+  return simdjson::OUT_OF_CAPACITY;
+}
+
+simdjson_inline bool string_builder::validate_unicode() const noexcept {
+  return simdjson::validate_utf8(buffer.get(), position);
+}
+
+simdjson_inline void string_builder::start_object()  noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position++] = '{';
+  }
+}
+
+
+simdjson_inline void string_builder::end_object()  noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position++] = '}';
+  }
+}
+
+
+simdjson_inline void string_builder::start_array()  noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position++] = '[';
+  }
+}
+
+
+simdjson_inline void string_builder::end_array()  noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position++] = ']';
+  }
+}
+
+
+simdjson_inline void string_builder::append_comma()  noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position++] = ',';
+  }
+}
+
+
+simdjson_inline void string_builder::append_colon()  noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position++] = ':';
+  }
+}
+
+template<typename key_type, typename value_type>
+simdjson_inline void string_builder::append_key_value(key_type key, value_type value) noexcept {
+  static_assert(
+    std::is_arithmetic<value_type>::value ||
+    std::is_same<value_type, char>::value ||
+    std::is_same<value_type, const char*>::value ||
+    std::is_convertible<value_type, std::string_view>::value ||
+    std::is_same<value_type, std::nullptr_t>::value,
+    "Unsupported value type");
+  static_assert(
+    std::is_same<key_type, const char*>::value ||
+    std::is_convertible<key_type, std::string_view>::value,
+    "Unsupported key type");
+  escape_and_append_with_quotes(key);
+  append_colon();
+  SIMDJSON_IF_CONSTEXPR(std::is_same<value_type, std::nullptr_t>::value) {
+    append_null();
+  } else SIMDJSON_IF_CONSTEXPR(std::is_same<value_type, char>::value) {
+    escape_and_append_with_quotes(value);
+  } else SIMDJSON_IF_CONSTEXPR(std::is_convertible<value_type, std::string_view>::value) {
+    escape_and_append_with_quotes(value);
+  } else SIMDJSON_IF_CONSTEXPR(std::is_same<value_type, const char*>::value) {
+    escape_and_append_with_quotes(value);
+  } else {
+    append(value);
+  }
+}
+
+} // namespace builder
+} // namespace haswell
+} // namespace simdjson
+
+#endif // SIMDJSON_GENERIC_STRING_BUILDER_INL_H
+/* end file simdjson/generic/ondemand/json_string_builder-inl.h for haswell */
+/* including simdjson/generic/ondemand/json_builder.h for haswell: #include "simdjson/generic/ondemand/json_builder.h" */
+/* begin file simdjson/generic/ondemand/json_builder.h for haswell */
+/**
+ * This file is part of the builder API. It is temporarily in the ondemand directory
+ * but we will move it to a builder directory later.
+ */
+#ifndef SIMDJSON_GENERIC_BUILDER_H
+
+/* amalgamation skipped (editor-only): #ifndef SIMDJSON_CONDITIONAL_INCLUDE */
+/* amalgamation skipped (editor-only): #define SIMDJSON_GENERIC_STRING_BUILDER_H */
+/* amalgamation skipped (editor-only): #include "simdjson/generic/builder/json_string_builder.h" */
+/* amalgamation skipped (editor-only): #include "simdjson/concepts.h" */
+/* amalgamation skipped (editor-only): #endif // SIMDJSON_CONDITIONAL_INCLUDE */
+#if SIMDJSON_STATIC_REFLECTION
+
+#include <charconv>
+#include <cstring>
+#include <experimental/meta>
+#include <memory>
+#include <optional>
+#include <string_view>
+#include <type_traits>
+#include <utility>
+// #include <static_reflection> // for std::define_static_string - header not available yet
+
+namespace simdjson {
+namespace haswell {
+namespace builder {
+
+// Concept that checks if a type is a container but not a string (because
+// strings handling must be handled differently)
+template <typename T>
+concept container_but_not_string =
+    requires(T a) {
+      { a.size() } -> std::convertible_to<std::size_t>;
+      {
+        a[std::declval<std::size_t>()]
+      }; // check if elements are accessible for the subscript operator
+    } && !std::is_same_v<T, std::string> &&
+    !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char *>;
+
+template <class T>
+  requires(container_but_not_string<T>)
+constexpr void atom(string_builder &b, const T &t) {
+  if (t.size() == 0) {
+    b.append_raw("[]");
+    return;
+  }
+  b.append('[');
+  atom(b, t[0]);
+  for (size_t i = 1; i < t.size(); ++i) {
+    b.append(',');
+    atom(b, t[i]);
+  }
+  b.append(']');
+}
+
+template <class T>
+  requires(std::is_same_v<T, std::string> ||
+           std::is_same_v<T, std::string_view> ||
+           std::is_same_v<T, const char *> ||
+           std::is_same_v<T, char>)
+constexpr void atom(string_builder &b, const T &t) {
+  b.escape_and_append_with_quotes(t);
+}
+
+template <concepts::string_view_keyed_map T>
+constexpr void atom(string_builder &b, const T &m) {
+  if (m.empty()) {
+    b.append_raw("{}");
+    return;
+  }
+  b.append('{');
+  bool first = true;
+  for (const auto& [key, value] : m) {
+    if (!first) {
+      b.append(',');
+    }
+    first = false;
+    // Keys must be convertible to string_view per the concept
+    b.escape_and_append_with_quotes(key);
+    b.append(':');
+    atom(b, value);
+  }
+  b.append('}');
+}
+
+
+template<typename number_type,
+         typename = typename std::enable_if<std::is_arithmetic<number_type>::value && !std::is_same_v<number_type, char>>::type>
+constexpr void atom(string_builder &b, const number_type t) {
+  b.append(t);
+}
+#if SIMDJSON_CONSTEVAL
+consteval std::string consteval_to_quoted_escaped(std::string_view input);
+#endif
+
+template <class T>
+  requires(std::is_class_v<T> && !container_but_not_string<T> &&
+           !concepts::string_view_keyed_map<T> &&
+           !concepts::optional_type<T> &&
+           !concepts::smart_pointer<T> &&
+           !concepts::appendable_containers<T> &&
+           !std::is_same_v<T, std::string> &&
+           !std::is_same_v<T, std::string_view> &&
+           !std::is_same_v<T, const char*> &&
+           !std::is_same_v<T, char>)
+constexpr void atom(string_builder &b, const T &t) {
+  int i = 0;
+  b.append('{');
+  [:expand(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked())):] >> [&]<auto dm>() {
+    if (i != 0)
+      b.append(',');
+    constexpr auto key = std::define_static_string(consteval_to_quoted_escaped(std::meta::identifier_of(dm)));
+    b.append_raw(key);
+    b.append(':');
+    atom(b, t.[:dm:]);
+    i++;
+  };
+  b.append('}');
+}
+
+// Support for optional types (std::optional, etc.)
+template <concepts::optional_type T>
+constexpr void atom(string_builder &b, const T &opt) {
+  if (opt) {
+    atom(b, opt.value());
+  } else {
+    b.append_raw("null");
+  }
+}
+
+// Support for smart pointers (std::unique_ptr, std::shared_ptr, etc.)
+template <concepts::smart_pointer T>
+constexpr void atom(string_builder &b, const T &ptr) {
+  if (ptr) {
+    atom(b, *ptr);
+  } else {
+    b.append_raw("null");
+  }
+}
+
+// Support for enums - serialize as string representation using expand approach from P2996R12
+template <typename T>
+  requires(std::is_enum_v<T>)
+void atom(string_builder &b, const T &e) {
+#if SIMDJSON_STATIC_REFLECTION
+  std::string_view result = "<unnamed>";
+  [:expand(std::meta::enumerators_of(^^T)):] >> [&]<auto enum_val>{
+    if (e == [:enum_val:]) {
+      result = std::meta::identifier_of(enum_val);
+    }
+  };
+
+  if (result != "<unnamed>") {
+    b.append_raw("\"");
+    b.append_raw(result);
+    b.append_raw("\"");
+  } else {
+    // Fallback to integer if enum value not found
+    atom(b, static_cast<std::underlying_type_t<T>>(e));
+  }
+#else
+  // Fallback: serialize as integer if reflection not available
+  atom(b, static_cast<std::underlying_type_t<T>>(e));
+#endif
+}
+
+// Support for appendable containers that don't have operator[] (sets, etc.)
+template <concepts::appendable_containers T>
+  requires(!container_but_not_string<T> && !concepts::string_view_keyed_map<T> &&
+           !concepts::optional_type<T> && !concepts::smart_pointer<T> &&
+           !std::is_same_v<T, std::string> &&
+           !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char*>)
+constexpr void atom(string_builder &b, const T &container) {
+  if (container.empty()) {
+    b.append_raw("[]");
+    return;
+  }
+  b.append('[');
+  bool first = true;
+  for (const auto& item : container) {
+    if (!first) {
+      b.append(',');
+    }
+    first = false;
+    atom(b, item);
+  }
+  b.append(']');
+}
+
+// append functions that delegate to atom functions for primitive types
+template <class T>
+  requires(std::is_arithmetic_v<T> && !std::is_same_v<T, char>)
+void append(string_builder &b, const T &t) {
+  atom(b, t);
+}
+
+template <class T>
+  requires(std::is_same_v<T, std::string> ||
+           std::is_same_v<T, std::string_view> ||
+           std::is_same_v<T, const char *> ||
+           std::is_same_v<T, char>)
+void append(string_builder &b, const T &t) {
+  atom(b, t);
+}
+
+template <concepts::optional_type T>
+void append(string_builder &b, const T &t) {
+  atom(b, t);
+}
+
+template <concepts::smart_pointer T>
+void append(string_builder &b, const T &t) {
+  atom(b, t);
+}
+
+template <concepts::appendable_containers T>
+  requires(!container_but_not_string<T> && !concepts::string_view_keyed_map<T> &&
+           !concepts::optional_type<T> && !concepts::smart_pointer<T> &&
+           !std::is_same_v<T, std::string> &&
+           !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char*>)
+void append(string_builder &b, const T &t) {
+  atom(b, t);
+}
+
+template <concepts::string_view_keyed_map T>
+void append(string_builder &b, const T &t) {
+  atom(b, t);
+}
+
+// works for struct
+template <class Z>
+  requires(std::is_class_v<Z> && !container_but_not_string<Z> &&
+           !concepts::string_view_keyed_map<Z> &&
+           !concepts::optional_type<Z> &&
+           !concepts::smart_pointer<Z> &&
+           !concepts::appendable_containers<Z> &&
+           !std::is_same_v<Z, std::string> &&
+           !std::is_same_v<Z, std::string_view> &&
+           !std::is_same_v<Z, const char*> &&
+           !std::is_same_v<Z, char>)
+void append(string_builder &b, const Z &z) {
+  int i = 0;
+  b.append('{');
+  [:expand(std::meta::nonstatic_data_members_of(^^Z, std::meta::access_context::unchecked())):] >> [&]<auto dm>() {
+    if (i != 0)
+      b.append(',');
+    constexpr auto key = std::define_static_string(consteval_to_quoted_escaped(std::meta::identifier_of(dm)));
+    b.append_raw(key);
+    b.append(':');
+    atom(b, z.[:dm:]);
+    i++;
+  };
+  b.append('}');
+}
+
+// works for container
+template <class Z>
+  requires(container_but_not_string<Z>)
+void append(string_builder &b, const Z &z) {
+  if (z.size() == 0) {
+    b.append_raw("[]");
+    return;
+  }
+  b.append('[');
+  atom(b, z[0]);
+  for (size_t i = 1; i < z.size(); ++i) {
+    b.append(',');
+    atom(b, z[i]);
+  }
+  b.append(']');
+}
+
+template <class Z>
+simdjson_result<std::string> to_json_string(const Z &z, size_t initial_capacity = 1024) {
+  string_builder b(initial_capacity);
+  append(b, z);
+  std::string_view s;
+  if(auto e = b.view().get(s); e) { return e; }
+  return std::string(s);
+}
+
+template <class Z>
+simdjson_error to_json(const Z &z, std::string &s) {
+  string_builder b;
+  append(b, z);
+  std::string_view view;
+  if(auto e = b.view().get(view); e) { return e; }
+  s.assign(view);
+  return SUCCESS;
+}
+
+template <class Z>
+string_builder& operator<<(string_builder& b, const Z& z) {
+  append(b, z);
+  return b;
+}
+} // namespace builder
+} // namespace haswell
+} // namespace simdjson
+#endif // SIMDJSON_STATIC_REFLECTION
+
+#endif
+/* end file simdjson/generic/ondemand/json_builder.h for haswell */
 
 /* end file simdjson/generic/ondemand/amalgamated.h for haswell */
 /* including simdjson/haswell/end.h: #include "simdjson/haswell/end.h" */
@@ -65729,7 +71126,6 @@ namespace simd {
     friend simdjson_really_inline uint64_t operator==(const simd8<T> lhs, const simd8<T> rhs) {
       return _mm512_cmpeq_epi8_mask(lhs, rhs);
     }
-
     static const int SIZE = sizeof(base<T>::value);
 
     template<int N=1>
@@ -66072,6 +71468,35 @@ simdjson_inline backslash_and_quote backslash_and_quote::copy_and_find(const uin
   };
 }
 
+
+
+struct escaping {
+  static constexpr uint32_t BYTES_PROCESSED = 64;
+  simdjson_inline static escaping copy_and_find(const uint8_t *src, uint8_t *dst);
+
+  simdjson_inline bool has_escape() { return escape_bits != 0; }
+  simdjson_inline int escape_index() { return trailing_zeroes(uint64_t(escape_bits)); }
+
+  __mmask64 escape_bits;
+}; // struct escaping
+
+
+
+simdjson_inline escaping escaping::copy_and_find(const uint8_t *src, uint8_t *dst) {
+  static_assert(SIMDJSON_PADDING >= (BYTES_PROCESSED - 1), "escaping finder must process fewer than SIMDJSON_PADDING bytes");
+  simd8<uint8_t> v(src);
+  v.store(dst);
+  __mmask64 is_quote = _mm512_cmpeq_epi8_mask(v, _mm512_set1_epi8('"'));
+  __mmask64 is_backslash = _mm512_cmpeq_epi8_mask(v, _mm512_set1_epi8('\\'));
+  __mmask64 is_control = _mm512_cmplt_epi8_mask(v, _mm512_set1_epi8(32));
+  return {
+    (is_backslash | is_quote | is_control)
+  };
+}
+
+
+
+
 } // unnamed namespace
 } // namespace icelake
 } // namespace simdjson
@@ -66277,7 +71702,7 @@ template <typename T, typename ValT = icelake::ondemand::value>
 concept custom_deserializable = tag_invocable<deserialize_tag, ValT&, T&>;
 
 template <typename T, typename ValT = icelake::ondemand::value>
-concept deserializable = custom_deserializable<T, ValT> || is_builtin_deserializable_v<T>;
+concept deserializable = custom_deserializable<T, ValT> || is_builtin_deserializable_v<T> || concepts::optional_type<T>;
 
 template <typename T, typename ValT = icelake::ondemand::value>
 concept nothrow_custom_deserializable = nothrow_tag_invocable<deserialize_tag, ValT&, T&>;
@@ -66288,9 +71713,25 @@ concept nothrow_deserializable = nothrow_custom_deserializable<T, ValT> || is_bu
 
 /// Deserialize Tag
 inline constexpr struct deserialize_tag {
+  using array_type = icelake::ondemand::array;
+  using object_type = icelake::ondemand::object;
   using value_type = icelake::ondemand::value;
   using document_type = icelake::ondemand::document;
   using document_reference_type = icelake::ondemand::document_reference;
+
+  // Customization Point for array
+  template <typename T>
+    requires custom_deserializable<T, value_type>
+  [[nodiscard]] constexpr /* error_code */ auto operator()(array_type &object, T& output) const noexcept(nothrow_custom_deserializable<T, value_type>) {
+    return tag_invoke(*this, object, output);
+  }
+
+  // Customization Point for object
+  template <typename T>
+    requires custom_deserializable<T, value_type>
+  [[nodiscard]] constexpr /* error_code */ auto operator()(object_type &object, T& output) const noexcept(nothrow_custom_deserializable<T, value_type>) {
+    return tag_invoke(*this, object, output);
+  }
 
   // Customization Point for value
   template <typename T>
@@ -66859,6 +72300,7 @@ public:
    *
    * You may use get_double(), get_bool(), get_uint64(), get_int64(),
    * get_object(), get_array(), get_raw_json_string(), or get_string() instead.
+   * When SIMDJSON_SUPPORTS_DESERIALIZATION is set, custom types are also supported.
    *
    * @returns A value of the given type, parsed from the JSON.
    * @returns INCORRECT_TYPE If the JSON value is not the given type.
@@ -66882,6 +72324,7 @@ public:
    * Get this value as the given type.
    *
    * Supported types: object, array, raw_json_string, string_view, uint64_t, int64_t, double, bool
+   * If the macro SIMDJSON_SUPPORTS_DESERIALIZATION is set, then custom types are also supported.
    *
    * @param out This is set to a value of the given type, parsed from the JSON. If there is an error, this may not be initialized.
    * @returns INCORRECT_TYPE If the JSON value is not an object.
@@ -66898,6 +72341,19 @@ public:
   #if SIMDJSON_SUPPORTS_DESERIALIZATION
   if constexpr (custom_deserializable<T, value>) {
       return deserialize(*this, out);
+  } else if constexpr (concepts::optional_type<T>) {
+      using value_type = typename std::remove_cvref_t<T>::value_type;
+
+      // Check if the value is null
+      if (is_null()) {
+        out.reset(); // Set to nullopt
+        return SUCCESS;
+      }
+
+      if (!out) {
+        out.emplace();
+      }
+      return get<value_type>(out.value());
   } else {
     static_assert(!sizeof(T), "The get<T> method with type T is not implemented by the simdjson library. "
       "And you do not seem to have added support for it. Indeed, we have that "
@@ -69124,6 +74580,37 @@ public:
    *         - INDEX_OUT_OF_BOUNDS if the array index is larger than an array length
    */
   simdjson_inline simdjson_result<value> at(size_t index) noexcept;
+
+#if SIMDJSON_SUPPORTS_DESERIALIZATION
+  /**
+   * Get this array as the given type.
+   *
+   * @param out This is set to a value of the given type, parsed from the JSON. If there is an error, this may not be initialized.
+   * @returns INCORRECT_TYPE If the JSON array is not of the given type.
+   * @returns SUCCESS If the parse succeeded and the out parameter was set to the value.
+   */
+  template <typename T>
+  simdjson_inline error_code get(T &out)
+     noexcept(custom_deserializable<T, array> ? nothrow_custom_deserializable<T, array> : true) {
+    static_assert(custom_deserializable<T, array>);
+    return deserialize(*this, out);
+  }
+  /**
+   * Get this array as the given type.
+   *
+   * @returns A value of the given type, parsed from the JSON.
+   * @returns INCORRECT_TYPE If the JSON value is not the given type.
+   */
+  template <typename T>
+  simdjson_inline simdjson_result<T> get()
+    noexcept(custom_deserializable<T, value> ? nothrow_custom_deserializable<T, value> : true)
+  {
+    static_assert(std::is_default_constructible<T>::value, "The specified type is not default constructible.");
+    T out{};
+    SIMDJSON_TRY(get<T>(out));
+    return out;
+  }
+#endif // SIMDJSON_SUPPORTS_DESERIALIZATION
 protected:
   /**
    * Go to the end of the array, no matter where you are right now.
@@ -69202,7 +74689,28 @@ public:
   simdjson_inline simdjson_result<icelake::ondemand::value> at_pointer(std::string_view json_pointer) noexcept;
   simdjson_inline simdjson_result<icelake::ondemand::value> at_path(std::string_view json_path) noexcept;
   simdjson_inline simdjson_result<std::string_view> raw_json() noexcept;
+#if SIMDJSON_SUPPORTS_DESERIALIZATION
+  // TODO: move this code into object-inl.h
 
+  template<typename T>
+  simdjson_inline simdjson_result<T> get() noexcept {
+    if (error()) { return error(); }
+    if constexpr (std::is_same_v<T, icelake::ondemand::array>) {
+      return first;
+    }
+    return first.get<T>();
+  }
+  template<typename T>
+  simdjson_inline error_code get(T& out) noexcept {
+    if (error()) { return error(); }
+    if constexpr (std::is_same_v<T, icelake::ondemand::array>) {
+      out = first;
+    } else {
+      SIMDJSON_TRY( first.get<T>(out) );
+    }
+    return SUCCESS;
+  }
+#endif // SIMDJSON_SUPPORTS_DESERIALIZATION
 };
 
 } // namespace simdjson
@@ -69247,7 +74755,8 @@ public:
    *
    * Part of the std::iterator interface.
    */
-  simdjson_inline simdjson_result<value> operator*() noexcept; // MUST ONLY BE CALLED ONCE PER ITERATION.
+  simdjson_inline simdjson_result<value>
+  operator*() noexcept; // MUST ONLY BE CALLED ONCE PER ITERATION.
   /**
    * Check if we are at the end of the JSON.
    *
@@ -69271,6 +74780,11 @@ public:
    */
   simdjson_inline array_iterator &operator++() noexcept;
 
+  /**
+   * Check if the array is at the end.
+   */
+  [[nodiscard]] simdjson_inline bool at_end() const noexcept;
+
 private:
   value_iterator iter{};
 
@@ -69289,7 +74803,6 @@ namespace simdjson {
 
 template<>
 struct simdjson_result<icelake::ondemand::array_iterator> : public icelake::implementation_simdjson_result_base<icelake::ondemand::array_iterator> {
-public:
   simdjson_inline simdjson_result(icelake::ondemand::array_iterator &&value) noexcept; ///< @private
   simdjson_inline simdjson_result(error_code error) noexcept; ///< @private
   simdjson_inline simdjson_result() noexcept = default;
@@ -69302,6 +74815,8 @@ public:
   simdjson_inline bool operator==(const simdjson_result<icelake::ondemand::array_iterator> &) const noexcept;
   simdjson_inline bool operator!=(const simdjson_result<icelake::ondemand::array_iterator> &) const noexcept;
   simdjson_inline simdjson_result<icelake::ondemand::array_iterator> &operator++() noexcept;
+
+  [[nodiscard]] simdjson_inline bool at_end() const noexcept;
 };
 
 } // namespace simdjson
@@ -69536,7 +75051,7 @@ public:
    * Be mindful that the document instance must remain in scope while you are accessing object, array and value instances.
    *
    * @param out This is set to a value of the given type, parsed from the JSON. If there is an error, this may not be initialized.
-   * @returns INCORRECT_TYPE If the JSON value is not an object.
+   * @returns INCORRECT_TYPE If the JSON value is of the given type.
    * @returns SUCCESS If the parse succeeded and the out parameter was set to the value.
    */
   template<typename T>
@@ -69634,7 +75149,7 @@ public:
    *          time it parses a document or when it is destroyed.
    * @exception simdjson_error(INCORRECT_TYPE) if the JSON value is not a string.
    */
-  simdjson_inline operator std::string_view() noexcept(false);
+  simdjson_inline operator std::string_view() noexcept(false) simdjson_lifetime_bound;
   /**
    * Cast this JSON value to a raw_json_string.
    *
@@ -69643,7 +75158,7 @@ public:
    * @returns A pointer to the raw JSON for the given string.
    * @exception simdjson_error(INCORRECT_TYPE) if the JSON value is not a string.
    */
-  simdjson_inline operator raw_json_string() noexcept(false);
+  simdjson_inline operator raw_json_string() noexcept(false) simdjson_lifetime_bound;
   /**
    * Cast this JSON value to a bool.
    *
@@ -71023,6 +76538,36 @@ public:
    */
   simdjson_inline simdjson_result<std::string_view> raw_json() noexcept;
 
+#if SIMDJSON_SUPPORTS_DESERIALIZATION
+  /**
+   * Get this object as the given type.
+   *
+   * @param out This is set to a value of the given type, parsed from the JSON. If there is an error, this may not be initialized.
+   * @returns INCORRECT_TYPE If the JSON object is not of the given type.
+   * @returns SUCCESS If the parse succeeded and the out parameter was set to the value.
+   */
+  template <typename T>
+  simdjson_inline error_code get(T &out)
+     noexcept(custom_deserializable<T, object> ? nothrow_custom_deserializable<T, object> : true) {
+    static_assert(custom_deserializable<T, object>);
+    return deserialize(*this, out);
+  }
+  /**
+   * Get this array as the given type.
+   *
+   * @returns A value of the given type, parsed from the JSON.
+   * @returns INCORRECT_TYPE If the JSON value is not the given type.
+   */
+  template <typename T>
+  simdjson_inline simdjson_result<T> get()
+    noexcept(custom_deserializable<T, value> ? nothrow_custom_deserializable<T, value> : true)
+  {
+    static_assert(std::is_default_constructible<T>::value, "The specified type is not default constructible.");
+    T out{};
+    SIMDJSON_TRY(get<T>(out));
+    return out;
+  }
+#endif // SIMDJSON_SUPPORTS_DESERIALIZATION
 protected:
   /**
    * Go to the end of the object, no matter where you are right now.
@@ -71066,12 +76611,32 @@ public:
   simdjson_inline simdjson_result<icelake::ondemand::value> operator[](std::string_view key) && noexcept;
   simdjson_inline simdjson_result<icelake::ondemand::value> at_pointer(std::string_view json_pointer) noexcept;
   simdjson_inline simdjson_result<icelake::ondemand::value> at_path(std::string_view json_path) noexcept;
-
   inline simdjson_result<bool> reset() noexcept;
   inline simdjson_result<bool> is_empty() noexcept;
   inline simdjson_result<size_t> count_fields() & noexcept;
   inline simdjson_result<std::string_view> raw_json() noexcept;
+  #if SIMDJSON_SUPPORTS_DESERIALIZATION
+  // TODO: move this code into object-inl.h
 
+  template<typename T>
+  simdjson_inline simdjson_result<T> get() noexcept {
+    if (error()) { return error(); }
+    if constexpr (std::is_same_v<T, icelake::ondemand::object>) {
+      return first;
+    }
+    return first.get<T>();
+  }
+  template<typename T>
+  simdjson_inline error_code get(T& out) noexcept {
+    if (error()) { return error(); }
+    if constexpr (std::is_same_v<T, icelake::ondemand::object>) {
+      out = first;
+    } else {
+      SIMDJSON_TRY( first.get<T>(out) );
+    }
+    return SUCCESS;
+  }
+#endif // SIMDJSON_SUPPORTS_DESERIALIZATION
 };
 
 } // namespace simdjson
@@ -71200,6 +76765,20 @@ inline simdjson_result<std::string_view> to_json_string(simdjson_result<icelake:
 inline simdjson_result<std::string_view> to_json_string(simdjson_result<icelake::ondemand::value> x);
 inline simdjson_result<std::string_view> to_json_string(simdjson_result<icelake::ondemand::object> x);
 inline simdjson_result<std::string_view> to_json_string(simdjson_result<icelake::ondemand::array> x);
+
+#if SIMDJSON_STATIC_REFLECTION
+/**
+ * Create a JSON string from any user-defined type using static reflection.
+ * Only available when SIMDJSON_STATIC_REFLECTION is enabled.
+ */
+template<typename T>
+  requires(!std::same_as<T, icelake::ondemand::document> &&
+           !std::same_as<T, icelake::ondemand::value> &&
+           !std::same_as<T, icelake::ondemand::object> &&
+           !std::same_as<T, icelake::ondemand::array>)
+inline std::string to_json_string(const T& obj);
+#endif
+
 } // namespace simdjson
 
 /**
@@ -71276,12 +76855,17 @@ inline std::ostream& operator<<(std::ostream& out, simdjson::simdjson_result<sim
 #ifndef SIMDJSON_ONDEMAND_DESERIALIZE_H
 /* amalgamation skipped (editor-only): #ifndef SIMDJSON_CONDITIONAL_INCLUDE */
 /* amalgamation skipped (editor-only): #define SIMDJSON_ONDEMAND_DESERIALIZE_H */
+/* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/object.h" */
 /* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/array.h" */
 /* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/base.h" */
 /* amalgamation skipped (editor-only): #endif // SIMDJSON_CONDITIONAL_INCLUDE */
 
 #include <concepts>
 #include <limits>
+#if SIMDJSON_STATIC_REFLECTION
+#include <experimental/meta>
+// #include <static_reflection> // for std::define_static_string - header not available yet
+#endif
 
 namespace simdjson {
 template <typename T>
@@ -71328,6 +76912,22 @@ error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept {
   return SUCCESS;
 }
 
+//////////////////////////////
+// String deserialization
+//////////////////////////////
+
+// just a character!
+error_code tag_invoke(deserialize_tag, auto &val, char &out) noexcept {
+  std::string_view x;
+  SIMDJSON_TRY(val.get_string().get(x));
+  if(x.size() != 1) {
+    return INCORRECT_TYPE;
+  }
+  out = x[0];
+  return SUCCESS;
+}
+
+// any string-like type (can be constructed from std::string_view)
 template <concepts::constructible_from_string_view T, typename ValT>
   requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(std::is_nothrow_constructible_v<T, std::string_view>) {
@@ -71349,15 +76949,20 @@ template <concepts::appendable_containers T, typename ValT>
   requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(false) {
   using value_type = typename std::remove_cvref_t<T>::value_type;
-  static_assert(
+  /*static_assert(
       deserializable<value_type, ValT>,
-      "The specified type inside the container must itself be deserializable");
+      "The specified type inside the container must itself be deserializable");*/
   static_assert(
       std::is_default_constructible_v<value_type>,
       "The specified type inside the container must default constructible.");
 
   icelake::ondemand::array arr;
-  SIMDJSON_TRY(val.get_array().get(arr));
+  if constexpr (std::is_same_v<std::remove_cvref_t<ValT>, icelake::ondemand::array>) {
+    arr = val;
+  } else {
+    SIMDJSON_TRY(val.get_array().get(arr));
+  }
+
   for (auto v : arr) {
     if constexpr (concepts::returns_reference<T>) {
       if (auto const err = v.get<value_type>().get(concepts::emplace_one(out));
@@ -71414,7 +77019,45 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(false) {
  return SUCCESS;
 }
 
+template <concepts::string_view_keyed_map T>
+error_code tag_invoke(deserialize_tag, icelake::ondemand::object &obj, T &out) noexcept {
+  using value_type = typename std::remove_cvref_t<T>::mapped_type;
 
+  out.clear();
+  for (auto field : obj) {
+    std::string_view key;
+    SIMDJSON_TRY(field.unescaped_key().get(key));
+
+    icelake::ondemand::value value_obj;
+    SIMDJSON_TRY(field.value().get(value_obj));
+
+    value_type this_value;
+    SIMDJSON_TRY(value_obj.get(this_value));
+    out.emplace(typename T::key_type(key), std::move(this_value));
+  }
+  return SUCCESS;
+}
+
+template <concepts::string_view_keyed_map T>
+error_code tag_invoke(deserialize_tag, icelake::ondemand::value &val, T &out) noexcept {
+  icelake::ondemand::object obj;
+  SIMDJSON_TRY(val.get_object().get(obj));
+  return simdjson::deserialize(obj, out);
+}
+
+template <concepts::string_view_keyed_map T>
+error_code tag_invoke(deserialize_tag, icelake::ondemand::document &doc, T &out) noexcept {
+  icelake::ondemand::object obj;
+  SIMDJSON_TRY(doc.get_object().get(obj));
+  return simdjson::deserialize(obj, out);
+}
+
+template <concepts::string_view_keyed_map T>
+error_code tag_invoke(deserialize_tag, icelake::ondemand::document_reference &doc, T &out) noexcept {
+  icelake::ondemand::object obj;
+  SIMDJSON_TRY(doc.get_object().get(obj));
+  return simdjson::deserialize(obj, out);
+}
 
 
 /**
@@ -71457,22 +77100,334 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(nothrow_deser
 /**
  * This CPO (Customization Point Object) will help deserialize into optional types.
  */
-template <concepts::optional_type T, typename ValT>
+template <concepts::optional_type T>
   requires(!require_custom_serialization<T>)
-error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(nothrow_deserializable<typename std::remove_cvref_t<T>::value_type, ValT>) {
+error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept(nothrow_deserializable<typename std::remove_cvref_t<T>::value_type, decltype(val)>) {
   using value_type = typename std::remove_cvref_t<T>::value_type;
 
-  static_assert(
-      deserializable<value_type, ValT>,
-      "The specified type inside the unique_ptr must itself be deserializable");
-  static_assert(
-      std::is_default_constructible_v<value_type>,
-      "The specified type inside the unique_ptr must default constructible.");
+  // Check if the value is null
+  if (val.is_null()) {
+    out.reset(); // Set to nullopt
+    return SUCCESS;
+  }
 
   if (!out) {
     out.emplace();
   }
   SIMDJSON_TRY(val.template get<value_type>(out.value()));
+  return SUCCESS;
+}
+
+
+#if SIMDJSON_STATIC_REFLECTION
+
+
+template <typename T>
+constexpr bool user_defined_type = (std::is_class_v<T>
+&& !std::is_same_v<T, std::string> && !std::is_same_v<T, std::string_view> && !concepts::optional_type<T> &&
+!concepts::appendable_containers<T> && !require_custom_serialization<T>);
+
+
+// workaround from
+// https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2024/p2996r10.html#back-and-forth
+// for missing expansion statements
+namespace __impl {
+  template<auto... vals>
+  struct replicator_type {
+    template<typename F>
+      constexpr void operator>>(F body) const {
+        (body.template operator()<vals>(), ...);
+      }
+  };
+
+  template<auto... vals>
+  replicator_type<vals...> replicator = {};
+}
+
+template<typename R>
+consteval auto expand(R range) {
+  std::vector<std::meta::info> args;
+  for (auto r : range) {
+    args.push_back(reflect_constant(r));
+  }
+  return substitute(^^__impl::replicator, args);
+}
+// end of workaround
+
+template <typename T, typename ValT>
+  requires(user_defined_type<T> && std::is_class_v<T>)
+error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept {
+  icelake::ondemand::object obj;
+  if constexpr (std::is_same_v<std::remove_cvref_t<ValT>, icelake::ondemand::object>) {
+    obj = val;
+  } else {
+    SIMDJSON_TRY(val.get_object().get(obj));
+  }
+  error_code e = simdjson::SUCCESS;
+
+  [:expand(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked())):] >> [&]<auto mem>() {
+    if constexpr (!std::meta::is_const(mem) && std::meta::is_public(mem)) {
+      constexpr std::string_view key = std::define_static_string(std::meta::identifier_of(mem));
+      // Note: removed static assert as optional types are now handled generically
+      // as long we are succesful or the field is not found, we continue
+      if(e == simdjson::SUCCESS || e == simdjson::NO_SUCH_FIELD) {
+        e = obj[key].get(out.[:mem:]);
+      }
+    }
+  };
+  return e;
+}
+
+// Support for enum deserialization - deserialize from string representation using expand approach from P2996R12
+template <typename T, typename ValT>
+  requires(std::is_enum_v<T>)
+error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept {
+#if SIMDJSON_STATIC_REFLECTION
+  std::string_view str;
+  SIMDJSON_TRY(val.get_string().get(str));
+
+  bool found = false;
+  [:expand(std::meta::enumerators_of(^^T)):] >> [&]<auto enum_val>{
+    if (!found && str == std::meta::identifier_of(enum_val)) {
+      out = [:enum_val:];
+      found = true;
+    }
+  };
+
+  return found ? SUCCESS : INCORRECT_TYPE;
+#else
+  // Fallback: deserialize as integer if reflection not available
+  std::underlying_type_t<T> int_val;
+  SIMDJSON_TRY(val.get(int_val));
+  out = static_cast<T>(int_val);
+  return SUCCESS;
+#endif
+}
+
+template <typename simdjson_value, typename T>
+  requires(user_defined_type<std::remove_cvref_t<T>>)
+error_code tag_invoke(deserialize_tag, simdjson_value &val, std::unique_ptr<T> &out) noexcept {
+  if (!out) {
+    out = std::make_unique<T>();
+    if (!out) {
+      return MEMALLOC;
+    }
+  }
+  if (auto err = val.get(*out)) {
+    out.reset();
+    return err;
+  }
+  return SUCCESS;
+}
+
+template <typename simdjson_value, typename T>
+  requires(user_defined_type<std::remove_cvref_t<T>>)
+error_code tag_invoke(deserialize_tag, simdjson_value &val, std::shared_ptr<T> &out) noexcept {
+  if (!out) {
+    out = std::make_shared<T>();
+    if (!out) {
+      return MEMALLOC;
+    }
+  }
+  if (auto err = val.get(*out)) {
+    out.reset();
+    return err;
+  }
+  return SUCCESS;
+}
+
+#endif // SIMDJSON_STATIC_REFLECTION
+
+////////////////////////////////////////
+// Unique pointers
+////////////////////////////////////////
+error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<bool> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_unique<bool>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_bool().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<int64_t> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_unique<int64_t>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_int64().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<uint64_t> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_unique<uint64_t>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_uint64().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<double> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_unique<double>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_double().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<std::string_view> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_unique<std::string_view>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_string().get(*out));
+  return SUCCESS;
+}
+
+
+////////////////////////////////////////
+// Shared pointers
+////////////////////////////////////////
+error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<bool> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_shared<bool>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_bool().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<int64_t> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_shared<int64_t>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_int64().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<uint64_t> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_shared<uint64_t>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_uint64().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<double> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_shared<double>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_double().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<std::string_view> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_shared<std::string_view>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_string().get(*out));
+  return SUCCESS;
+}
+
+
+////////////////////////////////////////
+// Explicit optional specializations
+////////////////////////////////////////
+
+////////////////////////////////////////
+// Explicit smart pointer specializations for string and int types
+////////////////////////////////////////
+error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<std::string> &out) noexcept {
+  // Check if the value is null
+  if (val.is_null()) {
+    out.reset(); // Set to nullptr
+    return SUCCESS;
+  }
+
+  if (!out) {
+    out = std::make_unique<std::string>();
+  }
+  std::string_view str;
+  SIMDJSON_TRY(val.get_string().get(str));
+  *out = std::string{str};
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<std::string> &out) noexcept {
+  // Check if the value is null
+  if (val.is_null()) {
+    out.reset(); // Set to nullptr
+    return SUCCESS;
+  }
+
+  if (!out) {
+    out = std::make_shared<std::string>();
+  }
+  std::string_view str;
+  SIMDJSON_TRY(val.get_string().get(str));
+  *out = std::string{str};
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<int> &out) noexcept {
+  // Check if the value is null
+  if (val.is_null()) {
+    out.reset(); // Set to nullptr
+    return SUCCESS;
+  }
+
+  if (!out) {
+    out = std::make_unique<int>();
+  }
+  int64_t temp;
+  SIMDJSON_TRY(val.get_int64().get(temp));
+  *out = static_cast<int>(temp);
   return SUCCESS;
 }
 
@@ -71763,6 +77718,9 @@ simdjson_inline array_iterator &array_iterator::operator++() noexcept {
   return *this;
 }
 
+simdjson_inline bool array_iterator::at_end() const noexcept {
+  return iter.at_end();
+}
 } // namespace ondemand
 } // namespace icelake
 } // namespace simdjson
@@ -71799,7 +77757,9 @@ simdjson_inline simdjson_result<icelake::ondemand::array_iterator> &simdjson_res
   ++(first);
   return *this;
 }
-
+simdjson_inline bool simdjson_result<icelake::ondemand::array_iterator>::at_end() const noexcept {
+  return !first.iter.is_valid() || first.at_end();
+}
 } // namespace simdjson
 
 #endif // SIMDJSON_GENERIC_ONDEMAND_ARRAY_ITERATOR_INL_H
@@ -72557,8 +78517,8 @@ simdjson_inline document::operator object() & noexcept(false) { return get_objec
 simdjson_inline document::operator uint64_t() noexcept(false) { return get_uint64(); }
 simdjson_inline document::operator int64_t() noexcept(false) { return get_int64(); }
 simdjson_inline document::operator double() noexcept(false) { return get_double(); }
-simdjson_inline document::operator std::string_view() noexcept(false) { return get_string(false); }
-simdjson_inline document::operator raw_json_string() noexcept(false) { return get_raw_json_string(); }
+simdjson_inline document::operator std::string_view() noexcept(false) simdjson_lifetime_bound { return get_string(false); }
+simdjson_inline document::operator raw_json_string() noexcept(false) simdjson_lifetime_bound { return get_raw_json_string(); }
 simdjson_inline document::operator bool() noexcept(false) { return get_bool(); }
 simdjson_inline document::operator value() noexcept(false) { return get_value(); }
 
@@ -74115,6 +80075,8 @@ simdjson_inline void json_iterator::assert_valid_position(token_position positio
 #ifndef SIMDJSON_CLANG_VISUAL_STUDIO
   SIMDJSON_ASSUME( position >= &parser->implementation->structural_indexes[0] );
   SIMDJSON_ASSUME( position < &parser->implementation->structural_indexes[parser->implementation->n_structural_indexes] );
+#else
+  (void)position; // Suppress unused parameter warning
 #endif
 }
 
@@ -74963,6 +80925,7 @@ simdjson_inline  simdjson_result<std::string_view> simdjson_result<icelake::onde
   if (error()) { return error(); }
   return first.raw_json();
 }
+
 } // namespace simdjson
 
 #endif // SIMDJSON_GENERIC_ONDEMAND_OBJECT_INL_H
@@ -75538,6 +81501,9 @@ simdjson_inline simdjson_warn_unused simdjson_result<std::string_view> simdjson_
 /* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/object.h" */
 /* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/serialization.h" */
 /* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/value.h" */
+/* amalgamation skipped (editor-only): #if SIMDJSON_STATIC_REFLECTION */
+/* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/json_builder.h" */
+/* amalgamation skipped (editor-only): #endif */
 /* amalgamation skipped (editor-only): #endif // SIMDJSON_CONDITIONAL_INCLUDE */
 
 namespace simdjson {
@@ -76959,6 +82925,1151 @@ simdjson_inline simdjson_result<icelake::ondemand::value_iterator>::simdjson_res
 #endif // SIMDJSON_GENERIC_ONDEMAND_VALUE_ITERATOR_INL_H
 /* end file simdjson/generic/ondemand/value_iterator-inl.h for icelake */
 
+// JSON builder, ideally they should not be part of the ondemand directory
+// but it is convenient for now to have them here.
+/* including simdjson/generic/ondemand/json_string_builder.h for icelake: #include "simdjson/generic/ondemand/json_string_builder.h" */
+/* begin file simdjson/generic/ondemand/json_string_builder.h for icelake */
+/**
+ * This file is part of the builder API. It is temporarily in the ondemand directory
+ * but we will move it to a builder directory later.
+ */
+#ifndef SIMDJSON_GENERIC_STRING_BUILDER_H
+
+/* amalgamation skipped (editor-only): #ifndef SIMDJSON_CONDITIONAL_INCLUDE */
+/* amalgamation skipped (editor-only): #define SIMDJSON_GENERIC_STRING_BUILDER_H */
+/* amalgamation skipped (editor-only): #include "simdjson/generic/implementation_simdjson_result_base.h" */
+/* amalgamation skipped (editor-only): #endif // SIMDJSON_CONDITIONAL_INCLUDE */
+
+namespace simdjson {
+namespace icelake {
+namespace builder {
+
+/**
+ * A builder for JSON strings representing documents. This is a low-level
+ * builder that is not meant to be used directly by end-users. Though it
+ * supports atomic types (Booleans, strings), it does not support composed
+ * types (arrays and objects).
+ *
+ * Ultimately, this class can support kernel-specific optimizations. E.g.,
+ * it may make use of SIMD instructions to escape strings faster.
+ */
+class string_builder {
+public:
+  simdjson_inline string_builder(size_t initial_capacity = 1024);
+
+  /**
+   * Append number (includes Booleans). Booleans are mapped to the strings
+   * false and true. Numbers are converted to strings abiding by the JSON standard.
+   * Floating-point numbers are converted to the shortest string that 'correctly'
+   * represents the number.
+   */
+  template<typename number_type,
+         typename = typename std::enable_if<std::is_arithmetic<number_type>::value>::type>
+  simdjson_inline void append(number_type v) noexcept;
+
+  /**
+   * Append character c.
+   */
+  simdjson_inline void append(char c)  noexcept;
+
+  /**
+   * Append the string 'null'.
+   */
+  simdjson_inline void append_null()  noexcept;
+
+  /**
+   * Clear the content.
+   */
+  simdjson_inline void clear()  noexcept;
+
+  /**
+   * Append the std::string_view, after escaping it.
+   * There is no UTF-8 validation.
+   */
+  simdjson_inline void escape_and_append(std::string_view input)  noexcept;
+
+  /**
+   * Append the std::string_view surrounded by double quotes, after escaping it.
+   * There is no UTF-8 validation.
+   */
+  simdjson_inline void escape_and_append_with_quotes(std::string_view input)  noexcept;
+
+  /**
+   * Append the character surrounded by double quotes, after escaping it.
+   * There is no UTF-8 validation.
+   */
+  simdjson_inline void escape_and_append_with_quotes(char input)  noexcept;
+
+  /**
+   * Append the character surrounded by double quotes, after escaping it.
+   * There is no UTF-8 validation.
+   */
+   simdjson_inline void escape_and_append_with_quotes(const char* input)  noexcept;
+
+  /**
+   * Append the C string directly, without escaping.
+   * There is no UTF-8 validation.
+   */
+  simdjson_inline void append_raw(const char *c)  noexcept;
+
+  /**
+   * Append "{" to the buffer.
+   */
+  simdjson_inline void start_object()  noexcept;
+
+  /**
+   * Append "}" to the buffer.
+   */
+  simdjson_inline void end_object()  noexcept;
+
+  /**
+   * Append "[" to the buffer.
+   */
+  simdjson_inline void start_array()  noexcept;
+
+  /**
+   * Append "]" to the buffer.
+   */
+  simdjson_inline void end_array()  noexcept;
+
+  /**
+   * Append "," to the buffer.
+   */
+  simdjson_inline void append_comma()  noexcept;
+
+  /**
+   * Append ":" to the buffer.
+   */
+  simdjson_inline void append_colon()  noexcept;
+
+  /**
+   * Append a key-value pair to the buffer.
+   * The key is escaped and surrounded by double quotes.
+   * The value is escaped if it is a string.
+   */
+   template<typename key_type, typename value_type>
+  simdjson_inline void append_key_value(key_type key, value_type value) noexcept;
+  /**
+   * Append the std::string_view directly, without escaping.
+   * There is no UTF-8 validation.
+   */
+  simdjson_inline void append_raw(std::string_view input)  noexcept;
+
+  /**
+   * Append len characters from str.
+   * There is no UTF-8 validation.
+   */
+  simdjson_inline void append_raw(const char *str, size_t len) noexcept;
+#if SIMDJSON_EXCEPTIONS
+  /**
+   * Creates an std::string from the written JSON buffer.
+   * Throws if memory allocation failed
+   *
+   * The result may not be valid UTF-8 if some of your content was not valid UTF-8.
+   * Use validate_unicode() to check the content if needed.
+   */
+  simdjson_inline operator std::string() const noexcept(false);
+
+  /**
+   * Creates an std::string_view from the written JSON buffer.
+   * Throws if memory allocation failed.
+   *
+   * The result may not be valid UTF-8 if some of your content was not valid UTF-8.
+   * Use validate_unicode() to check the content if needed.
+   */
+  simdjson_inline operator std::string_view() const noexcept(false) simdjson_lifetime_bound;
+#endif
+
+  /**
+   * Returns a view on the written JSON buffer. Returns an error
+   * if memory allocation failed.
+   *
+   * The result may not be valid UTF-8 if some of your content was not valid UTF-8.
+   * Use validate_unicode() to check the content.
+   */
+  simdjson_inline simdjson_result<std::string_view> view() const noexcept;
+
+  /**
+   * Appends the null character to the buffer and returns
+   * a pointer to the beginning of the written JSON buffer.
+   * Returns an error if memory allocation failed.
+   * The result is null-terminated.
+   *
+   * The result may not be valid UTF-8 if some of your content was not valid UTF-8.
+   * Use validate_unicode() to check the content.
+   */
+  simdjson_inline simdjson_result<const char *> c_str() noexcept;
+
+  /**
+   * Return true if the content is valid UTF-8.
+   */
+  simdjson_inline bool validate_unicode() const noexcept;
+
+  /**
+   * Returns the current size of the written JSON buffer.
+   * If an error occurred, returns 0.
+   */
+  simdjson_inline size_t size() const noexcept;
+
+private:
+  /**
+   * Returns true if we can write at least upcoming_bytes bytes.
+   * The underlying buffer is reallocated if needed. It is designed
+   * to be called before writing to the buffer. It should be fast.
+   */
+  simdjson_inline bool capacity_check(size_t upcoming_bytes);
+
+  /**
+   * Grow the buffer to at least desired_capacity bytes.
+   * If the allocation fails, is_valid is set to false. We expect
+   * that this function would not be repeatedly called.
+   */
+  simdjson_inline void grow_buffer(size_t desired_capacity);
+
+  /**
+   * We use this helper function to make sure that is_valid is kept consistent.
+   */
+  simdjson_inline void set_valid(bool valid) noexcept;
+
+  std::unique_ptr<char[]> buffer{};
+  size_t position{0};
+  size_t capacity{0};
+  bool is_valid{true};
+};
+
+
+
+}
+}
+} // namespace simdjson
+
+#endif // SIMDJSON_GENERIC_STRING_BUILDER_H
+/* end file simdjson/generic/ondemand/json_string_builder.h for icelake */
+/* including simdjson/generic/ondemand/json_string_builder-inl.h for icelake: #include "simdjson/generic/ondemand/json_string_builder-inl.h" */
+/* begin file simdjson/generic/ondemand/json_string_builder-inl.h for icelake */
+/**
+ * This file is part of the builder API. It is temporarily in the ondemand
+ * directory but we will move it to a builder directory later.
+ */
+#include <array>
+#include <cstring>
+#include <type_traits>
+#ifndef SIMDJSON_GENERIC_STRING_BUILDER_INL_H
+
+/* amalgamation skipped (editor-only): #ifndef SIMDJSON_CONDITIONAL_INCLUDE */
+/* amalgamation skipped (editor-only): #define SIMDJSON_GENERIC_STRING_BUILDER_INL_H */
+/* amalgamation skipped (editor-only): #include "simdjson/generic/builder/json_string_builder.h" */
+/* amalgamation skipped (editor-only): #endif // SIMDJSON_CONDITIONAL_INCLUDE */
+
+/*
+ * Empirically, we have found that an inlined optimization is important for
+ * performance. The following macros are not ideal. We should find a better
+ * way to inline the code.
+ */
+
+#if defined(__SSE2__) || defined(__x86_64__) || defined(__x86_64) ||           \
+    (defined(_M_AMD64) || defined(_M_X64) ||                                   \
+     (defined(_M_IX86_FP) && _M_IX86_FP == 2))
+#ifndef SIMDJSON_EXPERIMENTAL_HAS_SSE2
+#define SIMDJSON_EXPERIMENTAL_HAS_SSE2 1
+#endif
+#endif
+
+#if defined(__aarch64__) || defined(_M_ARM64)
+#ifndef SIMDJSON_EXPERIMENTAL_HAS_NEON
+#define SIMDJSON_EXPERIMENTAL_HAS_NEON 1
+#endif
+#endif
+#if SIMDJSON_EXPERIMENTAL_HAS_NEON
+#include <arm_neon.h>
+#endif
+#if SIMDJSON_EXPERIMENTAL_HAS_SSE2
+#include <emmintrin.h>
+#endif
+
+namespace simdjson {
+namespace icelake {
+namespace builder {
+
+static SIMDJSON_CONSTEXPR_LAMBDA std::array<uint8_t, 256> json_quotable_character = {
+  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+  1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+
+/**
+
+A possible SWAR implementation of has_json_escapable_byte. It is not used because
+it is slower than the current implementation. It is kept here for reference (to show
+that we tried it).
+
+inline bool has_json_escapable_byte(uint64_t x) {
+  uint64_t is_ascii = 0x8080808080808080ULL & ~x;
+  uint64_t xor2 = x ^ 0x0202020202020202ULL;
+  uint64_t lt32_or_eq34 = xor2 - 0x2121212121212121ULL;
+  uint64_t sub92 = x ^ 0x5C5C5C5C5C5C5C5CULL;
+  uint64_t eq92 = (sub92 - 0x0101010101010101ULL);
+  return ((lt32_or_eq34 | eq92) & is_ascii) != 0;
+}
+
+**/
+
+SIMDJSON_CONSTEXPR_LAMBDA simdjson_inline bool
+simple_needs_escaping(std::string_view v) {
+  for (char c : v) {
+    // a table lookup is faster than a series of comparisons
+    if(json_quotable_character[static_cast<uint8_t>(c)]) {
+      return true;
+    }
+  }
+  return false;
+}
+
+#if SIMDJSON_EXPERIMENTAL_HAS_NEON
+simdjson_inline bool fast_needs_escaping(std::string_view view) {
+  if (view.size() < 16) {
+    return simple_needs_escaping(view);
+  }
+  size_t i = 0;
+  uint8x16_t running = vdupq_n_u8(0);
+  uint8x16_t v34 = vdupq_n_u8(34);
+  uint8x16_t v92 = vdupq_n_u8(92);
+
+  for (; i + 15 < view.size(); i += 16) {
+    uint8x16_t word = vld1q_u8((const uint8_t *)view.data() + i);
+    running = vorrq_u8(running, vceqq_u8(word, v34));
+    running = vorrq_u8(running, vceqq_u8(word, v92));
+    running = vorrq_u8(running, vcltq_u8(word, vdupq_n_u8(32)));
+  }
+  if (i < view.size()) {
+    uint8x16_t word =
+        vld1q_u8((const uint8_t *)view.data() + view.length() - 16);
+    running = vorrq_u8(running, vceqq_u8(word, v34));
+    running = vorrq_u8(running, vceqq_u8(word, v92));
+    running = vorrq_u8(running, vcltq_u8(word, vdupq_n_u8(32)));
+  }
+  return vmaxvq_u32(vreinterpretq_u32_u8(running)) != 0;
+}
+#elif SIMDJSON_EXPERIMENTAL_HAS_SSE2
+simdjson_inline bool fast_needs_escaping(std::string_view view) {
+  if (view.size() < 16) {
+    return simple_needs_escaping(view);
+  }
+  size_t i = 0;
+  __m128i running = _mm_setzero_si128();
+  for (; i + 15 < view.size(); i += 16) {
+
+    __m128i word = _mm_loadu_si128(reinterpret_cast<const __m128i *>(view.data() + i));
+    running = _mm_or_si128(running, _mm_cmpeq_epi8(word, _mm_set1_epi8(34)));
+    running = _mm_or_si128(running, _mm_cmpeq_epi8(word, _mm_set1_epi8(92)));
+    running = _mm_or_si128(
+        running, _mm_cmpeq_epi8(_mm_subs_epu8(word, _mm_set1_epi8(31)),
+                                _mm_setzero_si128()));
+  }
+  if (i < view.size()) {
+    __m128i word =
+        _mm_loadu_si128(reinterpret_cast<const __m128i *>(view.data() + view.length() - 16));
+    running = _mm_or_si128(running, _mm_cmpeq_epi8(word, _mm_set1_epi8(34)));
+    running = _mm_or_si128(running, _mm_cmpeq_epi8(word, _mm_set1_epi8(92)));
+    running = _mm_or_si128(
+        running, _mm_cmpeq_epi8(_mm_subs_epu8(word, _mm_set1_epi8(31)),
+                                _mm_setzero_si128()));
+  }
+  return _mm_movemask_epi8(running) != 0;
+}
+#else
+simdjson_inline bool fast_needs_escaping(std::string_view view) {
+  return simple_needs_escaping(view);
+}
+#endif
+
+
+SIMDJSON_CONSTEXPR_LAMBDA inline size_t
+find_next_json_quotable_character(const std::string_view view,
+                                  size_t location) noexcept {
+
+  for (auto pos = view.begin() + location; pos != view.end(); ++pos) {
+    if (json_quotable_character[static_cast<uint8_t>(*pos)]) {
+      return pos - view.begin();
+    }
+  }
+  return size_t(view.size());
+}
+
+SIMDJSON_CONSTEXPR_LAMBDA static std::string_view control_chars[] = {
+    "\\x0000", "\\x0001", "\\x0002", "\\x0003", "\\x0004", "\\x0005", "\\x0006",
+    "\\x0007", "\\x0008", "\\t",     "\\n",     "\\x000b", "\\f",     "\\r",
+    "\\x000e", "\\x000f", "\\x0010", "\\x0011", "\\x0012", "\\x0013", "\\x0014",
+    "\\x0015", "\\x0016", "\\x0017", "\\x0018", "\\x0019", "\\x001a", "\\x001b",
+    "\\x001c", "\\x001d", "\\x001e", "\\x001f"};
+
+SIMDJSON_CONSTEXPR_LAMBDA void escape_json_char(char c, char *&out) {
+  if (c == '"') {
+    memcpy(out, "\\\"", 2);
+    out += 2;
+  } else if (c == '\\') {
+    memcpy(out, "\\\\", 2);
+    out += 2;
+  } else {
+    std::string_view v = control_chars[uint8_t(c)];
+    memcpy(out, v.data(), v.size());
+    out += v.size();
+  }
+}
+
+inline size_t write_string_escaped(const std::string_view input, char *out) {
+  size_t mysize = input.size();
+  if (!fast_needs_escaping(input)) { // fast path!
+    memcpy(out, input.data(), input.size());
+    return input.size();
+  }
+  const char *const initout = out;
+  size_t location = find_next_json_quotable_character(input, 0);
+  memcpy(out, input.data(), location);
+  out += location;
+  escape_json_char(input[location], out);
+  location += 1;
+  while (location < mysize) {
+    size_t newlocation = find_next_json_quotable_character(input, location);
+    memcpy(out, input.data() + location, newlocation - location);
+    out += newlocation - location;
+    location = newlocation;
+    if (location == mysize) {
+      break;
+    }
+    escape_json_char(input[location], out);
+    location += 1;
+  }
+  return out - initout;
+}
+
+#if SIMDJSON_CONSTEVAL
+// unoptimized, meant for compile-time execution
+consteval std::string consteval_to_quoted_escaped(std::string_view input) {
+  std::string out = "\"";
+  for (char c : input) {
+    if (json_quotable_character[uint8_t(c)]) {
+      if (c == '"') {
+        out.append("\\\"");
+      } else if (c == '\\') {
+        out.append("\\\\");
+      } else {
+        std::string_view v = control_chars[uint8_t(c)];
+        out.append(v);
+      }
+    } else {
+      out.push_back(c);
+    }
+  }
+  out.push_back('"');
+  return out;
+}
+#endif // SIMDJSON_CONSTEVAL
+
+simdjson_inline string_builder::string_builder(size_t initial_capacity)
+    : buffer(new(std::nothrow) char[initial_capacity]), position(0),
+      capacity(buffer.get() != nullptr ? initial_capacity : 0),
+      is_valid(buffer.get() != nullptr) {}
+
+simdjson_inline bool string_builder::capacity_check(size_t upcoming_bytes) {
+  // We use the convention that when is_valid is false, then the capacity and
+  // the position are 0.
+  // Most of the time, this function will return true.
+  if (simdjson_likely(upcoming_bytes <= capacity - position)) {
+    return true;
+  }
+  // check for overflow, most of the time there is no overflow
+  if (simdjson_likely(position + upcoming_bytes < position)) {
+    return false;
+  }
+  // We will rarely get here.
+  grow_buffer((std::max)(capacity * 2, position + upcoming_bytes));
+  // If the buffer allocation failed, we set is_valid to false.
+  return is_valid;
+}
+
+simdjson_inline void string_builder::grow_buffer(size_t desired_capacity) {
+  if (!is_valid) {
+    return;
+  }
+  std::unique_ptr<char[]> new_buffer(new (std::nothrow) char[desired_capacity]);
+  if (new_buffer.get() == nullptr) {
+    set_valid(false);
+    return;
+  }
+  std::memcpy(new_buffer.get(), buffer.get(), position);
+  buffer.swap(new_buffer);
+  capacity = desired_capacity;
+}
+
+simdjson_inline void string_builder::set_valid(bool valid) noexcept {
+  if (!valid) {
+    is_valid = false;
+    capacity = 0;
+    position = 0;
+    buffer.reset();
+  } else {
+    is_valid = true;
+  }
+}
+
+simdjson_inline size_t string_builder::size() const noexcept {
+  return position;
+}
+
+simdjson_inline void string_builder::append(char c) noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position++] = c;
+  }
+}
+
+simdjson_inline void string_builder::append_null() noexcept {
+  constexpr char null_literal[] = "null";
+  constexpr size_t null_len = sizeof(null_literal) - 1;
+  if (capacity_check(null_len)) {
+    std::memcpy(buffer.get() + position, null_literal, null_len);
+    position += null_len;
+  }
+}
+
+simdjson_inline void string_builder::clear() noexcept {
+  position = 0;
+  // if it was invalid, we should try to repair it
+  if (!is_valid) {
+    capacity = 0;
+    buffer.reset();
+    is_valid = true;
+  }
+}
+
+namespace internal {
+
+// We could specialize further for 32-bit integers.
+simdjson_really_inline int int_log2(uint32_t x) { return (63 - leading_zeroes(x | 1)); }
+
+simdjson_really_inline int fast_digit_count(uint32_t x) {
+  static uint64_t table[] = {
+      4294967296,  8589934582,  8589934582,  8589934582,  12884901788,
+      12884901788, 12884901788, 17179868184, 17179868184, 17179868184,
+      21474826480, 21474826480, 21474826480, 21474826480, 25769703776,
+      25769703776, 25769703776, 30063771072, 30063771072, 30063771072,
+      34349738368, 34349738368, 34349738368, 34349738368, 38554705664,
+      38554705664, 38554705664, 41949672960, 41949672960, 41949672960,
+      42949672960, 42949672960};
+  return uint32_t((x + table[int_log2(x)]) >> 32);
+}
+
+simdjson_really_inline int int_log2(uint64_t x) { return 63 - leading_zeroes(x | 1); }
+
+simdjson_really_inline int fast_digit_count(uint64_t x) {
+  static uint64_t table[] = {9,
+                             99,
+                             999,
+                             9999,
+                             99999,
+                             999999,
+                             9999999,
+                             99999999,
+                             999999999,
+                             9999999999,
+                             99999999999,
+                             999999999999,
+                             9999999999999,
+                             99999999999999,
+                             999999999999999ULL,
+                             9999999999999999ULL,
+                             99999999999999999ULL,
+                             999999999999999999ULL,
+                             9999999999999999999ULL};
+  int y = (19 * int_log2(x) >> 6);
+  y += x > table[y];
+  return y + 1;
+}
+
+template <typename number_type, typename = typename std::enable_if<
+                                    std::is_unsigned<number_type>::value>::type>
+simdjson_really_inline size_t digit_count(number_type v) noexcept {
+  static_assert(sizeof(number_type) == 8 || sizeof(number_type) == 4 ||
+                    sizeof(number_type) == 2 || sizeof(number_type) == 1,
+                "We only support 8-bit, 16-bit, 32-bit and 64-bit numbers");
+  return fast_digit_count(v);
+}
+static const char decimal_table[200] = {
+  0x30, 0x30, 0x30, 0x31, 0x30, 0x32, 0x30, 0x33, 0x30, 0x34, 0x30, 0x35,
+  0x30, 0x36, 0x30, 0x37, 0x30, 0x38, 0x30, 0x39, 0x31, 0x30, 0x31, 0x31,
+  0x31, 0x32, 0x31, 0x33, 0x31, 0x34, 0x31, 0x35, 0x31, 0x36, 0x31, 0x37,
+  0x31, 0x38, 0x31, 0x39, 0x32, 0x30, 0x32, 0x31, 0x32, 0x32, 0x32, 0x33,
+  0x32, 0x34, 0x32, 0x35, 0x32, 0x36, 0x32, 0x37, 0x32, 0x38, 0x32, 0x39,
+  0x33, 0x30, 0x33, 0x31, 0x33, 0x32, 0x33, 0x33, 0x33, 0x34, 0x33, 0x35,
+  0x33, 0x36, 0x33, 0x37, 0x33, 0x38, 0x33, 0x39, 0x34, 0x30, 0x34, 0x31,
+  0x34, 0x32, 0x34, 0x33, 0x34, 0x34, 0x34, 0x35, 0x34, 0x36, 0x34, 0x37,
+  0x34, 0x38, 0x34, 0x39, 0x35, 0x30, 0x35, 0x31, 0x35, 0x32, 0x35, 0x33,
+  0x35, 0x34, 0x35, 0x35, 0x35, 0x36, 0x35, 0x37, 0x35, 0x38, 0x35, 0x39,
+  0x36, 0x30, 0x36, 0x31, 0x36, 0x32, 0x36, 0x33, 0x36, 0x34, 0x36, 0x35,
+  0x36, 0x36, 0x36, 0x37, 0x36, 0x38, 0x36, 0x39, 0x37, 0x30, 0x37, 0x31,
+  0x37, 0x32, 0x37, 0x33, 0x37, 0x34, 0x37, 0x35, 0x37, 0x36, 0x37, 0x37,
+  0x37, 0x38, 0x37, 0x39, 0x38, 0x30, 0x38, 0x31, 0x38, 0x32, 0x38, 0x33,
+  0x38, 0x34, 0x38, 0x35, 0x38, 0x36, 0x38, 0x37, 0x38, 0x38, 0x38, 0x39,
+  0x39, 0x30, 0x39, 0x31, 0x39, 0x32, 0x39, 0x33, 0x39, 0x34, 0x39, 0x35,
+  0x39, 0x36, 0x39, 0x37, 0x39, 0x38, 0x39, 0x39,
+};
+} // namespace internal
+
+template <typename number_type, typename>
+simdjson_inline void string_builder::append(number_type v) noexcept {
+  static_assert(std::is_same<number_type, bool>::value ||
+                    std::is_integral<number_type>::value ||
+                    std::is_floating_point<number_type>::value,
+                "Unsupported number type");
+  // If C++17 is available, we can 'if constexpr' here.
+  SIMDJSON_IF_CONSTEXPR(std::is_same<number_type, bool>::value) {
+    if (v) {
+      constexpr char true_literal[] = "true";
+      constexpr size_t true_len = sizeof(true_literal) - 1;
+      if (capacity_check(true_len)) {
+        std::memcpy(buffer.get() + position, true_literal, true_len);
+        position += true_len;
+      }
+    } else {
+      constexpr char false_literal[] = "false";
+      constexpr size_t false_len = sizeof(false_literal) - 1;
+      if (capacity_check(false_len)) {
+        std::memcpy(buffer.get() + position, false_literal, false_len);
+        position += false_len;
+      }
+    }
+  }
+  else SIMDJSON_IF_CONSTEXPR(std::is_unsigned<number_type>::value) {
+    constexpr size_t max_number_size = 20;
+    if (capacity_check(max_number_size)) {
+      using unsigned_type = typename std::make_unsigned<number_type>::type;
+      unsigned_type pv = static_cast<unsigned_type>(v);
+      size_t dc = internal::digit_count(pv);
+      char *write_pointer = buffer.get() + position + dc - 1;
+      while (pv >= 100) {
+        memcpy(write_pointer - 1, &internal::decimal_table[(pv % 100)*2], 2);
+        write_pointer -= 2;
+        pv /= 100;
+      }
+      if (pv >= 10) {
+        *write_pointer-- = char('0' + (pv % 10));
+        pv /= 10;
+      }
+      *write_pointer = char('0' + pv);
+      position += dc;
+    }
+  }
+  else SIMDJSON_IF_CONSTEXPR(std::is_integral<number_type>::value) {
+    constexpr size_t max_number_size = 20;
+    if (capacity_check(max_number_size)) {
+      using unsigned_type = typename std::make_unsigned<number_type>::type;
+      bool negative = v < 0;
+      unsigned_type pv = static_cast<unsigned_type>(v);
+      if (negative) {
+        pv = 0 - pv; // the 0 is for Microsoft
+      }
+      size_t dc = internal::digit_count(pv);
+      if (negative) {
+        buffer.get()[position++] = '-';
+      }
+      char *write_pointer = buffer.get() + position + dc - 1;
+      while (pv >= 100) {
+        memcpy(write_pointer - 1, &internal::decimal_table[(pv % 100)*2], 2);
+        write_pointer -= 2;
+        pv /= 100;
+      }
+      if (pv >= 10) {
+        *write_pointer-- = char('0' + (pv % 10));
+        pv /= 10;
+      }
+      *write_pointer = char('0' + pv);
+      position += dc;
+    }
+  }
+  else SIMDJSON_IF_CONSTEXPR(std::is_floating_point<number_type>::value) {
+    constexpr size_t max_number_size = 24;
+    if (capacity_check(max_number_size)) {
+      // We could specialize for float.
+      char *end = simdjson::internal::to_chars(buffer.get() + position, nullptr,
+                                               double(v));
+      position = end - buffer.get();
+    }
+  }
+}
+
+simdjson_inline void
+string_builder::escape_and_append(std::string_view input) noexcept {
+  // escaping might turn a control character into \x00xx so 6 characters.
+  if (capacity_check(6 * input.size())) {
+    position += write_string_escaped(input, buffer.get() + position);
+  }
+}
+
+simdjson_inline void
+string_builder::escape_and_append_with_quotes(std::string_view input) noexcept {
+  // escaping might turn a control character into \x00xx so 6 characters.
+  if (capacity_check(2 + 6 * input.size())) {
+    buffer.get()[position++] = '"';
+    position += write_string_escaped(input, buffer.get() + position);
+    buffer.get()[position++] = '"';
+  }
+}
+
+simdjson_inline void
+string_builder::escape_and_append_with_quotes(char input) noexcept {
+  // escaping might turn a control character into \x00xx so 6 characters.
+  if (capacity_check(2 + 6 * 1)) {
+    buffer.get()[position++] = '"';
+    std::string_view cinput(&input, 1);
+    position += write_string_escaped(cinput, buffer.get() + position);
+    buffer.get()[position++] = '"';
+  }
+}
+
+simdjson_inline void string_builder::escape_and_append_with_quotes(const char* input)  noexcept {
+  std::string_view cinput(input);
+  escape_and_append_with_quotes(cinput);
+}
+
+simdjson_inline void string_builder::append_raw(const char *c) noexcept {
+  size_t len = std::strlen(c);
+  append_raw(c, len);
+}
+
+simdjson_inline void
+string_builder::append_raw(std::string_view input) noexcept {
+  if (capacity_check(input.size())) {
+    std::memcpy(buffer.get() + position, input.data(), input.size());
+    position += input.size();
+  }
+}
+
+simdjson_inline void string_builder::append_raw(const char *str,
+                                                size_t len) noexcept {
+  if (capacity_check(len)) {
+    std::memcpy(buffer.get() + position, str, len);
+    position += len;
+  }
+}
+
+#if SIMDJSON_EXCEPTIONS
+simdjson_inline string_builder::operator std::string() const noexcept(false) {
+  return std::string(std::string_view());
+}
+
+simdjson_inline string_builder::operator std::string_view() const
+    noexcept(false) simdjson_lifetime_bound {
+  return view();
+}
+#endif
+
+simdjson_inline simdjson_result<std::string_view>
+string_builder::view() const noexcept {
+  if (!is_valid) {
+    return simdjson::OUT_OF_CAPACITY;
+  }
+  return std::string_view(buffer.get(), position);
+}
+
+simdjson_inline simdjson_result<const char *> string_builder::c_str() noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position] = '\0';
+    return buffer.get();
+  }
+  return simdjson::OUT_OF_CAPACITY;
+}
+
+simdjson_inline bool string_builder::validate_unicode() const noexcept {
+  return simdjson::validate_utf8(buffer.get(), position);
+}
+
+simdjson_inline void string_builder::start_object()  noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position++] = '{';
+  }
+}
+
+
+simdjson_inline void string_builder::end_object()  noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position++] = '}';
+  }
+}
+
+
+simdjson_inline void string_builder::start_array()  noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position++] = '[';
+  }
+}
+
+
+simdjson_inline void string_builder::end_array()  noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position++] = ']';
+  }
+}
+
+
+simdjson_inline void string_builder::append_comma()  noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position++] = ',';
+  }
+}
+
+
+simdjson_inline void string_builder::append_colon()  noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position++] = ':';
+  }
+}
+
+template<typename key_type, typename value_type>
+simdjson_inline void string_builder::append_key_value(key_type key, value_type value) noexcept {
+  static_assert(
+    std::is_arithmetic<value_type>::value ||
+    std::is_same<value_type, char>::value ||
+    std::is_same<value_type, const char*>::value ||
+    std::is_convertible<value_type, std::string_view>::value ||
+    std::is_same<value_type, std::nullptr_t>::value,
+    "Unsupported value type");
+  static_assert(
+    std::is_same<key_type, const char*>::value ||
+    std::is_convertible<key_type, std::string_view>::value,
+    "Unsupported key type");
+  escape_and_append_with_quotes(key);
+  append_colon();
+  SIMDJSON_IF_CONSTEXPR(std::is_same<value_type, std::nullptr_t>::value) {
+    append_null();
+  } else SIMDJSON_IF_CONSTEXPR(std::is_same<value_type, char>::value) {
+    escape_and_append_with_quotes(value);
+  } else SIMDJSON_IF_CONSTEXPR(std::is_convertible<value_type, std::string_view>::value) {
+    escape_and_append_with_quotes(value);
+  } else SIMDJSON_IF_CONSTEXPR(std::is_same<value_type, const char*>::value) {
+    escape_and_append_with_quotes(value);
+  } else {
+    append(value);
+  }
+}
+
+} // namespace builder
+} // namespace icelake
+} // namespace simdjson
+
+#endif // SIMDJSON_GENERIC_STRING_BUILDER_INL_H
+/* end file simdjson/generic/ondemand/json_string_builder-inl.h for icelake */
+/* including simdjson/generic/ondemand/json_builder.h for icelake: #include "simdjson/generic/ondemand/json_builder.h" */
+/* begin file simdjson/generic/ondemand/json_builder.h for icelake */
+/**
+ * This file is part of the builder API. It is temporarily in the ondemand directory
+ * but we will move it to a builder directory later.
+ */
+#ifndef SIMDJSON_GENERIC_BUILDER_H
+
+/* amalgamation skipped (editor-only): #ifndef SIMDJSON_CONDITIONAL_INCLUDE */
+/* amalgamation skipped (editor-only): #define SIMDJSON_GENERIC_STRING_BUILDER_H */
+/* amalgamation skipped (editor-only): #include "simdjson/generic/builder/json_string_builder.h" */
+/* amalgamation skipped (editor-only): #include "simdjson/concepts.h" */
+/* amalgamation skipped (editor-only): #endif // SIMDJSON_CONDITIONAL_INCLUDE */
+#if SIMDJSON_STATIC_REFLECTION
+
+#include <charconv>
+#include <cstring>
+#include <experimental/meta>
+#include <memory>
+#include <optional>
+#include <string_view>
+#include <type_traits>
+#include <utility>
+// #include <static_reflection> // for std::define_static_string - header not available yet
+
+namespace simdjson {
+namespace icelake {
+namespace builder {
+
+// Concept that checks if a type is a container but not a string (because
+// strings handling must be handled differently)
+template <typename T>
+concept container_but_not_string =
+    requires(T a) {
+      { a.size() } -> std::convertible_to<std::size_t>;
+      {
+        a[std::declval<std::size_t>()]
+      }; // check if elements are accessible for the subscript operator
+    } && !std::is_same_v<T, std::string> &&
+    !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char *>;
+
+template <class T>
+  requires(container_but_not_string<T>)
+constexpr void atom(string_builder &b, const T &t) {
+  if (t.size() == 0) {
+    b.append_raw("[]");
+    return;
+  }
+  b.append('[');
+  atom(b, t[0]);
+  for (size_t i = 1; i < t.size(); ++i) {
+    b.append(',');
+    atom(b, t[i]);
+  }
+  b.append(']');
+}
+
+template <class T>
+  requires(std::is_same_v<T, std::string> ||
+           std::is_same_v<T, std::string_view> ||
+           std::is_same_v<T, const char *> ||
+           std::is_same_v<T, char>)
+constexpr void atom(string_builder &b, const T &t) {
+  b.escape_and_append_with_quotes(t);
+}
+
+template <concepts::string_view_keyed_map T>
+constexpr void atom(string_builder &b, const T &m) {
+  if (m.empty()) {
+    b.append_raw("{}");
+    return;
+  }
+  b.append('{');
+  bool first = true;
+  for (const auto& [key, value] : m) {
+    if (!first) {
+      b.append(',');
+    }
+    first = false;
+    // Keys must be convertible to string_view per the concept
+    b.escape_and_append_with_quotes(key);
+    b.append(':');
+    atom(b, value);
+  }
+  b.append('}');
+}
+
+
+template<typename number_type,
+         typename = typename std::enable_if<std::is_arithmetic<number_type>::value && !std::is_same_v<number_type, char>>::type>
+constexpr void atom(string_builder &b, const number_type t) {
+  b.append(t);
+}
+#if SIMDJSON_CONSTEVAL
+consteval std::string consteval_to_quoted_escaped(std::string_view input);
+#endif
+
+template <class T>
+  requires(std::is_class_v<T> && !container_but_not_string<T> &&
+           !concepts::string_view_keyed_map<T> &&
+           !concepts::optional_type<T> &&
+           !concepts::smart_pointer<T> &&
+           !concepts::appendable_containers<T> &&
+           !std::is_same_v<T, std::string> &&
+           !std::is_same_v<T, std::string_view> &&
+           !std::is_same_v<T, const char*> &&
+           !std::is_same_v<T, char>)
+constexpr void atom(string_builder &b, const T &t) {
+  int i = 0;
+  b.append('{');
+  [:expand(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked())):] >> [&]<auto dm>() {
+    if (i != 0)
+      b.append(',');
+    constexpr auto key = std::define_static_string(consteval_to_quoted_escaped(std::meta::identifier_of(dm)));
+    b.append_raw(key);
+    b.append(':');
+    atom(b, t.[:dm:]);
+    i++;
+  };
+  b.append('}');
+}
+
+// Support for optional types (std::optional, etc.)
+template <concepts::optional_type T>
+constexpr void atom(string_builder &b, const T &opt) {
+  if (opt) {
+    atom(b, opt.value());
+  } else {
+    b.append_raw("null");
+  }
+}
+
+// Support for smart pointers (std::unique_ptr, std::shared_ptr, etc.)
+template <concepts::smart_pointer T>
+constexpr void atom(string_builder &b, const T &ptr) {
+  if (ptr) {
+    atom(b, *ptr);
+  } else {
+    b.append_raw("null");
+  }
+}
+
+// Support for enums - serialize as string representation using expand approach from P2996R12
+template <typename T>
+  requires(std::is_enum_v<T>)
+void atom(string_builder &b, const T &e) {
+#if SIMDJSON_STATIC_REFLECTION
+  std::string_view result = "<unnamed>";
+  [:expand(std::meta::enumerators_of(^^T)):] >> [&]<auto enum_val>{
+    if (e == [:enum_val:]) {
+      result = std::meta::identifier_of(enum_val);
+    }
+  };
+
+  if (result != "<unnamed>") {
+    b.append_raw("\"");
+    b.append_raw(result);
+    b.append_raw("\"");
+  } else {
+    // Fallback to integer if enum value not found
+    atom(b, static_cast<std::underlying_type_t<T>>(e));
+  }
+#else
+  // Fallback: serialize as integer if reflection not available
+  atom(b, static_cast<std::underlying_type_t<T>>(e));
+#endif
+}
+
+// Support for appendable containers that don't have operator[] (sets, etc.)
+template <concepts::appendable_containers T>
+  requires(!container_but_not_string<T> && !concepts::string_view_keyed_map<T> &&
+           !concepts::optional_type<T> && !concepts::smart_pointer<T> &&
+           !std::is_same_v<T, std::string> &&
+           !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char*>)
+constexpr void atom(string_builder &b, const T &container) {
+  if (container.empty()) {
+    b.append_raw("[]");
+    return;
+  }
+  b.append('[');
+  bool first = true;
+  for (const auto& item : container) {
+    if (!first) {
+      b.append(',');
+    }
+    first = false;
+    atom(b, item);
+  }
+  b.append(']');
+}
+
+// append functions that delegate to atom functions for primitive types
+template <class T>
+  requires(std::is_arithmetic_v<T> && !std::is_same_v<T, char>)
+void append(string_builder &b, const T &t) {
+  atom(b, t);
+}
+
+template <class T>
+  requires(std::is_same_v<T, std::string> ||
+           std::is_same_v<T, std::string_view> ||
+           std::is_same_v<T, const char *> ||
+           std::is_same_v<T, char>)
+void append(string_builder &b, const T &t) {
+  atom(b, t);
+}
+
+template <concepts::optional_type T>
+void append(string_builder &b, const T &t) {
+  atom(b, t);
+}
+
+template <concepts::smart_pointer T>
+void append(string_builder &b, const T &t) {
+  atom(b, t);
+}
+
+template <concepts::appendable_containers T>
+  requires(!container_but_not_string<T> && !concepts::string_view_keyed_map<T> &&
+           !concepts::optional_type<T> && !concepts::smart_pointer<T> &&
+           !std::is_same_v<T, std::string> &&
+           !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char*>)
+void append(string_builder &b, const T &t) {
+  atom(b, t);
+}
+
+template <concepts::string_view_keyed_map T>
+void append(string_builder &b, const T &t) {
+  atom(b, t);
+}
+
+// works for struct
+template <class Z>
+  requires(std::is_class_v<Z> && !container_but_not_string<Z> &&
+           !concepts::string_view_keyed_map<Z> &&
+           !concepts::optional_type<Z> &&
+           !concepts::smart_pointer<Z> &&
+           !concepts::appendable_containers<Z> &&
+           !std::is_same_v<Z, std::string> &&
+           !std::is_same_v<Z, std::string_view> &&
+           !std::is_same_v<Z, const char*> &&
+           !std::is_same_v<Z, char>)
+void append(string_builder &b, const Z &z) {
+  int i = 0;
+  b.append('{');
+  [:expand(std::meta::nonstatic_data_members_of(^^Z, std::meta::access_context::unchecked())):] >> [&]<auto dm>() {
+    if (i != 0)
+      b.append(',');
+    constexpr auto key = std::define_static_string(consteval_to_quoted_escaped(std::meta::identifier_of(dm)));
+    b.append_raw(key);
+    b.append(':');
+    atom(b, z.[:dm:]);
+    i++;
+  };
+  b.append('}');
+}
+
+// works for container
+template <class Z>
+  requires(container_but_not_string<Z>)
+void append(string_builder &b, const Z &z) {
+  if (z.size() == 0) {
+    b.append_raw("[]");
+    return;
+  }
+  b.append('[');
+  atom(b, z[0]);
+  for (size_t i = 1; i < z.size(); ++i) {
+    b.append(',');
+    atom(b, z[i]);
+  }
+  b.append(']');
+}
+
+template <class Z>
+simdjson_result<std::string> to_json_string(const Z &z, size_t initial_capacity = 1024) {
+  string_builder b(initial_capacity);
+  append(b, z);
+  std::string_view s;
+  if(auto e = b.view().get(s); e) { return e; }
+  return std::string(s);
+}
+
+template <class Z>
+simdjson_error to_json(const Z &z, std::string &s) {
+  string_builder b;
+  append(b, z);
+  std::string_view view;
+  if(auto e = b.view().get(view); e) { return e; }
+  s.assign(view);
+  return SUCCESS;
+}
+
+template <class Z>
+string_builder& operator<<(string_builder& b, const Z& z) {
+  append(b, z);
+  return b;
+}
+} // namespace builder
+} // namespace icelake
+} // namespace simdjson
+#endif // SIMDJSON_STATIC_REFLECTION
+
+#endif
+/* end file simdjson/generic/ondemand/json_builder.h for icelake */
 
 /* end file simdjson/generic/ondemand/amalgamated.h for icelake */
 /* including simdjson/icelake/end.h: #include "simdjson/icelake/end.h" */
@@ -77783,6 +84894,32 @@ backslash_and_quote::copy_and_find(const uint8_t *src, uint8_t *dst) {
   };
 }
 
+
+struct escaping {
+  static constexpr uint32_t BYTES_PROCESSED = 16;
+  simdjson_inline static escaping copy_and_find(const uint8_t *src, uint8_t *dst);
+
+  simdjson_inline bool has_escape() { return escape_bits != 0; }
+  simdjson_inline int escape_index() { return trailing_zeroes(escape_bits); }
+
+  uint64_t escape_bits;
+}; // struct escaping
+
+
+
+simdjson_inline escaping escaping::copy_and_find(const uint8_t *src, uint8_t *dst) {
+  static_assert(SIMDJSON_PADDING >= (BYTES_PROCESSED - 1), "escaping finder must process fewer than SIMDJSON_PADDING bytes");
+  simd8<uint8_t> v(src);
+  v.store(dst);
+  simd8<bool> is_quote = (v == '"');
+  simd8<bool> is_backslash = (v == '\\');
+  simd8<bool> is_control = (v < 32);
+  return {
+    // We store it as a 64-bit bitmask even though we only need 16 bits.
+    uint64_t((is_backslash | is_quote | is_control).to_bitmask())
+  };
+}
+
 } // unnamed namespace
 } // namespace ppc64
 } // namespace simdjson
@@ -77930,7 +85067,7 @@ template <typename T, typename ValT = ppc64::ondemand::value>
 concept custom_deserializable = tag_invocable<deserialize_tag, ValT&, T&>;
 
 template <typename T, typename ValT = ppc64::ondemand::value>
-concept deserializable = custom_deserializable<T, ValT> || is_builtin_deserializable_v<T>;
+concept deserializable = custom_deserializable<T, ValT> || is_builtin_deserializable_v<T> || concepts::optional_type<T>;
 
 template <typename T, typename ValT = ppc64::ondemand::value>
 concept nothrow_custom_deserializable = nothrow_tag_invocable<deserialize_tag, ValT&, T&>;
@@ -77941,9 +85078,25 @@ concept nothrow_deserializable = nothrow_custom_deserializable<T, ValT> || is_bu
 
 /// Deserialize Tag
 inline constexpr struct deserialize_tag {
+  using array_type = ppc64::ondemand::array;
+  using object_type = ppc64::ondemand::object;
   using value_type = ppc64::ondemand::value;
   using document_type = ppc64::ondemand::document;
   using document_reference_type = ppc64::ondemand::document_reference;
+
+  // Customization Point for array
+  template <typename T>
+    requires custom_deserializable<T, value_type>
+  [[nodiscard]] constexpr /* error_code */ auto operator()(array_type &object, T& output) const noexcept(nothrow_custom_deserializable<T, value_type>) {
+    return tag_invoke(*this, object, output);
+  }
+
+  // Customization Point for object
+  template <typename T>
+    requires custom_deserializable<T, value_type>
+  [[nodiscard]] constexpr /* error_code */ auto operator()(object_type &object, T& output) const noexcept(nothrow_custom_deserializable<T, value_type>) {
+    return tag_invoke(*this, object, output);
+  }
 
   // Customization Point for value
   template <typename T>
@@ -78512,6 +85665,7 @@ public:
    *
    * You may use get_double(), get_bool(), get_uint64(), get_int64(),
    * get_object(), get_array(), get_raw_json_string(), or get_string() instead.
+   * When SIMDJSON_SUPPORTS_DESERIALIZATION is set, custom types are also supported.
    *
    * @returns A value of the given type, parsed from the JSON.
    * @returns INCORRECT_TYPE If the JSON value is not the given type.
@@ -78535,6 +85689,7 @@ public:
    * Get this value as the given type.
    *
    * Supported types: object, array, raw_json_string, string_view, uint64_t, int64_t, double, bool
+   * If the macro SIMDJSON_SUPPORTS_DESERIALIZATION is set, then custom types are also supported.
    *
    * @param out This is set to a value of the given type, parsed from the JSON. If there is an error, this may not be initialized.
    * @returns INCORRECT_TYPE If the JSON value is not an object.
@@ -78551,6 +85706,19 @@ public:
   #if SIMDJSON_SUPPORTS_DESERIALIZATION
   if constexpr (custom_deserializable<T, value>) {
       return deserialize(*this, out);
+  } else if constexpr (concepts::optional_type<T>) {
+      using value_type = typename std::remove_cvref_t<T>::value_type;
+
+      // Check if the value is null
+      if (is_null()) {
+        out.reset(); // Set to nullopt
+        return SUCCESS;
+      }
+
+      if (!out) {
+        out.emplace();
+      }
+      return get<value_type>(out.value());
   } else {
     static_assert(!sizeof(T), "The get<T> method with type T is not implemented by the simdjson library. "
       "And you do not seem to have added support for it. Indeed, we have that "
@@ -80777,6 +87945,37 @@ public:
    *         - INDEX_OUT_OF_BOUNDS if the array index is larger than an array length
    */
   simdjson_inline simdjson_result<value> at(size_t index) noexcept;
+
+#if SIMDJSON_SUPPORTS_DESERIALIZATION
+  /**
+   * Get this array as the given type.
+   *
+   * @param out This is set to a value of the given type, parsed from the JSON. If there is an error, this may not be initialized.
+   * @returns INCORRECT_TYPE If the JSON array is not of the given type.
+   * @returns SUCCESS If the parse succeeded and the out parameter was set to the value.
+   */
+  template <typename T>
+  simdjson_inline error_code get(T &out)
+     noexcept(custom_deserializable<T, array> ? nothrow_custom_deserializable<T, array> : true) {
+    static_assert(custom_deserializable<T, array>);
+    return deserialize(*this, out);
+  }
+  /**
+   * Get this array as the given type.
+   *
+   * @returns A value of the given type, parsed from the JSON.
+   * @returns INCORRECT_TYPE If the JSON value is not the given type.
+   */
+  template <typename T>
+  simdjson_inline simdjson_result<T> get()
+    noexcept(custom_deserializable<T, value> ? nothrow_custom_deserializable<T, value> : true)
+  {
+    static_assert(std::is_default_constructible<T>::value, "The specified type is not default constructible.");
+    T out{};
+    SIMDJSON_TRY(get<T>(out));
+    return out;
+  }
+#endif // SIMDJSON_SUPPORTS_DESERIALIZATION
 protected:
   /**
    * Go to the end of the array, no matter where you are right now.
@@ -80855,7 +88054,28 @@ public:
   simdjson_inline simdjson_result<ppc64::ondemand::value> at_pointer(std::string_view json_pointer) noexcept;
   simdjson_inline simdjson_result<ppc64::ondemand::value> at_path(std::string_view json_path) noexcept;
   simdjson_inline simdjson_result<std::string_view> raw_json() noexcept;
+#if SIMDJSON_SUPPORTS_DESERIALIZATION
+  // TODO: move this code into object-inl.h
 
+  template<typename T>
+  simdjson_inline simdjson_result<T> get() noexcept {
+    if (error()) { return error(); }
+    if constexpr (std::is_same_v<T, ppc64::ondemand::array>) {
+      return first;
+    }
+    return first.get<T>();
+  }
+  template<typename T>
+  simdjson_inline error_code get(T& out) noexcept {
+    if (error()) { return error(); }
+    if constexpr (std::is_same_v<T, ppc64::ondemand::array>) {
+      out = first;
+    } else {
+      SIMDJSON_TRY( first.get<T>(out) );
+    }
+    return SUCCESS;
+  }
+#endif // SIMDJSON_SUPPORTS_DESERIALIZATION
 };
 
 } // namespace simdjson
@@ -80900,7 +88120,8 @@ public:
    *
    * Part of the std::iterator interface.
    */
-  simdjson_inline simdjson_result<value> operator*() noexcept; // MUST ONLY BE CALLED ONCE PER ITERATION.
+  simdjson_inline simdjson_result<value>
+  operator*() noexcept; // MUST ONLY BE CALLED ONCE PER ITERATION.
   /**
    * Check if we are at the end of the JSON.
    *
@@ -80924,6 +88145,11 @@ public:
    */
   simdjson_inline array_iterator &operator++() noexcept;
 
+  /**
+   * Check if the array is at the end.
+   */
+  [[nodiscard]] simdjson_inline bool at_end() const noexcept;
+
 private:
   value_iterator iter{};
 
@@ -80942,7 +88168,6 @@ namespace simdjson {
 
 template<>
 struct simdjson_result<ppc64::ondemand::array_iterator> : public ppc64::implementation_simdjson_result_base<ppc64::ondemand::array_iterator> {
-public:
   simdjson_inline simdjson_result(ppc64::ondemand::array_iterator &&value) noexcept; ///< @private
   simdjson_inline simdjson_result(error_code error) noexcept; ///< @private
   simdjson_inline simdjson_result() noexcept = default;
@@ -80955,6 +88180,8 @@ public:
   simdjson_inline bool operator==(const simdjson_result<ppc64::ondemand::array_iterator> &) const noexcept;
   simdjson_inline bool operator!=(const simdjson_result<ppc64::ondemand::array_iterator> &) const noexcept;
   simdjson_inline simdjson_result<ppc64::ondemand::array_iterator> &operator++() noexcept;
+
+  [[nodiscard]] simdjson_inline bool at_end() const noexcept;
 };
 
 } // namespace simdjson
@@ -81189,7 +88416,7 @@ public:
    * Be mindful that the document instance must remain in scope while you are accessing object, array and value instances.
    *
    * @param out This is set to a value of the given type, parsed from the JSON. If there is an error, this may not be initialized.
-   * @returns INCORRECT_TYPE If the JSON value is not an object.
+   * @returns INCORRECT_TYPE If the JSON value is of the given type.
    * @returns SUCCESS If the parse succeeded and the out parameter was set to the value.
    */
   template<typename T>
@@ -81287,7 +88514,7 @@ public:
    *          time it parses a document or when it is destroyed.
    * @exception simdjson_error(INCORRECT_TYPE) if the JSON value is not a string.
    */
-  simdjson_inline operator std::string_view() noexcept(false);
+  simdjson_inline operator std::string_view() noexcept(false) simdjson_lifetime_bound;
   /**
    * Cast this JSON value to a raw_json_string.
    *
@@ -81296,7 +88523,7 @@ public:
    * @returns A pointer to the raw JSON for the given string.
    * @exception simdjson_error(INCORRECT_TYPE) if the JSON value is not a string.
    */
-  simdjson_inline operator raw_json_string() noexcept(false);
+  simdjson_inline operator raw_json_string() noexcept(false) simdjson_lifetime_bound;
   /**
    * Cast this JSON value to a bool.
    *
@@ -82676,6 +89903,36 @@ public:
    */
   simdjson_inline simdjson_result<std::string_view> raw_json() noexcept;
 
+#if SIMDJSON_SUPPORTS_DESERIALIZATION
+  /**
+   * Get this object as the given type.
+   *
+   * @param out This is set to a value of the given type, parsed from the JSON. If there is an error, this may not be initialized.
+   * @returns INCORRECT_TYPE If the JSON object is not of the given type.
+   * @returns SUCCESS If the parse succeeded and the out parameter was set to the value.
+   */
+  template <typename T>
+  simdjson_inline error_code get(T &out)
+     noexcept(custom_deserializable<T, object> ? nothrow_custom_deserializable<T, object> : true) {
+    static_assert(custom_deserializable<T, object>);
+    return deserialize(*this, out);
+  }
+  /**
+   * Get this array as the given type.
+   *
+   * @returns A value of the given type, parsed from the JSON.
+   * @returns INCORRECT_TYPE If the JSON value is not the given type.
+   */
+  template <typename T>
+  simdjson_inline simdjson_result<T> get()
+    noexcept(custom_deserializable<T, value> ? nothrow_custom_deserializable<T, value> : true)
+  {
+    static_assert(std::is_default_constructible<T>::value, "The specified type is not default constructible.");
+    T out{};
+    SIMDJSON_TRY(get<T>(out));
+    return out;
+  }
+#endif // SIMDJSON_SUPPORTS_DESERIALIZATION
 protected:
   /**
    * Go to the end of the object, no matter where you are right now.
@@ -82719,12 +89976,32 @@ public:
   simdjson_inline simdjson_result<ppc64::ondemand::value> operator[](std::string_view key) && noexcept;
   simdjson_inline simdjson_result<ppc64::ondemand::value> at_pointer(std::string_view json_pointer) noexcept;
   simdjson_inline simdjson_result<ppc64::ondemand::value> at_path(std::string_view json_path) noexcept;
-
   inline simdjson_result<bool> reset() noexcept;
   inline simdjson_result<bool> is_empty() noexcept;
   inline simdjson_result<size_t> count_fields() & noexcept;
   inline simdjson_result<std::string_view> raw_json() noexcept;
+  #if SIMDJSON_SUPPORTS_DESERIALIZATION
+  // TODO: move this code into object-inl.h
 
+  template<typename T>
+  simdjson_inline simdjson_result<T> get() noexcept {
+    if (error()) { return error(); }
+    if constexpr (std::is_same_v<T, ppc64::ondemand::object>) {
+      return first;
+    }
+    return first.get<T>();
+  }
+  template<typename T>
+  simdjson_inline error_code get(T& out) noexcept {
+    if (error()) { return error(); }
+    if constexpr (std::is_same_v<T, ppc64::ondemand::object>) {
+      out = first;
+    } else {
+      SIMDJSON_TRY( first.get<T>(out) );
+    }
+    return SUCCESS;
+  }
+#endif // SIMDJSON_SUPPORTS_DESERIALIZATION
 };
 
 } // namespace simdjson
@@ -82853,6 +90130,20 @@ inline simdjson_result<std::string_view> to_json_string(simdjson_result<ppc64::o
 inline simdjson_result<std::string_view> to_json_string(simdjson_result<ppc64::ondemand::value> x);
 inline simdjson_result<std::string_view> to_json_string(simdjson_result<ppc64::ondemand::object> x);
 inline simdjson_result<std::string_view> to_json_string(simdjson_result<ppc64::ondemand::array> x);
+
+#if SIMDJSON_STATIC_REFLECTION
+/**
+ * Create a JSON string from any user-defined type using static reflection.
+ * Only available when SIMDJSON_STATIC_REFLECTION is enabled.
+ */
+template<typename T>
+  requires(!std::same_as<T, ppc64::ondemand::document> &&
+           !std::same_as<T, ppc64::ondemand::value> &&
+           !std::same_as<T, ppc64::ondemand::object> &&
+           !std::same_as<T, ppc64::ondemand::array>)
+inline std::string to_json_string(const T& obj);
+#endif
+
 } // namespace simdjson
 
 /**
@@ -82929,12 +90220,17 @@ inline std::ostream& operator<<(std::ostream& out, simdjson::simdjson_result<sim
 #ifndef SIMDJSON_ONDEMAND_DESERIALIZE_H
 /* amalgamation skipped (editor-only): #ifndef SIMDJSON_CONDITIONAL_INCLUDE */
 /* amalgamation skipped (editor-only): #define SIMDJSON_ONDEMAND_DESERIALIZE_H */
+/* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/object.h" */
 /* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/array.h" */
 /* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/base.h" */
 /* amalgamation skipped (editor-only): #endif // SIMDJSON_CONDITIONAL_INCLUDE */
 
 #include <concepts>
 #include <limits>
+#if SIMDJSON_STATIC_REFLECTION
+#include <experimental/meta>
+// #include <static_reflection> // for std::define_static_string - header not available yet
+#endif
 
 namespace simdjson {
 template <typename T>
@@ -82981,6 +90277,22 @@ error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept {
   return SUCCESS;
 }
 
+//////////////////////////////
+// String deserialization
+//////////////////////////////
+
+// just a character!
+error_code tag_invoke(deserialize_tag, auto &val, char &out) noexcept {
+  std::string_view x;
+  SIMDJSON_TRY(val.get_string().get(x));
+  if(x.size() != 1) {
+    return INCORRECT_TYPE;
+  }
+  out = x[0];
+  return SUCCESS;
+}
+
+// any string-like type (can be constructed from std::string_view)
 template <concepts::constructible_from_string_view T, typename ValT>
   requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(std::is_nothrow_constructible_v<T, std::string_view>) {
@@ -83002,15 +90314,20 @@ template <concepts::appendable_containers T, typename ValT>
   requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(false) {
   using value_type = typename std::remove_cvref_t<T>::value_type;
-  static_assert(
+  /*static_assert(
       deserializable<value_type, ValT>,
-      "The specified type inside the container must itself be deserializable");
+      "The specified type inside the container must itself be deserializable");*/
   static_assert(
       std::is_default_constructible_v<value_type>,
       "The specified type inside the container must default constructible.");
 
   ppc64::ondemand::array arr;
-  SIMDJSON_TRY(val.get_array().get(arr));
+  if constexpr (std::is_same_v<std::remove_cvref_t<ValT>, ppc64::ondemand::array>) {
+    arr = val;
+  } else {
+    SIMDJSON_TRY(val.get_array().get(arr));
+  }
+
   for (auto v : arr) {
     if constexpr (concepts::returns_reference<T>) {
       if (auto const err = v.get<value_type>().get(concepts::emplace_one(out));
@@ -83067,7 +90384,45 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(false) {
  return SUCCESS;
 }
 
+template <concepts::string_view_keyed_map T>
+error_code tag_invoke(deserialize_tag, ppc64::ondemand::object &obj, T &out) noexcept {
+  using value_type = typename std::remove_cvref_t<T>::mapped_type;
 
+  out.clear();
+  for (auto field : obj) {
+    std::string_view key;
+    SIMDJSON_TRY(field.unescaped_key().get(key));
+
+    ppc64::ondemand::value value_obj;
+    SIMDJSON_TRY(field.value().get(value_obj));
+
+    value_type this_value;
+    SIMDJSON_TRY(value_obj.get(this_value));
+    out.emplace(typename T::key_type(key), std::move(this_value));
+  }
+  return SUCCESS;
+}
+
+template <concepts::string_view_keyed_map T>
+error_code tag_invoke(deserialize_tag, ppc64::ondemand::value &val, T &out) noexcept {
+  ppc64::ondemand::object obj;
+  SIMDJSON_TRY(val.get_object().get(obj));
+  return simdjson::deserialize(obj, out);
+}
+
+template <concepts::string_view_keyed_map T>
+error_code tag_invoke(deserialize_tag, ppc64::ondemand::document &doc, T &out) noexcept {
+  ppc64::ondemand::object obj;
+  SIMDJSON_TRY(doc.get_object().get(obj));
+  return simdjson::deserialize(obj, out);
+}
+
+template <concepts::string_view_keyed_map T>
+error_code tag_invoke(deserialize_tag, ppc64::ondemand::document_reference &doc, T &out) noexcept {
+  ppc64::ondemand::object obj;
+  SIMDJSON_TRY(doc.get_object().get(obj));
+  return simdjson::deserialize(obj, out);
+}
 
 
 /**
@@ -83110,22 +90465,334 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(nothrow_deser
 /**
  * This CPO (Customization Point Object) will help deserialize into optional types.
  */
-template <concepts::optional_type T, typename ValT>
+template <concepts::optional_type T>
   requires(!require_custom_serialization<T>)
-error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(nothrow_deserializable<typename std::remove_cvref_t<T>::value_type, ValT>) {
+error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept(nothrow_deserializable<typename std::remove_cvref_t<T>::value_type, decltype(val)>) {
   using value_type = typename std::remove_cvref_t<T>::value_type;
 
-  static_assert(
-      deserializable<value_type, ValT>,
-      "The specified type inside the unique_ptr must itself be deserializable");
-  static_assert(
-      std::is_default_constructible_v<value_type>,
-      "The specified type inside the unique_ptr must default constructible.");
+  // Check if the value is null
+  if (val.is_null()) {
+    out.reset(); // Set to nullopt
+    return SUCCESS;
+  }
 
   if (!out) {
     out.emplace();
   }
   SIMDJSON_TRY(val.template get<value_type>(out.value()));
+  return SUCCESS;
+}
+
+
+#if SIMDJSON_STATIC_REFLECTION
+
+
+template <typename T>
+constexpr bool user_defined_type = (std::is_class_v<T>
+&& !std::is_same_v<T, std::string> && !std::is_same_v<T, std::string_view> && !concepts::optional_type<T> &&
+!concepts::appendable_containers<T> && !require_custom_serialization<T>);
+
+
+// workaround from
+// https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2024/p2996r10.html#back-and-forth
+// for missing expansion statements
+namespace __impl {
+  template<auto... vals>
+  struct replicator_type {
+    template<typename F>
+      constexpr void operator>>(F body) const {
+        (body.template operator()<vals>(), ...);
+      }
+  };
+
+  template<auto... vals>
+  replicator_type<vals...> replicator = {};
+}
+
+template<typename R>
+consteval auto expand(R range) {
+  std::vector<std::meta::info> args;
+  for (auto r : range) {
+    args.push_back(reflect_constant(r));
+  }
+  return substitute(^^__impl::replicator, args);
+}
+// end of workaround
+
+template <typename T, typename ValT>
+  requires(user_defined_type<T> && std::is_class_v<T>)
+error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept {
+  ppc64::ondemand::object obj;
+  if constexpr (std::is_same_v<std::remove_cvref_t<ValT>, ppc64::ondemand::object>) {
+    obj = val;
+  } else {
+    SIMDJSON_TRY(val.get_object().get(obj));
+  }
+  error_code e = simdjson::SUCCESS;
+
+  [:expand(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked())):] >> [&]<auto mem>() {
+    if constexpr (!std::meta::is_const(mem) && std::meta::is_public(mem)) {
+      constexpr std::string_view key = std::define_static_string(std::meta::identifier_of(mem));
+      // Note: removed static assert as optional types are now handled generically
+      // as long we are succesful or the field is not found, we continue
+      if(e == simdjson::SUCCESS || e == simdjson::NO_SUCH_FIELD) {
+        e = obj[key].get(out.[:mem:]);
+      }
+    }
+  };
+  return e;
+}
+
+// Support for enum deserialization - deserialize from string representation using expand approach from P2996R12
+template <typename T, typename ValT>
+  requires(std::is_enum_v<T>)
+error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept {
+#if SIMDJSON_STATIC_REFLECTION
+  std::string_view str;
+  SIMDJSON_TRY(val.get_string().get(str));
+
+  bool found = false;
+  [:expand(std::meta::enumerators_of(^^T)):] >> [&]<auto enum_val>{
+    if (!found && str == std::meta::identifier_of(enum_val)) {
+      out = [:enum_val:];
+      found = true;
+    }
+  };
+
+  return found ? SUCCESS : INCORRECT_TYPE;
+#else
+  // Fallback: deserialize as integer if reflection not available
+  std::underlying_type_t<T> int_val;
+  SIMDJSON_TRY(val.get(int_val));
+  out = static_cast<T>(int_val);
+  return SUCCESS;
+#endif
+}
+
+template <typename simdjson_value, typename T>
+  requires(user_defined_type<std::remove_cvref_t<T>>)
+error_code tag_invoke(deserialize_tag, simdjson_value &val, std::unique_ptr<T> &out) noexcept {
+  if (!out) {
+    out = std::make_unique<T>();
+    if (!out) {
+      return MEMALLOC;
+    }
+  }
+  if (auto err = val.get(*out)) {
+    out.reset();
+    return err;
+  }
+  return SUCCESS;
+}
+
+template <typename simdjson_value, typename T>
+  requires(user_defined_type<std::remove_cvref_t<T>>)
+error_code tag_invoke(deserialize_tag, simdjson_value &val, std::shared_ptr<T> &out) noexcept {
+  if (!out) {
+    out = std::make_shared<T>();
+    if (!out) {
+      return MEMALLOC;
+    }
+  }
+  if (auto err = val.get(*out)) {
+    out.reset();
+    return err;
+  }
+  return SUCCESS;
+}
+
+#endif // SIMDJSON_STATIC_REFLECTION
+
+////////////////////////////////////////
+// Unique pointers
+////////////////////////////////////////
+error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<bool> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_unique<bool>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_bool().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<int64_t> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_unique<int64_t>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_int64().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<uint64_t> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_unique<uint64_t>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_uint64().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<double> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_unique<double>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_double().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<std::string_view> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_unique<std::string_view>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_string().get(*out));
+  return SUCCESS;
+}
+
+
+////////////////////////////////////////
+// Shared pointers
+////////////////////////////////////////
+error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<bool> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_shared<bool>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_bool().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<int64_t> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_shared<int64_t>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_int64().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<uint64_t> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_shared<uint64_t>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_uint64().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<double> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_shared<double>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_double().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<std::string_view> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_shared<std::string_view>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_string().get(*out));
+  return SUCCESS;
+}
+
+
+////////////////////////////////////////
+// Explicit optional specializations
+////////////////////////////////////////
+
+////////////////////////////////////////
+// Explicit smart pointer specializations for string and int types
+////////////////////////////////////////
+error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<std::string> &out) noexcept {
+  // Check if the value is null
+  if (val.is_null()) {
+    out.reset(); // Set to nullptr
+    return SUCCESS;
+  }
+
+  if (!out) {
+    out = std::make_unique<std::string>();
+  }
+  std::string_view str;
+  SIMDJSON_TRY(val.get_string().get(str));
+  *out = std::string{str};
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<std::string> &out) noexcept {
+  // Check if the value is null
+  if (val.is_null()) {
+    out.reset(); // Set to nullptr
+    return SUCCESS;
+  }
+
+  if (!out) {
+    out = std::make_shared<std::string>();
+  }
+  std::string_view str;
+  SIMDJSON_TRY(val.get_string().get(str));
+  *out = std::string{str};
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<int> &out) noexcept {
+  // Check if the value is null
+  if (val.is_null()) {
+    out.reset(); // Set to nullptr
+    return SUCCESS;
+  }
+
+  if (!out) {
+    out = std::make_unique<int>();
+  }
+  int64_t temp;
+  SIMDJSON_TRY(val.get_int64().get(temp));
+  *out = static_cast<int>(temp);
   return SUCCESS;
 }
 
@@ -83416,6 +91083,9 @@ simdjson_inline array_iterator &array_iterator::operator++() noexcept {
   return *this;
 }
 
+simdjson_inline bool array_iterator::at_end() const noexcept {
+  return iter.at_end();
+}
 } // namespace ondemand
 } // namespace ppc64
 } // namespace simdjson
@@ -83452,7 +91122,9 @@ simdjson_inline simdjson_result<ppc64::ondemand::array_iterator> &simdjson_resul
   ++(first);
   return *this;
 }
-
+simdjson_inline bool simdjson_result<ppc64::ondemand::array_iterator>::at_end() const noexcept {
+  return !first.iter.is_valid() || first.at_end();
+}
 } // namespace simdjson
 
 #endif // SIMDJSON_GENERIC_ONDEMAND_ARRAY_ITERATOR_INL_H
@@ -84210,8 +91882,8 @@ simdjson_inline document::operator object() & noexcept(false) { return get_objec
 simdjson_inline document::operator uint64_t() noexcept(false) { return get_uint64(); }
 simdjson_inline document::operator int64_t() noexcept(false) { return get_int64(); }
 simdjson_inline document::operator double() noexcept(false) { return get_double(); }
-simdjson_inline document::operator std::string_view() noexcept(false) { return get_string(false); }
-simdjson_inline document::operator raw_json_string() noexcept(false) { return get_raw_json_string(); }
+simdjson_inline document::operator std::string_view() noexcept(false) simdjson_lifetime_bound { return get_string(false); }
+simdjson_inline document::operator raw_json_string() noexcept(false) simdjson_lifetime_bound { return get_raw_json_string(); }
 simdjson_inline document::operator bool() noexcept(false) { return get_bool(); }
 simdjson_inline document::operator value() noexcept(false) { return get_value(); }
 
@@ -85768,6 +93440,8 @@ simdjson_inline void json_iterator::assert_valid_position(token_position positio
 #ifndef SIMDJSON_CLANG_VISUAL_STUDIO
   SIMDJSON_ASSUME( position >= &parser->implementation->structural_indexes[0] );
   SIMDJSON_ASSUME( position < &parser->implementation->structural_indexes[parser->implementation->n_structural_indexes] );
+#else
+  (void)position; // Suppress unused parameter warning
 #endif
 }
 
@@ -86616,6 +94290,7 @@ simdjson_inline  simdjson_result<std::string_view> simdjson_result<ppc64::ondema
   if (error()) { return error(); }
   return first.raw_json();
 }
+
 } // namespace simdjson
 
 #endif // SIMDJSON_GENERIC_ONDEMAND_OBJECT_INL_H
@@ -87191,6 +94866,9 @@ simdjson_inline simdjson_warn_unused simdjson_result<std::string_view> simdjson_
 /* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/object.h" */
 /* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/serialization.h" */
 /* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/value.h" */
+/* amalgamation skipped (editor-only): #if SIMDJSON_STATIC_REFLECTION */
+/* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/json_builder.h" */
+/* amalgamation skipped (editor-only): #endif */
 /* amalgamation skipped (editor-only): #endif // SIMDJSON_CONDITIONAL_INCLUDE */
 
 namespace simdjson {
@@ -88612,6 +96290,1151 @@ simdjson_inline simdjson_result<ppc64::ondemand::value_iterator>::simdjson_resul
 #endif // SIMDJSON_GENERIC_ONDEMAND_VALUE_ITERATOR_INL_H
 /* end file simdjson/generic/ondemand/value_iterator-inl.h for ppc64 */
 
+// JSON builder, ideally they should not be part of the ondemand directory
+// but it is convenient for now to have them here.
+/* including simdjson/generic/ondemand/json_string_builder.h for ppc64: #include "simdjson/generic/ondemand/json_string_builder.h" */
+/* begin file simdjson/generic/ondemand/json_string_builder.h for ppc64 */
+/**
+ * This file is part of the builder API. It is temporarily in the ondemand directory
+ * but we will move it to a builder directory later.
+ */
+#ifndef SIMDJSON_GENERIC_STRING_BUILDER_H
+
+/* amalgamation skipped (editor-only): #ifndef SIMDJSON_CONDITIONAL_INCLUDE */
+/* amalgamation skipped (editor-only): #define SIMDJSON_GENERIC_STRING_BUILDER_H */
+/* amalgamation skipped (editor-only): #include "simdjson/generic/implementation_simdjson_result_base.h" */
+/* amalgamation skipped (editor-only): #endif // SIMDJSON_CONDITIONAL_INCLUDE */
+
+namespace simdjson {
+namespace ppc64 {
+namespace builder {
+
+/**
+ * A builder for JSON strings representing documents. This is a low-level
+ * builder that is not meant to be used directly by end-users. Though it
+ * supports atomic types (Booleans, strings), it does not support composed
+ * types (arrays and objects).
+ *
+ * Ultimately, this class can support kernel-specific optimizations. E.g.,
+ * it may make use of SIMD instructions to escape strings faster.
+ */
+class string_builder {
+public:
+  simdjson_inline string_builder(size_t initial_capacity = 1024);
+
+  /**
+   * Append number (includes Booleans). Booleans are mapped to the strings
+   * false and true. Numbers are converted to strings abiding by the JSON standard.
+   * Floating-point numbers are converted to the shortest string that 'correctly'
+   * represents the number.
+   */
+  template<typename number_type,
+         typename = typename std::enable_if<std::is_arithmetic<number_type>::value>::type>
+  simdjson_inline void append(number_type v) noexcept;
+
+  /**
+   * Append character c.
+   */
+  simdjson_inline void append(char c)  noexcept;
+
+  /**
+   * Append the string 'null'.
+   */
+  simdjson_inline void append_null()  noexcept;
+
+  /**
+   * Clear the content.
+   */
+  simdjson_inline void clear()  noexcept;
+
+  /**
+   * Append the std::string_view, after escaping it.
+   * There is no UTF-8 validation.
+   */
+  simdjson_inline void escape_and_append(std::string_view input)  noexcept;
+
+  /**
+   * Append the std::string_view surrounded by double quotes, after escaping it.
+   * There is no UTF-8 validation.
+   */
+  simdjson_inline void escape_and_append_with_quotes(std::string_view input)  noexcept;
+
+  /**
+   * Append the character surrounded by double quotes, after escaping it.
+   * There is no UTF-8 validation.
+   */
+  simdjson_inline void escape_and_append_with_quotes(char input)  noexcept;
+
+  /**
+   * Append the character surrounded by double quotes, after escaping it.
+   * There is no UTF-8 validation.
+   */
+   simdjson_inline void escape_and_append_with_quotes(const char* input)  noexcept;
+
+  /**
+   * Append the C string directly, without escaping.
+   * There is no UTF-8 validation.
+   */
+  simdjson_inline void append_raw(const char *c)  noexcept;
+
+  /**
+   * Append "{" to the buffer.
+   */
+  simdjson_inline void start_object()  noexcept;
+
+  /**
+   * Append "}" to the buffer.
+   */
+  simdjson_inline void end_object()  noexcept;
+
+  /**
+   * Append "[" to the buffer.
+   */
+  simdjson_inline void start_array()  noexcept;
+
+  /**
+   * Append "]" to the buffer.
+   */
+  simdjson_inline void end_array()  noexcept;
+
+  /**
+   * Append "," to the buffer.
+   */
+  simdjson_inline void append_comma()  noexcept;
+
+  /**
+   * Append ":" to the buffer.
+   */
+  simdjson_inline void append_colon()  noexcept;
+
+  /**
+   * Append a key-value pair to the buffer.
+   * The key is escaped and surrounded by double quotes.
+   * The value is escaped if it is a string.
+   */
+   template<typename key_type, typename value_type>
+  simdjson_inline void append_key_value(key_type key, value_type value) noexcept;
+  /**
+   * Append the std::string_view directly, without escaping.
+   * There is no UTF-8 validation.
+   */
+  simdjson_inline void append_raw(std::string_view input)  noexcept;
+
+  /**
+   * Append len characters from str.
+   * There is no UTF-8 validation.
+   */
+  simdjson_inline void append_raw(const char *str, size_t len) noexcept;
+#if SIMDJSON_EXCEPTIONS
+  /**
+   * Creates an std::string from the written JSON buffer.
+   * Throws if memory allocation failed
+   *
+   * The result may not be valid UTF-8 if some of your content was not valid UTF-8.
+   * Use validate_unicode() to check the content if needed.
+   */
+  simdjson_inline operator std::string() const noexcept(false);
+
+  /**
+   * Creates an std::string_view from the written JSON buffer.
+   * Throws if memory allocation failed.
+   *
+   * The result may not be valid UTF-8 if some of your content was not valid UTF-8.
+   * Use validate_unicode() to check the content if needed.
+   */
+  simdjson_inline operator std::string_view() const noexcept(false) simdjson_lifetime_bound;
+#endif
+
+  /**
+   * Returns a view on the written JSON buffer. Returns an error
+   * if memory allocation failed.
+   *
+   * The result may not be valid UTF-8 if some of your content was not valid UTF-8.
+   * Use validate_unicode() to check the content.
+   */
+  simdjson_inline simdjson_result<std::string_view> view() const noexcept;
+
+  /**
+   * Appends the null character to the buffer and returns
+   * a pointer to the beginning of the written JSON buffer.
+   * Returns an error if memory allocation failed.
+   * The result is null-terminated.
+   *
+   * The result may not be valid UTF-8 if some of your content was not valid UTF-8.
+   * Use validate_unicode() to check the content.
+   */
+  simdjson_inline simdjson_result<const char *> c_str() noexcept;
+
+  /**
+   * Return true if the content is valid UTF-8.
+   */
+  simdjson_inline bool validate_unicode() const noexcept;
+
+  /**
+   * Returns the current size of the written JSON buffer.
+   * If an error occurred, returns 0.
+   */
+  simdjson_inline size_t size() const noexcept;
+
+private:
+  /**
+   * Returns true if we can write at least upcoming_bytes bytes.
+   * The underlying buffer is reallocated if needed. It is designed
+   * to be called before writing to the buffer. It should be fast.
+   */
+  simdjson_inline bool capacity_check(size_t upcoming_bytes);
+
+  /**
+   * Grow the buffer to at least desired_capacity bytes.
+   * If the allocation fails, is_valid is set to false. We expect
+   * that this function would not be repeatedly called.
+   */
+  simdjson_inline void grow_buffer(size_t desired_capacity);
+
+  /**
+   * We use this helper function to make sure that is_valid is kept consistent.
+   */
+  simdjson_inline void set_valid(bool valid) noexcept;
+
+  std::unique_ptr<char[]> buffer{};
+  size_t position{0};
+  size_t capacity{0};
+  bool is_valid{true};
+};
+
+
+
+}
+}
+} // namespace simdjson
+
+#endif // SIMDJSON_GENERIC_STRING_BUILDER_H
+/* end file simdjson/generic/ondemand/json_string_builder.h for ppc64 */
+/* including simdjson/generic/ondemand/json_string_builder-inl.h for ppc64: #include "simdjson/generic/ondemand/json_string_builder-inl.h" */
+/* begin file simdjson/generic/ondemand/json_string_builder-inl.h for ppc64 */
+/**
+ * This file is part of the builder API. It is temporarily in the ondemand
+ * directory but we will move it to a builder directory later.
+ */
+#include <array>
+#include <cstring>
+#include <type_traits>
+#ifndef SIMDJSON_GENERIC_STRING_BUILDER_INL_H
+
+/* amalgamation skipped (editor-only): #ifndef SIMDJSON_CONDITIONAL_INCLUDE */
+/* amalgamation skipped (editor-only): #define SIMDJSON_GENERIC_STRING_BUILDER_INL_H */
+/* amalgamation skipped (editor-only): #include "simdjson/generic/builder/json_string_builder.h" */
+/* amalgamation skipped (editor-only): #endif // SIMDJSON_CONDITIONAL_INCLUDE */
+
+/*
+ * Empirically, we have found that an inlined optimization is important for
+ * performance. The following macros are not ideal. We should find a better
+ * way to inline the code.
+ */
+
+#if defined(__SSE2__) || defined(__x86_64__) || defined(__x86_64) ||           \
+    (defined(_M_AMD64) || defined(_M_X64) ||                                   \
+     (defined(_M_IX86_FP) && _M_IX86_FP == 2))
+#ifndef SIMDJSON_EXPERIMENTAL_HAS_SSE2
+#define SIMDJSON_EXPERIMENTAL_HAS_SSE2 1
+#endif
+#endif
+
+#if defined(__aarch64__) || defined(_M_ARM64)
+#ifndef SIMDJSON_EXPERIMENTAL_HAS_NEON
+#define SIMDJSON_EXPERIMENTAL_HAS_NEON 1
+#endif
+#endif
+#if SIMDJSON_EXPERIMENTAL_HAS_NEON
+#include <arm_neon.h>
+#endif
+#if SIMDJSON_EXPERIMENTAL_HAS_SSE2
+#include <emmintrin.h>
+#endif
+
+namespace simdjson {
+namespace ppc64 {
+namespace builder {
+
+static SIMDJSON_CONSTEXPR_LAMBDA std::array<uint8_t, 256> json_quotable_character = {
+  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+  1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+
+/**
+
+A possible SWAR implementation of has_json_escapable_byte. It is not used because
+it is slower than the current implementation. It is kept here for reference (to show
+that we tried it).
+
+inline bool has_json_escapable_byte(uint64_t x) {
+  uint64_t is_ascii = 0x8080808080808080ULL & ~x;
+  uint64_t xor2 = x ^ 0x0202020202020202ULL;
+  uint64_t lt32_or_eq34 = xor2 - 0x2121212121212121ULL;
+  uint64_t sub92 = x ^ 0x5C5C5C5C5C5C5C5CULL;
+  uint64_t eq92 = (sub92 - 0x0101010101010101ULL);
+  return ((lt32_or_eq34 | eq92) & is_ascii) != 0;
+}
+
+**/
+
+SIMDJSON_CONSTEXPR_LAMBDA simdjson_inline bool
+simple_needs_escaping(std::string_view v) {
+  for (char c : v) {
+    // a table lookup is faster than a series of comparisons
+    if(json_quotable_character[static_cast<uint8_t>(c)]) {
+      return true;
+    }
+  }
+  return false;
+}
+
+#if SIMDJSON_EXPERIMENTAL_HAS_NEON
+simdjson_inline bool fast_needs_escaping(std::string_view view) {
+  if (view.size() < 16) {
+    return simple_needs_escaping(view);
+  }
+  size_t i = 0;
+  uint8x16_t running = vdupq_n_u8(0);
+  uint8x16_t v34 = vdupq_n_u8(34);
+  uint8x16_t v92 = vdupq_n_u8(92);
+
+  for (; i + 15 < view.size(); i += 16) {
+    uint8x16_t word = vld1q_u8((const uint8_t *)view.data() + i);
+    running = vorrq_u8(running, vceqq_u8(word, v34));
+    running = vorrq_u8(running, vceqq_u8(word, v92));
+    running = vorrq_u8(running, vcltq_u8(word, vdupq_n_u8(32)));
+  }
+  if (i < view.size()) {
+    uint8x16_t word =
+        vld1q_u8((const uint8_t *)view.data() + view.length() - 16);
+    running = vorrq_u8(running, vceqq_u8(word, v34));
+    running = vorrq_u8(running, vceqq_u8(word, v92));
+    running = vorrq_u8(running, vcltq_u8(word, vdupq_n_u8(32)));
+  }
+  return vmaxvq_u32(vreinterpretq_u32_u8(running)) != 0;
+}
+#elif SIMDJSON_EXPERIMENTAL_HAS_SSE2
+simdjson_inline bool fast_needs_escaping(std::string_view view) {
+  if (view.size() < 16) {
+    return simple_needs_escaping(view);
+  }
+  size_t i = 0;
+  __m128i running = _mm_setzero_si128();
+  for (; i + 15 < view.size(); i += 16) {
+
+    __m128i word = _mm_loadu_si128(reinterpret_cast<const __m128i *>(view.data() + i));
+    running = _mm_or_si128(running, _mm_cmpeq_epi8(word, _mm_set1_epi8(34)));
+    running = _mm_or_si128(running, _mm_cmpeq_epi8(word, _mm_set1_epi8(92)));
+    running = _mm_or_si128(
+        running, _mm_cmpeq_epi8(_mm_subs_epu8(word, _mm_set1_epi8(31)),
+                                _mm_setzero_si128()));
+  }
+  if (i < view.size()) {
+    __m128i word =
+        _mm_loadu_si128(reinterpret_cast<const __m128i *>(view.data() + view.length() - 16));
+    running = _mm_or_si128(running, _mm_cmpeq_epi8(word, _mm_set1_epi8(34)));
+    running = _mm_or_si128(running, _mm_cmpeq_epi8(word, _mm_set1_epi8(92)));
+    running = _mm_or_si128(
+        running, _mm_cmpeq_epi8(_mm_subs_epu8(word, _mm_set1_epi8(31)),
+                                _mm_setzero_si128()));
+  }
+  return _mm_movemask_epi8(running) != 0;
+}
+#else
+simdjson_inline bool fast_needs_escaping(std::string_view view) {
+  return simple_needs_escaping(view);
+}
+#endif
+
+
+SIMDJSON_CONSTEXPR_LAMBDA inline size_t
+find_next_json_quotable_character(const std::string_view view,
+                                  size_t location) noexcept {
+
+  for (auto pos = view.begin() + location; pos != view.end(); ++pos) {
+    if (json_quotable_character[static_cast<uint8_t>(*pos)]) {
+      return pos - view.begin();
+    }
+  }
+  return size_t(view.size());
+}
+
+SIMDJSON_CONSTEXPR_LAMBDA static std::string_view control_chars[] = {
+    "\\x0000", "\\x0001", "\\x0002", "\\x0003", "\\x0004", "\\x0005", "\\x0006",
+    "\\x0007", "\\x0008", "\\t",     "\\n",     "\\x000b", "\\f",     "\\r",
+    "\\x000e", "\\x000f", "\\x0010", "\\x0011", "\\x0012", "\\x0013", "\\x0014",
+    "\\x0015", "\\x0016", "\\x0017", "\\x0018", "\\x0019", "\\x001a", "\\x001b",
+    "\\x001c", "\\x001d", "\\x001e", "\\x001f"};
+
+SIMDJSON_CONSTEXPR_LAMBDA void escape_json_char(char c, char *&out) {
+  if (c == '"') {
+    memcpy(out, "\\\"", 2);
+    out += 2;
+  } else if (c == '\\') {
+    memcpy(out, "\\\\", 2);
+    out += 2;
+  } else {
+    std::string_view v = control_chars[uint8_t(c)];
+    memcpy(out, v.data(), v.size());
+    out += v.size();
+  }
+}
+
+inline size_t write_string_escaped(const std::string_view input, char *out) {
+  size_t mysize = input.size();
+  if (!fast_needs_escaping(input)) { // fast path!
+    memcpy(out, input.data(), input.size());
+    return input.size();
+  }
+  const char *const initout = out;
+  size_t location = find_next_json_quotable_character(input, 0);
+  memcpy(out, input.data(), location);
+  out += location;
+  escape_json_char(input[location], out);
+  location += 1;
+  while (location < mysize) {
+    size_t newlocation = find_next_json_quotable_character(input, location);
+    memcpy(out, input.data() + location, newlocation - location);
+    out += newlocation - location;
+    location = newlocation;
+    if (location == mysize) {
+      break;
+    }
+    escape_json_char(input[location], out);
+    location += 1;
+  }
+  return out - initout;
+}
+
+#if SIMDJSON_CONSTEVAL
+// unoptimized, meant for compile-time execution
+consteval std::string consteval_to_quoted_escaped(std::string_view input) {
+  std::string out = "\"";
+  for (char c : input) {
+    if (json_quotable_character[uint8_t(c)]) {
+      if (c == '"') {
+        out.append("\\\"");
+      } else if (c == '\\') {
+        out.append("\\\\");
+      } else {
+        std::string_view v = control_chars[uint8_t(c)];
+        out.append(v);
+      }
+    } else {
+      out.push_back(c);
+    }
+  }
+  out.push_back('"');
+  return out;
+}
+#endif // SIMDJSON_CONSTEVAL
+
+simdjson_inline string_builder::string_builder(size_t initial_capacity)
+    : buffer(new(std::nothrow) char[initial_capacity]), position(0),
+      capacity(buffer.get() != nullptr ? initial_capacity : 0),
+      is_valid(buffer.get() != nullptr) {}
+
+simdjson_inline bool string_builder::capacity_check(size_t upcoming_bytes) {
+  // We use the convention that when is_valid is false, then the capacity and
+  // the position are 0.
+  // Most of the time, this function will return true.
+  if (simdjson_likely(upcoming_bytes <= capacity - position)) {
+    return true;
+  }
+  // check for overflow, most of the time there is no overflow
+  if (simdjson_likely(position + upcoming_bytes < position)) {
+    return false;
+  }
+  // We will rarely get here.
+  grow_buffer((std::max)(capacity * 2, position + upcoming_bytes));
+  // If the buffer allocation failed, we set is_valid to false.
+  return is_valid;
+}
+
+simdjson_inline void string_builder::grow_buffer(size_t desired_capacity) {
+  if (!is_valid) {
+    return;
+  }
+  std::unique_ptr<char[]> new_buffer(new (std::nothrow) char[desired_capacity]);
+  if (new_buffer.get() == nullptr) {
+    set_valid(false);
+    return;
+  }
+  std::memcpy(new_buffer.get(), buffer.get(), position);
+  buffer.swap(new_buffer);
+  capacity = desired_capacity;
+}
+
+simdjson_inline void string_builder::set_valid(bool valid) noexcept {
+  if (!valid) {
+    is_valid = false;
+    capacity = 0;
+    position = 0;
+    buffer.reset();
+  } else {
+    is_valid = true;
+  }
+}
+
+simdjson_inline size_t string_builder::size() const noexcept {
+  return position;
+}
+
+simdjson_inline void string_builder::append(char c) noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position++] = c;
+  }
+}
+
+simdjson_inline void string_builder::append_null() noexcept {
+  constexpr char null_literal[] = "null";
+  constexpr size_t null_len = sizeof(null_literal) - 1;
+  if (capacity_check(null_len)) {
+    std::memcpy(buffer.get() + position, null_literal, null_len);
+    position += null_len;
+  }
+}
+
+simdjson_inline void string_builder::clear() noexcept {
+  position = 0;
+  // if it was invalid, we should try to repair it
+  if (!is_valid) {
+    capacity = 0;
+    buffer.reset();
+    is_valid = true;
+  }
+}
+
+namespace internal {
+
+// We could specialize further for 32-bit integers.
+simdjson_really_inline int int_log2(uint32_t x) { return (63 - leading_zeroes(x | 1)); }
+
+simdjson_really_inline int fast_digit_count(uint32_t x) {
+  static uint64_t table[] = {
+      4294967296,  8589934582,  8589934582,  8589934582,  12884901788,
+      12884901788, 12884901788, 17179868184, 17179868184, 17179868184,
+      21474826480, 21474826480, 21474826480, 21474826480, 25769703776,
+      25769703776, 25769703776, 30063771072, 30063771072, 30063771072,
+      34349738368, 34349738368, 34349738368, 34349738368, 38554705664,
+      38554705664, 38554705664, 41949672960, 41949672960, 41949672960,
+      42949672960, 42949672960};
+  return uint32_t((x + table[int_log2(x)]) >> 32);
+}
+
+simdjson_really_inline int int_log2(uint64_t x) { return 63 - leading_zeroes(x | 1); }
+
+simdjson_really_inline int fast_digit_count(uint64_t x) {
+  static uint64_t table[] = {9,
+                             99,
+                             999,
+                             9999,
+                             99999,
+                             999999,
+                             9999999,
+                             99999999,
+                             999999999,
+                             9999999999,
+                             99999999999,
+                             999999999999,
+                             9999999999999,
+                             99999999999999,
+                             999999999999999ULL,
+                             9999999999999999ULL,
+                             99999999999999999ULL,
+                             999999999999999999ULL,
+                             9999999999999999999ULL};
+  int y = (19 * int_log2(x) >> 6);
+  y += x > table[y];
+  return y + 1;
+}
+
+template <typename number_type, typename = typename std::enable_if<
+                                    std::is_unsigned<number_type>::value>::type>
+simdjson_really_inline size_t digit_count(number_type v) noexcept {
+  static_assert(sizeof(number_type) == 8 || sizeof(number_type) == 4 ||
+                    sizeof(number_type) == 2 || sizeof(number_type) == 1,
+                "We only support 8-bit, 16-bit, 32-bit and 64-bit numbers");
+  return fast_digit_count(v);
+}
+static const char decimal_table[200] = {
+  0x30, 0x30, 0x30, 0x31, 0x30, 0x32, 0x30, 0x33, 0x30, 0x34, 0x30, 0x35,
+  0x30, 0x36, 0x30, 0x37, 0x30, 0x38, 0x30, 0x39, 0x31, 0x30, 0x31, 0x31,
+  0x31, 0x32, 0x31, 0x33, 0x31, 0x34, 0x31, 0x35, 0x31, 0x36, 0x31, 0x37,
+  0x31, 0x38, 0x31, 0x39, 0x32, 0x30, 0x32, 0x31, 0x32, 0x32, 0x32, 0x33,
+  0x32, 0x34, 0x32, 0x35, 0x32, 0x36, 0x32, 0x37, 0x32, 0x38, 0x32, 0x39,
+  0x33, 0x30, 0x33, 0x31, 0x33, 0x32, 0x33, 0x33, 0x33, 0x34, 0x33, 0x35,
+  0x33, 0x36, 0x33, 0x37, 0x33, 0x38, 0x33, 0x39, 0x34, 0x30, 0x34, 0x31,
+  0x34, 0x32, 0x34, 0x33, 0x34, 0x34, 0x34, 0x35, 0x34, 0x36, 0x34, 0x37,
+  0x34, 0x38, 0x34, 0x39, 0x35, 0x30, 0x35, 0x31, 0x35, 0x32, 0x35, 0x33,
+  0x35, 0x34, 0x35, 0x35, 0x35, 0x36, 0x35, 0x37, 0x35, 0x38, 0x35, 0x39,
+  0x36, 0x30, 0x36, 0x31, 0x36, 0x32, 0x36, 0x33, 0x36, 0x34, 0x36, 0x35,
+  0x36, 0x36, 0x36, 0x37, 0x36, 0x38, 0x36, 0x39, 0x37, 0x30, 0x37, 0x31,
+  0x37, 0x32, 0x37, 0x33, 0x37, 0x34, 0x37, 0x35, 0x37, 0x36, 0x37, 0x37,
+  0x37, 0x38, 0x37, 0x39, 0x38, 0x30, 0x38, 0x31, 0x38, 0x32, 0x38, 0x33,
+  0x38, 0x34, 0x38, 0x35, 0x38, 0x36, 0x38, 0x37, 0x38, 0x38, 0x38, 0x39,
+  0x39, 0x30, 0x39, 0x31, 0x39, 0x32, 0x39, 0x33, 0x39, 0x34, 0x39, 0x35,
+  0x39, 0x36, 0x39, 0x37, 0x39, 0x38, 0x39, 0x39,
+};
+} // namespace internal
+
+template <typename number_type, typename>
+simdjson_inline void string_builder::append(number_type v) noexcept {
+  static_assert(std::is_same<number_type, bool>::value ||
+                    std::is_integral<number_type>::value ||
+                    std::is_floating_point<number_type>::value,
+                "Unsupported number type");
+  // If C++17 is available, we can 'if constexpr' here.
+  SIMDJSON_IF_CONSTEXPR(std::is_same<number_type, bool>::value) {
+    if (v) {
+      constexpr char true_literal[] = "true";
+      constexpr size_t true_len = sizeof(true_literal) - 1;
+      if (capacity_check(true_len)) {
+        std::memcpy(buffer.get() + position, true_literal, true_len);
+        position += true_len;
+      }
+    } else {
+      constexpr char false_literal[] = "false";
+      constexpr size_t false_len = sizeof(false_literal) - 1;
+      if (capacity_check(false_len)) {
+        std::memcpy(buffer.get() + position, false_literal, false_len);
+        position += false_len;
+      }
+    }
+  }
+  else SIMDJSON_IF_CONSTEXPR(std::is_unsigned<number_type>::value) {
+    constexpr size_t max_number_size = 20;
+    if (capacity_check(max_number_size)) {
+      using unsigned_type = typename std::make_unsigned<number_type>::type;
+      unsigned_type pv = static_cast<unsigned_type>(v);
+      size_t dc = internal::digit_count(pv);
+      char *write_pointer = buffer.get() + position + dc - 1;
+      while (pv >= 100) {
+        memcpy(write_pointer - 1, &internal::decimal_table[(pv % 100)*2], 2);
+        write_pointer -= 2;
+        pv /= 100;
+      }
+      if (pv >= 10) {
+        *write_pointer-- = char('0' + (pv % 10));
+        pv /= 10;
+      }
+      *write_pointer = char('0' + pv);
+      position += dc;
+    }
+  }
+  else SIMDJSON_IF_CONSTEXPR(std::is_integral<number_type>::value) {
+    constexpr size_t max_number_size = 20;
+    if (capacity_check(max_number_size)) {
+      using unsigned_type = typename std::make_unsigned<number_type>::type;
+      bool negative = v < 0;
+      unsigned_type pv = static_cast<unsigned_type>(v);
+      if (negative) {
+        pv = 0 - pv; // the 0 is for Microsoft
+      }
+      size_t dc = internal::digit_count(pv);
+      if (negative) {
+        buffer.get()[position++] = '-';
+      }
+      char *write_pointer = buffer.get() + position + dc - 1;
+      while (pv >= 100) {
+        memcpy(write_pointer - 1, &internal::decimal_table[(pv % 100)*2], 2);
+        write_pointer -= 2;
+        pv /= 100;
+      }
+      if (pv >= 10) {
+        *write_pointer-- = char('0' + (pv % 10));
+        pv /= 10;
+      }
+      *write_pointer = char('0' + pv);
+      position += dc;
+    }
+  }
+  else SIMDJSON_IF_CONSTEXPR(std::is_floating_point<number_type>::value) {
+    constexpr size_t max_number_size = 24;
+    if (capacity_check(max_number_size)) {
+      // We could specialize for float.
+      char *end = simdjson::internal::to_chars(buffer.get() + position, nullptr,
+                                               double(v));
+      position = end - buffer.get();
+    }
+  }
+}
+
+simdjson_inline void
+string_builder::escape_and_append(std::string_view input) noexcept {
+  // escaping might turn a control character into \x00xx so 6 characters.
+  if (capacity_check(6 * input.size())) {
+    position += write_string_escaped(input, buffer.get() + position);
+  }
+}
+
+simdjson_inline void
+string_builder::escape_and_append_with_quotes(std::string_view input) noexcept {
+  // escaping might turn a control character into \x00xx so 6 characters.
+  if (capacity_check(2 + 6 * input.size())) {
+    buffer.get()[position++] = '"';
+    position += write_string_escaped(input, buffer.get() + position);
+    buffer.get()[position++] = '"';
+  }
+}
+
+simdjson_inline void
+string_builder::escape_and_append_with_quotes(char input) noexcept {
+  // escaping might turn a control character into \x00xx so 6 characters.
+  if (capacity_check(2 + 6 * 1)) {
+    buffer.get()[position++] = '"';
+    std::string_view cinput(&input, 1);
+    position += write_string_escaped(cinput, buffer.get() + position);
+    buffer.get()[position++] = '"';
+  }
+}
+
+simdjson_inline void string_builder::escape_and_append_with_quotes(const char* input)  noexcept {
+  std::string_view cinput(input);
+  escape_and_append_with_quotes(cinput);
+}
+
+simdjson_inline void string_builder::append_raw(const char *c) noexcept {
+  size_t len = std::strlen(c);
+  append_raw(c, len);
+}
+
+simdjson_inline void
+string_builder::append_raw(std::string_view input) noexcept {
+  if (capacity_check(input.size())) {
+    std::memcpy(buffer.get() + position, input.data(), input.size());
+    position += input.size();
+  }
+}
+
+simdjson_inline void string_builder::append_raw(const char *str,
+                                                size_t len) noexcept {
+  if (capacity_check(len)) {
+    std::memcpy(buffer.get() + position, str, len);
+    position += len;
+  }
+}
+
+#if SIMDJSON_EXCEPTIONS
+simdjson_inline string_builder::operator std::string() const noexcept(false) {
+  return std::string(std::string_view());
+}
+
+simdjson_inline string_builder::operator std::string_view() const
+    noexcept(false) simdjson_lifetime_bound {
+  return view();
+}
+#endif
+
+simdjson_inline simdjson_result<std::string_view>
+string_builder::view() const noexcept {
+  if (!is_valid) {
+    return simdjson::OUT_OF_CAPACITY;
+  }
+  return std::string_view(buffer.get(), position);
+}
+
+simdjson_inline simdjson_result<const char *> string_builder::c_str() noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position] = '\0';
+    return buffer.get();
+  }
+  return simdjson::OUT_OF_CAPACITY;
+}
+
+simdjson_inline bool string_builder::validate_unicode() const noexcept {
+  return simdjson::validate_utf8(buffer.get(), position);
+}
+
+simdjson_inline void string_builder::start_object()  noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position++] = '{';
+  }
+}
+
+
+simdjson_inline void string_builder::end_object()  noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position++] = '}';
+  }
+}
+
+
+simdjson_inline void string_builder::start_array()  noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position++] = '[';
+  }
+}
+
+
+simdjson_inline void string_builder::end_array()  noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position++] = ']';
+  }
+}
+
+
+simdjson_inline void string_builder::append_comma()  noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position++] = ',';
+  }
+}
+
+
+simdjson_inline void string_builder::append_colon()  noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position++] = ':';
+  }
+}
+
+template<typename key_type, typename value_type>
+simdjson_inline void string_builder::append_key_value(key_type key, value_type value) noexcept {
+  static_assert(
+    std::is_arithmetic<value_type>::value ||
+    std::is_same<value_type, char>::value ||
+    std::is_same<value_type, const char*>::value ||
+    std::is_convertible<value_type, std::string_view>::value ||
+    std::is_same<value_type, std::nullptr_t>::value,
+    "Unsupported value type");
+  static_assert(
+    std::is_same<key_type, const char*>::value ||
+    std::is_convertible<key_type, std::string_view>::value,
+    "Unsupported key type");
+  escape_and_append_with_quotes(key);
+  append_colon();
+  SIMDJSON_IF_CONSTEXPR(std::is_same<value_type, std::nullptr_t>::value) {
+    append_null();
+  } else SIMDJSON_IF_CONSTEXPR(std::is_same<value_type, char>::value) {
+    escape_and_append_with_quotes(value);
+  } else SIMDJSON_IF_CONSTEXPR(std::is_convertible<value_type, std::string_view>::value) {
+    escape_and_append_with_quotes(value);
+  } else SIMDJSON_IF_CONSTEXPR(std::is_same<value_type, const char*>::value) {
+    escape_and_append_with_quotes(value);
+  } else {
+    append(value);
+  }
+}
+
+} // namespace builder
+} // namespace ppc64
+} // namespace simdjson
+
+#endif // SIMDJSON_GENERIC_STRING_BUILDER_INL_H
+/* end file simdjson/generic/ondemand/json_string_builder-inl.h for ppc64 */
+/* including simdjson/generic/ondemand/json_builder.h for ppc64: #include "simdjson/generic/ondemand/json_builder.h" */
+/* begin file simdjson/generic/ondemand/json_builder.h for ppc64 */
+/**
+ * This file is part of the builder API. It is temporarily in the ondemand directory
+ * but we will move it to a builder directory later.
+ */
+#ifndef SIMDJSON_GENERIC_BUILDER_H
+
+/* amalgamation skipped (editor-only): #ifndef SIMDJSON_CONDITIONAL_INCLUDE */
+/* amalgamation skipped (editor-only): #define SIMDJSON_GENERIC_STRING_BUILDER_H */
+/* amalgamation skipped (editor-only): #include "simdjson/generic/builder/json_string_builder.h" */
+/* amalgamation skipped (editor-only): #include "simdjson/concepts.h" */
+/* amalgamation skipped (editor-only): #endif // SIMDJSON_CONDITIONAL_INCLUDE */
+#if SIMDJSON_STATIC_REFLECTION
+
+#include <charconv>
+#include <cstring>
+#include <experimental/meta>
+#include <memory>
+#include <optional>
+#include <string_view>
+#include <type_traits>
+#include <utility>
+// #include <static_reflection> // for std::define_static_string - header not available yet
+
+namespace simdjson {
+namespace ppc64 {
+namespace builder {
+
+// Concept that checks if a type is a container but not a string (because
+// strings handling must be handled differently)
+template <typename T>
+concept container_but_not_string =
+    requires(T a) {
+      { a.size() } -> std::convertible_to<std::size_t>;
+      {
+        a[std::declval<std::size_t>()]
+      }; // check if elements are accessible for the subscript operator
+    } && !std::is_same_v<T, std::string> &&
+    !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char *>;
+
+template <class T>
+  requires(container_but_not_string<T>)
+constexpr void atom(string_builder &b, const T &t) {
+  if (t.size() == 0) {
+    b.append_raw("[]");
+    return;
+  }
+  b.append('[');
+  atom(b, t[0]);
+  for (size_t i = 1; i < t.size(); ++i) {
+    b.append(',');
+    atom(b, t[i]);
+  }
+  b.append(']');
+}
+
+template <class T>
+  requires(std::is_same_v<T, std::string> ||
+           std::is_same_v<T, std::string_view> ||
+           std::is_same_v<T, const char *> ||
+           std::is_same_v<T, char>)
+constexpr void atom(string_builder &b, const T &t) {
+  b.escape_and_append_with_quotes(t);
+}
+
+template <concepts::string_view_keyed_map T>
+constexpr void atom(string_builder &b, const T &m) {
+  if (m.empty()) {
+    b.append_raw("{}");
+    return;
+  }
+  b.append('{');
+  bool first = true;
+  for (const auto& [key, value] : m) {
+    if (!first) {
+      b.append(',');
+    }
+    first = false;
+    // Keys must be convertible to string_view per the concept
+    b.escape_and_append_with_quotes(key);
+    b.append(':');
+    atom(b, value);
+  }
+  b.append('}');
+}
+
+
+template<typename number_type,
+         typename = typename std::enable_if<std::is_arithmetic<number_type>::value && !std::is_same_v<number_type, char>>::type>
+constexpr void atom(string_builder &b, const number_type t) {
+  b.append(t);
+}
+#if SIMDJSON_CONSTEVAL
+consteval std::string consteval_to_quoted_escaped(std::string_view input);
+#endif
+
+template <class T>
+  requires(std::is_class_v<T> && !container_but_not_string<T> &&
+           !concepts::string_view_keyed_map<T> &&
+           !concepts::optional_type<T> &&
+           !concepts::smart_pointer<T> &&
+           !concepts::appendable_containers<T> &&
+           !std::is_same_v<T, std::string> &&
+           !std::is_same_v<T, std::string_view> &&
+           !std::is_same_v<T, const char*> &&
+           !std::is_same_v<T, char>)
+constexpr void atom(string_builder &b, const T &t) {
+  int i = 0;
+  b.append('{');
+  [:expand(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked())):] >> [&]<auto dm>() {
+    if (i != 0)
+      b.append(',');
+    constexpr auto key = std::define_static_string(consteval_to_quoted_escaped(std::meta::identifier_of(dm)));
+    b.append_raw(key);
+    b.append(':');
+    atom(b, t.[:dm:]);
+    i++;
+  };
+  b.append('}');
+}
+
+// Support for optional types (std::optional, etc.)
+template <concepts::optional_type T>
+constexpr void atom(string_builder &b, const T &opt) {
+  if (opt) {
+    atom(b, opt.value());
+  } else {
+    b.append_raw("null");
+  }
+}
+
+// Support for smart pointers (std::unique_ptr, std::shared_ptr, etc.)
+template <concepts::smart_pointer T>
+constexpr void atom(string_builder &b, const T &ptr) {
+  if (ptr) {
+    atom(b, *ptr);
+  } else {
+    b.append_raw("null");
+  }
+}
+
+// Support for enums - serialize as string representation using expand approach from P2996R12
+template <typename T>
+  requires(std::is_enum_v<T>)
+void atom(string_builder &b, const T &e) {
+#if SIMDJSON_STATIC_REFLECTION
+  std::string_view result = "<unnamed>";
+  [:expand(std::meta::enumerators_of(^^T)):] >> [&]<auto enum_val>{
+    if (e == [:enum_val:]) {
+      result = std::meta::identifier_of(enum_val);
+    }
+  };
+
+  if (result != "<unnamed>") {
+    b.append_raw("\"");
+    b.append_raw(result);
+    b.append_raw("\"");
+  } else {
+    // Fallback to integer if enum value not found
+    atom(b, static_cast<std::underlying_type_t<T>>(e));
+  }
+#else
+  // Fallback: serialize as integer if reflection not available
+  atom(b, static_cast<std::underlying_type_t<T>>(e));
+#endif
+}
+
+// Support for appendable containers that don't have operator[] (sets, etc.)
+template <concepts::appendable_containers T>
+  requires(!container_but_not_string<T> && !concepts::string_view_keyed_map<T> &&
+           !concepts::optional_type<T> && !concepts::smart_pointer<T> &&
+           !std::is_same_v<T, std::string> &&
+           !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char*>)
+constexpr void atom(string_builder &b, const T &container) {
+  if (container.empty()) {
+    b.append_raw("[]");
+    return;
+  }
+  b.append('[');
+  bool first = true;
+  for (const auto& item : container) {
+    if (!first) {
+      b.append(',');
+    }
+    first = false;
+    atom(b, item);
+  }
+  b.append(']');
+}
+
+// append functions that delegate to atom functions for primitive types
+template <class T>
+  requires(std::is_arithmetic_v<T> && !std::is_same_v<T, char>)
+void append(string_builder &b, const T &t) {
+  atom(b, t);
+}
+
+template <class T>
+  requires(std::is_same_v<T, std::string> ||
+           std::is_same_v<T, std::string_view> ||
+           std::is_same_v<T, const char *> ||
+           std::is_same_v<T, char>)
+void append(string_builder &b, const T &t) {
+  atom(b, t);
+}
+
+template <concepts::optional_type T>
+void append(string_builder &b, const T &t) {
+  atom(b, t);
+}
+
+template <concepts::smart_pointer T>
+void append(string_builder &b, const T &t) {
+  atom(b, t);
+}
+
+template <concepts::appendable_containers T>
+  requires(!container_but_not_string<T> && !concepts::string_view_keyed_map<T> &&
+           !concepts::optional_type<T> && !concepts::smart_pointer<T> &&
+           !std::is_same_v<T, std::string> &&
+           !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char*>)
+void append(string_builder &b, const T &t) {
+  atom(b, t);
+}
+
+template <concepts::string_view_keyed_map T>
+void append(string_builder &b, const T &t) {
+  atom(b, t);
+}
+
+// works for struct
+template <class Z>
+  requires(std::is_class_v<Z> && !container_but_not_string<Z> &&
+           !concepts::string_view_keyed_map<Z> &&
+           !concepts::optional_type<Z> &&
+           !concepts::smart_pointer<Z> &&
+           !concepts::appendable_containers<Z> &&
+           !std::is_same_v<Z, std::string> &&
+           !std::is_same_v<Z, std::string_view> &&
+           !std::is_same_v<Z, const char*> &&
+           !std::is_same_v<Z, char>)
+void append(string_builder &b, const Z &z) {
+  int i = 0;
+  b.append('{');
+  [:expand(std::meta::nonstatic_data_members_of(^^Z, std::meta::access_context::unchecked())):] >> [&]<auto dm>() {
+    if (i != 0)
+      b.append(',');
+    constexpr auto key = std::define_static_string(consteval_to_quoted_escaped(std::meta::identifier_of(dm)));
+    b.append_raw(key);
+    b.append(':');
+    atom(b, z.[:dm:]);
+    i++;
+  };
+  b.append('}');
+}
+
+// works for container
+template <class Z>
+  requires(container_but_not_string<Z>)
+void append(string_builder &b, const Z &z) {
+  if (z.size() == 0) {
+    b.append_raw("[]");
+    return;
+  }
+  b.append('[');
+  atom(b, z[0]);
+  for (size_t i = 1; i < z.size(); ++i) {
+    b.append(',');
+    atom(b, z[i]);
+  }
+  b.append(']');
+}
+
+template <class Z>
+simdjson_result<std::string> to_json_string(const Z &z, size_t initial_capacity = 1024) {
+  string_builder b(initial_capacity);
+  append(b, z);
+  std::string_view s;
+  if(auto e = b.view().get(s); e) { return e; }
+  return std::string(s);
+}
+
+template <class Z>
+simdjson_error to_json(const Z &z, std::string &s) {
+  string_builder b;
+  append(b, z);
+  std::string_view view;
+  if(auto e = b.view().get(view); e) { return e; }
+  s.assign(view);
+  return SUCCESS;
+}
+
+template <class Z>
+string_builder& operator<<(string_builder& b, const Z& z) {
+  append(b, z);
+  return b;
+}
+} // namespace builder
+} // namespace ppc64
+} // namespace simdjson
+#endif // SIMDJSON_STATIC_REFLECTION
+
+#endif
+/* end file simdjson/generic/ondemand/json_builder.h for ppc64 */
 
 /* end file simdjson/generic/ondemand/amalgamated.h for ppc64 */
 /* including simdjson/ppc64/end.h: #include "simdjson/ppc64/end.h" */
@@ -89755,6 +98578,31 @@ simdjson_inline backslash_and_quote backslash_and_quote::copy_and_find(const uin
   };
 }
 
+
+struct escaping {
+  static constexpr uint32_t BYTES_PROCESSED = 16;
+  simdjson_inline static escaping copy_and_find(const uint8_t *src, uint8_t *dst);
+
+  simdjson_inline bool has_escape() { return escape_bits != 0; }
+  simdjson_inline int escape_index() { return trailing_zeroes(escape_bits); }
+
+  uint64_t escape_bits;
+}; // struct escaping
+
+
+
+simdjson_inline escaping escaping::copy_and_find(const uint8_t *src, uint8_t *dst) {
+  static_assert(SIMDJSON_PADDING >= (BYTES_PROCESSED - 1), "escaping finder must process fewer than SIMDJSON_PADDING bytes");
+  simd8<uint8_t> v(src);
+  v.store(dst);
+  simd8<bool> is_quote = (v == '"');
+  simd8<bool> is_backslash = (v == '\\');
+  simd8<bool> is_control = (v < 32);
+  return {
+    uint64_t((is_backslash | is_quote | is_control).to_bitmask())
+  };
+}
+
 } // unnamed namespace
 } // namespace westmere
 } // namespace simdjson
@@ -89900,7 +98748,7 @@ template <typename T, typename ValT = westmere::ondemand::value>
 concept custom_deserializable = tag_invocable<deserialize_tag, ValT&, T&>;
 
 template <typename T, typename ValT = westmere::ondemand::value>
-concept deserializable = custom_deserializable<T, ValT> || is_builtin_deserializable_v<T>;
+concept deserializable = custom_deserializable<T, ValT> || is_builtin_deserializable_v<T> || concepts::optional_type<T>;
 
 template <typename T, typename ValT = westmere::ondemand::value>
 concept nothrow_custom_deserializable = nothrow_tag_invocable<deserialize_tag, ValT&, T&>;
@@ -89911,9 +98759,25 @@ concept nothrow_deserializable = nothrow_custom_deserializable<T, ValT> || is_bu
 
 /// Deserialize Tag
 inline constexpr struct deserialize_tag {
+  using array_type = westmere::ondemand::array;
+  using object_type = westmere::ondemand::object;
   using value_type = westmere::ondemand::value;
   using document_type = westmere::ondemand::document;
   using document_reference_type = westmere::ondemand::document_reference;
+
+  // Customization Point for array
+  template <typename T>
+    requires custom_deserializable<T, value_type>
+  [[nodiscard]] constexpr /* error_code */ auto operator()(array_type &object, T& output) const noexcept(nothrow_custom_deserializable<T, value_type>) {
+    return tag_invoke(*this, object, output);
+  }
+
+  // Customization Point for object
+  template <typename T>
+    requires custom_deserializable<T, value_type>
+  [[nodiscard]] constexpr /* error_code */ auto operator()(object_type &object, T& output) const noexcept(nothrow_custom_deserializable<T, value_type>) {
+    return tag_invoke(*this, object, output);
+  }
 
   // Customization Point for value
   template <typename T>
@@ -90482,6 +99346,7 @@ public:
    *
    * You may use get_double(), get_bool(), get_uint64(), get_int64(),
    * get_object(), get_array(), get_raw_json_string(), or get_string() instead.
+   * When SIMDJSON_SUPPORTS_DESERIALIZATION is set, custom types are also supported.
    *
    * @returns A value of the given type, parsed from the JSON.
    * @returns INCORRECT_TYPE If the JSON value is not the given type.
@@ -90505,6 +99370,7 @@ public:
    * Get this value as the given type.
    *
    * Supported types: object, array, raw_json_string, string_view, uint64_t, int64_t, double, bool
+   * If the macro SIMDJSON_SUPPORTS_DESERIALIZATION is set, then custom types are also supported.
    *
    * @param out This is set to a value of the given type, parsed from the JSON. If there is an error, this may not be initialized.
    * @returns INCORRECT_TYPE If the JSON value is not an object.
@@ -90521,6 +99387,19 @@ public:
   #if SIMDJSON_SUPPORTS_DESERIALIZATION
   if constexpr (custom_deserializable<T, value>) {
       return deserialize(*this, out);
+  } else if constexpr (concepts::optional_type<T>) {
+      using value_type = typename std::remove_cvref_t<T>::value_type;
+
+      // Check if the value is null
+      if (is_null()) {
+        out.reset(); // Set to nullopt
+        return SUCCESS;
+      }
+
+      if (!out) {
+        out.emplace();
+      }
+      return get<value_type>(out.value());
   } else {
     static_assert(!sizeof(T), "The get<T> method with type T is not implemented by the simdjson library. "
       "And you do not seem to have added support for it. Indeed, we have that "
@@ -92747,6 +101626,37 @@ public:
    *         - INDEX_OUT_OF_BOUNDS if the array index is larger than an array length
    */
   simdjson_inline simdjson_result<value> at(size_t index) noexcept;
+
+#if SIMDJSON_SUPPORTS_DESERIALIZATION
+  /**
+   * Get this array as the given type.
+   *
+   * @param out This is set to a value of the given type, parsed from the JSON. If there is an error, this may not be initialized.
+   * @returns INCORRECT_TYPE If the JSON array is not of the given type.
+   * @returns SUCCESS If the parse succeeded and the out parameter was set to the value.
+   */
+  template <typename T>
+  simdjson_inline error_code get(T &out)
+     noexcept(custom_deserializable<T, array> ? nothrow_custom_deserializable<T, array> : true) {
+    static_assert(custom_deserializable<T, array>);
+    return deserialize(*this, out);
+  }
+  /**
+   * Get this array as the given type.
+   *
+   * @returns A value of the given type, parsed from the JSON.
+   * @returns INCORRECT_TYPE If the JSON value is not the given type.
+   */
+  template <typename T>
+  simdjson_inline simdjson_result<T> get()
+    noexcept(custom_deserializable<T, value> ? nothrow_custom_deserializable<T, value> : true)
+  {
+    static_assert(std::is_default_constructible<T>::value, "The specified type is not default constructible.");
+    T out{};
+    SIMDJSON_TRY(get<T>(out));
+    return out;
+  }
+#endif // SIMDJSON_SUPPORTS_DESERIALIZATION
 protected:
   /**
    * Go to the end of the array, no matter where you are right now.
@@ -92825,7 +101735,28 @@ public:
   simdjson_inline simdjson_result<westmere::ondemand::value> at_pointer(std::string_view json_pointer) noexcept;
   simdjson_inline simdjson_result<westmere::ondemand::value> at_path(std::string_view json_path) noexcept;
   simdjson_inline simdjson_result<std::string_view> raw_json() noexcept;
+#if SIMDJSON_SUPPORTS_DESERIALIZATION
+  // TODO: move this code into object-inl.h
 
+  template<typename T>
+  simdjson_inline simdjson_result<T> get() noexcept {
+    if (error()) { return error(); }
+    if constexpr (std::is_same_v<T, westmere::ondemand::array>) {
+      return first;
+    }
+    return first.get<T>();
+  }
+  template<typename T>
+  simdjson_inline error_code get(T& out) noexcept {
+    if (error()) { return error(); }
+    if constexpr (std::is_same_v<T, westmere::ondemand::array>) {
+      out = first;
+    } else {
+      SIMDJSON_TRY( first.get<T>(out) );
+    }
+    return SUCCESS;
+  }
+#endif // SIMDJSON_SUPPORTS_DESERIALIZATION
 };
 
 } // namespace simdjson
@@ -92870,7 +101801,8 @@ public:
    *
    * Part of the std::iterator interface.
    */
-  simdjson_inline simdjson_result<value> operator*() noexcept; // MUST ONLY BE CALLED ONCE PER ITERATION.
+  simdjson_inline simdjson_result<value>
+  operator*() noexcept; // MUST ONLY BE CALLED ONCE PER ITERATION.
   /**
    * Check if we are at the end of the JSON.
    *
@@ -92894,6 +101826,11 @@ public:
    */
   simdjson_inline array_iterator &operator++() noexcept;
 
+  /**
+   * Check if the array is at the end.
+   */
+  [[nodiscard]] simdjson_inline bool at_end() const noexcept;
+
 private:
   value_iterator iter{};
 
@@ -92912,7 +101849,6 @@ namespace simdjson {
 
 template<>
 struct simdjson_result<westmere::ondemand::array_iterator> : public westmere::implementation_simdjson_result_base<westmere::ondemand::array_iterator> {
-public:
   simdjson_inline simdjson_result(westmere::ondemand::array_iterator &&value) noexcept; ///< @private
   simdjson_inline simdjson_result(error_code error) noexcept; ///< @private
   simdjson_inline simdjson_result() noexcept = default;
@@ -92925,6 +101861,8 @@ public:
   simdjson_inline bool operator==(const simdjson_result<westmere::ondemand::array_iterator> &) const noexcept;
   simdjson_inline bool operator!=(const simdjson_result<westmere::ondemand::array_iterator> &) const noexcept;
   simdjson_inline simdjson_result<westmere::ondemand::array_iterator> &operator++() noexcept;
+
+  [[nodiscard]] simdjson_inline bool at_end() const noexcept;
 };
 
 } // namespace simdjson
@@ -93159,7 +102097,7 @@ public:
    * Be mindful that the document instance must remain in scope while you are accessing object, array and value instances.
    *
    * @param out This is set to a value of the given type, parsed from the JSON. If there is an error, this may not be initialized.
-   * @returns INCORRECT_TYPE If the JSON value is not an object.
+   * @returns INCORRECT_TYPE If the JSON value is of the given type.
    * @returns SUCCESS If the parse succeeded and the out parameter was set to the value.
    */
   template<typename T>
@@ -93257,7 +102195,7 @@ public:
    *          time it parses a document or when it is destroyed.
    * @exception simdjson_error(INCORRECT_TYPE) if the JSON value is not a string.
    */
-  simdjson_inline operator std::string_view() noexcept(false);
+  simdjson_inline operator std::string_view() noexcept(false) simdjson_lifetime_bound;
   /**
    * Cast this JSON value to a raw_json_string.
    *
@@ -93266,7 +102204,7 @@ public:
    * @returns A pointer to the raw JSON for the given string.
    * @exception simdjson_error(INCORRECT_TYPE) if the JSON value is not a string.
    */
-  simdjson_inline operator raw_json_string() noexcept(false);
+  simdjson_inline operator raw_json_string() noexcept(false) simdjson_lifetime_bound;
   /**
    * Cast this JSON value to a bool.
    *
@@ -94646,6 +103584,36 @@ public:
    */
   simdjson_inline simdjson_result<std::string_view> raw_json() noexcept;
 
+#if SIMDJSON_SUPPORTS_DESERIALIZATION
+  /**
+   * Get this object as the given type.
+   *
+   * @param out This is set to a value of the given type, parsed from the JSON. If there is an error, this may not be initialized.
+   * @returns INCORRECT_TYPE If the JSON object is not of the given type.
+   * @returns SUCCESS If the parse succeeded and the out parameter was set to the value.
+   */
+  template <typename T>
+  simdjson_inline error_code get(T &out)
+     noexcept(custom_deserializable<T, object> ? nothrow_custom_deserializable<T, object> : true) {
+    static_assert(custom_deserializable<T, object>);
+    return deserialize(*this, out);
+  }
+  /**
+   * Get this array as the given type.
+   *
+   * @returns A value of the given type, parsed from the JSON.
+   * @returns INCORRECT_TYPE If the JSON value is not the given type.
+   */
+  template <typename T>
+  simdjson_inline simdjson_result<T> get()
+    noexcept(custom_deserializable<T, value> ? nothrow_custom_deserializable<T, value> : true)
+  {
+    static_assert(std::is_default_constructible<T>::value, "The specified type is not default constructible.");
+    T out{};
+    SIMDJSON_TRY(get<T>(out));
+    return out;
+  }
+#endif // SIMDJSON_SUPPORTS_DESERIALIZATION
 protected:
   /**
    * Go to the end of the object, no matter where you are right now.
@@ -94689,12 +103657,32 @@ public:
   simdjson_inline simdjson_result<westmere::ondemand::value> operator[](std::string_view key) && noexcept;
   simdjson_inline simdjson_result<westmere::ondemand::value> at_pointer(std::string_view json_pointer) noexcept;
   simdjson_inline simdjson_result<westmere::ondemand::value> at_path(std::string_view json_path) noexcept;
-
   inline simdjson_result<bool> reset() noexcept;
   inline simdjson_result<bool> is_empty() noexcept;
   inline simdjson_result<size_t> count_fields() & noexcept;
   inline simdjson_result<std::string_view> raw_json() noexcept;
+  #if SIMDJSON_SUPPORTS_DESERIALIZATION
+  // TODO: move this code into object-inl.h
 
+  template<typename T>
+  simdjson_inline simdjson_result<T> get() noexcept {
+    if (error()) { return error(); }
+    if constexpr (std::is_same_v<T, westmere::ondemand::object>) {
+      return first;
+    }
+    return first.get<T>();
+  }
+  template<typename T>
+  simdjson_inline error_code get(T& out) noexcept {
+    if (error()) { return error(); }
+    if constexpr (std::is_same_v<T, westmere::ondemand::object>) {
+      out = first;
+    } else {
+      SIMDJSON_TRY( first.get<T>(out) );
+    }
+    return SUCCESS;
+  }
+#endif // SIMDJSON_SUPPORTS_DESERIALIZATION
 };
 
 } // namespace simdjson
@@ -94823,6 +103811,20 @@ inline simdjson_result<std::string_view> to_json_string(simdjson_result<westmere
 inline simdjson_result<std::string_view> to_json_string(simdjson_result<westmere::ondemand::value> x);
 inline simdjson_result<std::string_view> to_json_string(simdjson_result<westmere::ondemand::object> x);
 inline simdjson_result<std::string_view> to_json_string(simdjson_result<westmere::ondemand::array> x);
+
+#if SIMDJSON_STATIC_REFLECTION
+/**
+ * Create a JSON string from any user-defined type using static reflection.
+ * Only available when SIMDJSON_STATIC_REFLECTION is enabled.
+ */
+template<typename T>
+  requires(!std::same_as<T, westmere::ondemand::document> &&
+           !std::same_as<T, westmere::ondemand::value> &&
+           !std::same_as<T, westmere::ondemand::object> &&
+           !std::same_as<T, westmere::ondemand::array>)
+inline std::string to_json_string(const T& obj);
+#endif
+
 } // namespace simdjson
 
 /**
@@ -94899,12 +103901,17 @@ inline std::ostream& operator<<(std::ostream& out, simdjson::simdjson_result<sim
 #ifndef SIMDJSON_ONDEMAND_DESERIALIZE_H
 /* amalgamation skipped (editor-only): #ifndef SIMDJSON_CONDITIONAL_INCLUDE */
 /* amalgamation skipped (editor-only): #define SIMDJSON_ONDEMAND_DESERIALIZE_H */
+/* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/object.h" */
 /* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/array.h" */
 /* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/base.h" */
 /* amalgamation skipped (editor-only): #endif // SIMDJSON_CONDITIONAL_INCLUDE */
 
 #include <concepts>
 #include <limits>
+#if SIMDJSON_STATIC_REFLECTION
+#include <experimental/meta>
+// #include <static_reflection> // for std::define_static_string - header not available yet
+#endif
 
 namespace simdjson {
 template <typename T>
@@ -94951,6 +103958,22 @@ error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept {
   return SUCCESS;
 }
 
+//////////////////////////////
+// String deserialization
+//////////////////////////////
+
+// just a character!
+error_code tag_invoke(deserialize_tag, auto &val, char &out) noexcept {
+  std::string_view x;
+  SIMDJSON_TRY(val.get_string().get(x));
+  if(x.size() != 1) {
+    return INCORRECT_TYPE;
+  }
+  out = x[0];
+  return SUCCESS;
+}
+
+// any string-like type (can be constructed from std::string_view)
 template <concepts::constructible_from_string_view T, typename ValT>
   requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(std::is_nothrow_constructible_v<T, std::string_view>) {
@@ -94972,15 +103995,20 @@ template <concepts::appendable_containers T, typename ValT>
   requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(false) {
   using value_type = typename std::remove_cvref_t<T>::value_type;
-  static_assert(
+  /*static_assert(
       deserializable<value_type, ValT>,
-      "The specified type inside the container must itself be deserializable");
+      "The specified type inside the container must itself be deserializable");*/
   static_assert(
       std::is_default_constructible_v<value_type>,
       "The specified type inside the container must default constructible.");
 
   westmere::ondemand::array arr;
-  SIMDJSON_TRY(val.get_array().get(arr));
+  if constexpr (std::is_same_v<std::remove_cvref_t<ValT>, westmere::ondemand::array>) {
+    arr = val;
+  } else {
+    SIMDJSON_TRY(val.get_array().get(arr));
+  }
+
   for (auto v : arr) {
     if constexpr (concepts::returns_reference<T>) {
       if (auto const err = v.get<value_type>().get(concepts::emplace_one(out));
@@ -95037,7 +104065,45 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(false) {
  return SUCCESS;
 }
 
+template <concepts::string_view_keyed_map T>
+error_code tag_invoke(deserialize_tag, westmere::ondemand::object &obj, T &out) noexcept {
+  using value_type = typename std::remove_cvref_t<T>::mapped_type;
 
+  out.clear();
+  for (auto field : obj) {
+    std::string_view key;
+    SIMDJSON_TRY(field.unescaped_key().get(key));
+
+    westmere::ondemand::value value_obj;
+    SIMDJSON_TRY(field.value().get(value_obj));
+
+    value_type this_value;
+    SIMDJSON_TRY(value_obj.get(this_value));
+    out.emplace(typename T::key_type(key), std::move(this_value));
+  }
+  return SUCCESS;
+}
+
+template <concepts::string_view_keyed_map T>
+error_code tag_invoke(deserialize_tag, westmere::ondemand::value &val, T &out) noexcept {
+  westmere::ondemand::object obj;
+  SIMDJSON_TRY(val.get_object().get(obj));
+  return simdjson::deserialize(obj, out);
+}
+
+template <concepts::string_view_keyed_map T>
+error_code tag_invoke(deserialize_tag, westmere::ondemand::document &doc, T &out) noexcept {
+  westmere::ondemand::object obj;
+  SIMDJSON_TRY(doc.get_object().get(obj));
+  return simdjson::deserialize(obj, out);
+}
+
+template <concepts::string_view_keyed_map T>
+error_code tag_invoke(deserialize_tag, westmere::ondemand::document_reference &doc, T &out) noexcept {
+  westmere::ondemand::object obj;
+  SIMDJSON_TRY(doc.get_object().get(obj));
+  return simdjson::deserialize(obj, out);
+}
 
 
 /**
@@ -95080,22 +104146,334 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(nothrow_deser
 /**
  * This CPO (Customization Point Object) will help deserialize into optional types.
  */
-template <concepts::optional_type T, typename ValT>
+template <concepts::optional_type T>
   requires(!require_custom_serialization<T>)
-error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(nothrow_deserializable<typename std::remove_cvref_t<T>::value_type, ValT>) {
+error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept(nothrow_deserializable<typename std::remove_cvref_t<T>::value_type, decltype(val)>) {
   using value_type = typename std::remove_cvref_t<T>::value_type;
 
-  static_assert(
-      deserializable<value_type, ValT>,
-      "The specified type inside the unique_ptr must itself be deserializable");
-  static_assert(
-      std::is_default_constructible_v<value_type>,
-      "The specified type inside the unique_ptr must default constructible.");
+  // Check if the value is null
+  if (val.is_null()) {
+    out.reset(); // Set to nullopt
+    return SUCCESS;
+  }
 
   if (!out) {
     out.emplace();
   }
   SIMDJSON_TRY(val.template get<value_type>(out.value()));
+  return SUCCESS;
+}
+
+
+#if SIMDJSON_STATIC_REFLECTION
+
+
+template <typename T>
+constexpr bool user_defined_type = (std::is_class_v<T>
+&& !std::is_same_v<T, std::string> && !std::is_same_v<T, std::string_view> && !concepts::optional_type<T> &&
+!concepts::appendable_containers<T> && !require_custom_serialization<T>);
+
+
+// workaround from
+// https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2024/p2996r10.html#back-and-forth
+// for missing expansion statements
+namespace __impl {
+  template<auto... vals>
+  struct replicator_type {
+    template<typename F>
+      constexpr void operator>>(F body) const {
+        (body.template operator()<vals>(), ...);
+      }
+  };
+
+  template<auto... vals>
+  replicator_type<vals...> replicator = {};
+}
+
+template<typename R>
+consteval auto expand(R range) {
+  std::vector<std::meta::info> args;
+  for (auto r : range) {
+    args.push_back(reflect_constant(r));
+  }
+  return substitute(^^__impl::replicator, args);
+}
+// end of workaround
+
+template <typename T, typename ValT>
+  requires(user_defined_type<T> && std::is_class_v<T>)
+error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept {
+  westmere::ondemand::object obj;
+  if constexpr (std::is_same_v<std::remove_cvref_t<ValT>, westmere::ondemand::object>) {
+    obj = val;
+  } else {
+    SIMDJSON_TRY(val.get_object().get(obj));
+  }
+  error_code e = simdjson::SUCCESS;
+
+  [:expand(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked())):] >> [&]<auto mem>() {
+    if constexpr (!std::meta::is_const(mem) && std::meta::is_public(mem)) {
+      constexpr std::string_view key = std::define_static_string(std::meta::identifier_of(mem));
+      // Note: removed static assert as optional types are now handled generically
+      // as long we are succesful or the field is not found, we continue
+      if(e == simdjson::SUCCESS || e == simdjson::NO_SUCH_FIELD) {
+        e = obj[key].get(out.[:mem:]);
+      }
+    }
+  };
+  return e;
+}
+
+// Support for enum deserialization - deserialize from string representation using expand approach from P2996R12
+template <typename T, typename ValT>
+  requires(std::is_enum_v<T>)
+error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept {
+#if SIMDJSON_STATIC_REFLECTION
+  std::string_view str;
+  SIMDJSON_TRY(val.get_string().get(str));
+
+  bool found = false;
+  [:expand(std::meta::enumerators_of(^^T)):] >> [&]<auto enum_val>{
+    if (!found && str == std::meta::identifier_of(enum_val)) {
+      out = [:enum_val:];
+      found = true;
+    }
+  };
+
+  return found ? SUCCESS : INCORRECT_TYPE;
+#else
+  // Fallback: deserialize as integer if reflection not available
+  std::underlying_type_t<T> int_val;
+  SIMDJSON_TRY(val.get(int_val));
+  out = static_cast<T>(int_val);
+  return SUCCESS;
+#endif
+}
+
+template <typename simdjson_value, typename T>
+  requires(user_defined_type<std::remove_cvref_t<T>>)
+error_code tag_invoke(deserialize_tag, simdjson_value &val, std::unique_ptr<T> &out) noexcept {
+  if (!out) {
+    out = std::make_unique<T>();
+    if (!out) {
+      return MEMALLOC;
+    }
+  }
+  if (auto err = val.get(*out)) {
+    out.reset();
+    return err;
+  }
+  return SUCCESS;
+}
+
+template <typename simdjson_value, typename T>
+  requires(user_defined_type<std::remove_cvref_t<T>>)
+error_code tag_invoke(deserialize_tag, simdjson_value &val, std::shared_ptr<T> &out) noexcept {
+  if (!out) {
+    out = std::make_shared<T>();
+    if (!out) {
+      return MEMALLOC;
+    }
+  }
+  if (auto err = val.get(*out)) {
+    out.reset();
+    return err;
+  }
+  return SUCCESS;
+}
+
+#endif // SIMDJSON_STATIC_REFLECTION
+
+////////////////////////////////////////
+// Unique pointers
+////////////////////////////////////////
+error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<bool> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_unique<bool>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_bool().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<int64_t> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_unique<int64_t>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_int64().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<uint64_t> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_unique<uint64_t>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_uint64().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<double> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_unique<double>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_double().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<std::string_view> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_unique<std::string_view>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_string().get(*out));
+  return SUCCESS;
+}
+
+
+////////////////////////////////////////
+// Shared pointers
+////////////////////////////////////////
+error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<bool> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_shared<bool>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_bool().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<int64_t> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_shared<int64_t>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_int64().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<uint64_t> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_shared<uint64_t>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_uint64().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<double> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_shared<double>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_double().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<std::string_view> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_shared<std::string_view>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_string().get(*out));
+  return SUCCESS;
+}
+
+
+////////////////////////////////////////
+// Explicit optional specializations
+////////////////////////////////////////
+
+////////////////////////////////////////
+// Explicit smart pointer specializations for string and int types
+////////////////////////////////////////
+error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<std::string> &out) noexcept {
+  // Check if the value is null
+  if (val.is_null()) {
+    out.reset(); // Set to nullptr
+    return SUCCESS;
+  }
+
+  if (!out) {
+    out = std::make_unique<std::string>();
+  }
+  std::string_view str;
+  SIMDJSON_TRY(val.get_string().get(str));
+  *out = std::string{str};
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<std::string> &out) noexcept {
+  // Check if the value is null
+  if (val.is_null()) {
+    out.reset(); // Set to nullptr
+    return SUCCESS;
+  }
+
+  if (!out) {
+    out = std::make_shared<std::string>();
+  }
+  std::string_view str;
+  SIMDJSON_TRY(val.get_string().get(str));
+  *out = std::string{str};
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<int> &out) noexcept {
+  // Check if the value is null
+  if (val.is_null()) {
+    out.reset(); // Set to nullptr
+    return SUCCESS;
+  }
+
+  if (!out) {
+    out = std::make_unique<int>();
+  }
+  int64_t temp;
+  SIMDJSON_TRY(val.get_int64().get(temp));
+  *out = static_cast<int>(temp);
   return SUCCESS;
 }
 
@@ -95386,6 +104764,9 @@ simdjson_inline array_iterator &array_iterator::operator++() noexcept {
   return *this;
 }
 
+simdjson_inline bool array_iterator::at_end() const noexcept {
+  return iter.at_end();
+}
 } // namespace ondemand
 } // namespace westmere
 } // namespace simdjson
@@ -95422,7 +104803,9 @@ simdjson_inline simdjson_result<westmere::ondemand::array_iterator> &simdjson_re
   ++(first);
   return *this;
 }
-
+simdjson_inline bool simdjson_result<westmere::ondemand::array_iterator>::at_end() const noexcept {
+  return !first.iter.is_valid() || first.at_end();
+}
 } // namespace simdjson
 
 #endif // SIMDJSON_GENERIC_ONDEMAND_ARRAY_ITERATOR_INL_H
@@ -96180,8 +105563,8 @@ simdjson_inline document::operator object() & noexcept(false) { return get_objec
 simdjson_inline document::operator uint64_t() noexcept(false) { return get_uint64(); }
 simdjson_inline document::operator int64_t() noexcept(false) { return get_int64(); }
 simdjson_inline document::operator double() noexcept(false) { return get_double(); }
-simdjson_inline document::operator std::string_view() noexcept(false) { return get_string(false); }
-simdjson_inline document::operator raw_json_string() noexcept(false) { return get_raw_json_string(); }
+simdjson_inline document::operator std::string_view() noexcept(false) simdjson_lifetime_bound { return get_string(false); }
+simdjson_inline document::operator raw_json_string() noexcept(false) simdjson_lifetime_bound { return get_raw_json_string(); }
 simdjson_inline document::operator bool() noexcept(false) { return get_bool(); }
 simdjson_inline document::operator value() noexcept(false) { return get_value(); }
 
@@ -97738,6 +107121,8 @@ simdjson_inline void json_iterator::assert_valid_position(token_position positio
 #ifndef SIMDJSON_CLANG_VISUAL_STUDIO
   SIMDJSON_ASSUME( position >= &parser->implementation->structural_indexes[0] );
   SIMDJSON_ASSUME( position < &parser->implementation->structural_indexes[parser->implementation->n_structural_indexes] );
+#else
+  (void)position; // Suppress unused parameter warning
 #endif
 }
 
@@ -98586,6 +107971,7 @@ simdjson_inline  simdjson_result<std::string_view> simdjson_result<westmere::ond
   if (error()) { return error(); }
   return first.raw_json();
 }
+
 } // namespace simdjson
 
 #endif // SIMDJSON_GENERIC_ONDEMAND_OBJECT_INL_H
@@ -99161,6 +108547,9 @@ simdjson_inline simdjson_warn_unused simdjson_result<std::string_view> simdjson_
 /* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/object.h" */
 /* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/serialization.h" */
 /* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/value.h" */
+/* amalgamation skipped (editor-only): #if SIMDJSON_STATIC_REFLECTION */
+/* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/json_builder.h" */
+/* amalgamation skipped (editor-only): #endif */
 /* amalgamation skipped (editor-only): #endif // SIMDJSON_CONDITIONAL_INCLUDE */
 
 namespace simdjson {
@@ -100582,6 +109971,1151 @@ simdjson_inline simdjson_result<westmere::ondemand::value_iterator>::simdjson_re
 #endif // SIMDJSON_GENERIC_ONDEMAND_VALUE_ITERATOR_INL_H
 /* end file simdjson/generic/ondemand/value_iterator-inl.h for westmere */
 
+// JSON builder, ideally they should not be part of the ondemand directory
+// but it is convenient for now to have them here.
+/* including simdjson/generic/ondemand/json_string_builder.h for westmere: #include "simdjson/generic/ondemand/json_string_builder.h" */
+/* begin file simdjson/generic/ondemand/json_string_builder.h for westmere */
+/**
+ * This file is part of the builder API. It is temporarily in the ondemand directory
+ * but we will move it to a builder directory later.
+ */
+#ifndef SIMDJSON_GENERIC_STRING_BUILDER_H
+
+/* amalgamation skipped (editor-only): #ifndef SIMDJSON_CONDITIONAL_INCLUDE */
+/* amalgamation skipped (editor-only): #define SIMDJSON_GENERIC_STRING_BUILDER_H */
+/* amalgamation skipped (editor-only): #include "simdjson/generic/implementation_simdjson_result_base.h" */
+/* amalgamation skipped (editor-only): #endif // SIMDJSON_CONDITIONAL_INCLUDE */
+
+namespace simdjson {
+namespace westmere {
+namespace builder {
+
+/**
+ * A builder for JSON strings representing documents. This is a low-level
+ * builder that is not meant to be used directly by end-users. Though it
+ * supports atomic types (Booleans, strings), it does not support composed
+ * types (arrays and objects).
+ *
+ * Ultimately, this class can support kernel-specific optimizations. E.g.,
+ * it may make use of SIMD instructions to escape strings faster.
+ */
+class string_builder {
+public:
+  simdjson_inline string_builder(size_t initial_capacity = 1024);
+
+  /**
+   * Append number (includes Booleans). Booleans are mapped to the strings
+   * false and true. Numbers are converted to strings abiding by the JSON standard.
+   * Floating-point numbers are converted to the shortest string that 'correctly'
+   * represents the number.
+   */
+  template<typename number_type,
+         typename = typename std::enable_if<std::is_arithmetic<number_type>::value>::type>
+  simdjson_inline void append(number_type v) noexcept;
+
+  /**
+   * Append character c.
+   */
+  simdjson_inline void append(char c)  noexcept;
+
+  /**
+   * Append the string 'null'.
+   */
+  simdjson_inline void append_null()  noexcept;
+
+  /**
+   * Clear the content.
+   */
+  simdjson_inline void clear()  noexcept;
+
+  /**
+   * Append the std::string_view, after escaping it.
+   * There is no UTF-8 validation.
+   */
+  simdjson_inline void escape_and_append(std::string_view input)  noexcept;
+
+  /**
+   * Append the std::string_view surrounded by double quotes, after escaping it.
+   * There is no UTF-8 validation.
+   */
+  simdjson_inline void escape_and_append_with_quotes(std::string_view input)  noexcept;
+
+  /**
+   * Append the character surrounded by double quotes, after escaping it.
+   * There is no UTF-8 validation.
+   */
+  simdjson_inline void escape_and_append_with_quotes(char input)  noexcept;
+
+  /**
+   * Append the character surrounded by double quotes, after escaping it.
+   * There is no UTF-8 validation.
+   */
+   simdjson_inline void escape_and_append_with_quotes(const char* input)  noexcept;
+
+  /**
+   * Append the C string directly, without escaping.
+   * There is no UTF-8 validation.
+   */
+  simdjson_inline void append_raw(const char *c)  noexcept;
+
+  /**
+   * Append "{" to the buffer.
+   */
+  simdjson_inline void start_object()  noexcept;
+
+  /**
+   * Append "}" to the buffer.
+   */
+  simdjson_inline void end_object()  noexcept;
+
+  /**
+   * Append "[" to the buffer.
+   */
+  simdjson_inline void start_array()  noexcept;
+
+  /**
+   * Append "]" to the buffer.
+   */
+  simdjson_inline void end_array()  noexcept;
+
+  /**
+   * Append "," to the buffer.
+   */
+  simdjson_inline void append_comma()  noexcept;
+
+  /**
+   * Append ":" to the buffer.
+   */
+  simdjson_inline void append_colon()  noexcept;
+
+  /**
+   * Append a key-value pair to the buffer.
+   * The key is escaped and surrounded by double quotes.
+   * The value is escaped if it is a string.
+   */
+   template<typename key_type, typename value_type>
+  simdjson_inline void append_key_value(key_type key, value_type value) noexcept;
+  /**
+   * Append the std::string_view directly, without escaping.
+   * There is no UTF-8 validation.
+   */
+  simdjson_inline void append_raw(std::string_view input)  noexcept;
+
+  /**
+   * Append len characters from str.
+   * There is no UTF-8 validation.
+   */
+  simdjson_inline void append_raw(const char *str, size_t len) noexcept;
+#if SIMDJSON_EXCEPTIONS
+  /**
+   * Creates an std::string from the written JSON buffer.
+   * Throws if memory allocation failed
+   *
+   * The result may not be valid UTF-8 if some of your content was not valid UTF-8.
+   * Use validate_unicode() to check the content if needed.
+   */
+  simdjson_inline operator std::string() const noexcept(false);
+
+  /**
+   * Creates an std::string_view from the written JSON buffer.
+   * Throws if memory allocation failed.
+   *
+   * The result may not be valid UTF-8 if some of your content was not valid UTF-8.
+   * Use validate_unicode() to check the content if needed.
+   */
+  simdjson_inline operator std::string_view() const noexcept(false) simdjson_lifetime_bound;
+#endif
+
+  /**
+   * Returns a view on the written JSON buffer. Returns an error
+   * if memory allocation failed.
+   *
+   * The result may not be valid UTF-8 if some of your content was not valid UTF-8.
+   * Use validate_unicode() to check the content.
+   */
+  simdjson_inline simdjson_result<std::string_view> view() const noexcept;
+
+  /**
+   * Appends the null character to the buffer and returns
+   * a pointer to the beginning of the written JSON buffer.
+   * Returns an error if memory allocation failed.
+   * The result is null-terminated.
+   *
+   * The result may not be valid UTF-8 if some of your content was not valid UTF-8.
+   * Use validate_unicode() to check the content.
+   */
+  simdjson_inline simdjson_result<const char *> c_str() noexcept;
+
+  /**
+   * Return true if the content is valid UTF-8.
+   */
+  simdjson_inline bool validate_unicode() const noexcept;
+
+  /**
+   * Returns the current size of the written JSON buffer.
+   * If an error occurred, returns 0.
+   */
+  simdjson_inline size_t size() const noexcept;
+
+private:
+  /**
+   * Returns true if we can write at least upcoming_bytes bytes.
+   * The underlying buffer is reallocated if needed. It is designed
+   * to be called before writing to the buffer. It should be fast.
+   */
+  simdjson_inline bool capacity_check(size_t upcoming_bytes);
+
+  /**
+   * Grow the buffer to at least desired_capacity bytes.
+   * If the allocation fails, is_valid is set to false. We expect
+   * that this function would not be repeatedly called.
+   */
+  simdjson_inline void grow_buffer(size_t desired_capacity);
+
+  /**
+   * We use this helper function to make sure that is_valid is kept consistent.
+   */
+  simdjson_inline void set_valid(bool valid) noexcept;
+
+  std::unique_ptr<char[]> buffer{};
+  size_t position{0};
+  size_t capacity{0};
+  bool is_valid{true};
+};
+
+
+
+}
+}
+} // namespace simdjson
+
+#endif // SIMDJSON_GENERIC_STRING_BUILDER_H
+/* end file simdjson/generic/ondemand/json_string_builder.h for westmere */
+/* including simdjson/generic/ondemand/json_string_builder-inl.h for westmere: #include "simdjson/generic/ondemand/json_string_builder-inl.h" */
+/* begin file simdjson/generic/ondemand/json_string_builder-inl.h for westmere */
+/**
+ * This file is part of the builder API. It is temporarily in the ondemand
+ * directory but we will move it to a builder directory later.
+ */
+#include <array>
+#include <cstring>
+#include <type_traits>
+#ifndef SIMDJSON_GENERIC_STRING_BUILDER_INL_H
+
+/* amalgamation skipped (editor-only): #ifndef SIMDJSON_CONDITIONAL_INCLUDE */
+/* amalgamation skipped (editor-only): #define SIMDJSON_GENERIC_STRING_BUILDER_INL_H */
+/* amalgamation skipped (editor-only): #include "simdjson/generic/builder/json_string_builder.h" */
+/* amalgamation skipped (editor-only): #endif // SIMDJSON_CONDITIONAL_INCLUDE */
+
+/*
+ * Empirically, we have found that an inlined optimization is important for
+ * performance. The following macros are not ideal. We should find a better
+ * way to inline the code.
+ */
+
+#if defined(__SSE2__) || defined(__x86_64__) || defined(__x86_64) ||           \
+    (defined(_M_AMD64) || defined(_M_X64) ||                                   \
+     (defined(_M_IX86_FP) && _M_IX86_FP == 2))
+#ifndef SIMDJSON_EXPERIMENTAL_HAS_SSE2
+#define SIMDJSON_EXPERIMENTAL_HAS_SSE2 1
+#endif
+#endif
+
+#if defined(__aarch64__) || defined(_M_ARM64)
+#ifndef SIMDJSON_EXPERIMENTAL_HAS_NEON
+#define SIMDJSON_EXPERIMENTAL_HAS_NEON 1
+#endif
+#endif
+#if SIMDJSON_EXPERIMENTAL_HAS_NEON
+#include <arm_neon.h>
+#endif
+#if SIMDJSON_EXPERIMENTAL_HAS_SSE2
+#include <emmintrin.h>
+#endif
+
+namespace simdjson {
+namespace westmere {
+namespace builder {
+
+static SIMDJSON_CONSTEXPR_LAMBDA std::array<uint8_t, 256> json_quotable_character = {
+  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+  1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+
+/**
+
+A possible SWAR implementation of has_json_escapable_byte. It is not used because
+it is slower than the current implementation. It is kept here for reference (to show
+that we tried it).
+
+inline bool has_json_escapable_byte(uint64_t x) {
+  uint64_t is_ascii = 0x8080808080808080ULL & ~x;
+  uint64_t xor2 = x ^ 0x0202020202020202ULL;
+  uint64_t lt32_or_eq34 = xor2 - 0x2121212121212121ULL;
+  uint64_t sub92 = x ^ 0x5C5C5C5C5C5C5C5CULL;
+  uint64_t eq92 = (sub92 - 0x0101010101010101ULL);
+  return ((lt32_or_eq34 | eq92) & is_ascii) != 0;
+}
+
+**/
+
+SIMDJSON_CONSTEXPR_LAMBDA simdjson_inline bool
+simple_needs_escaping(std::string_view v) {
+  for (char c : v) {
+    // a table lookup is faster than a series of comparisons
+    if(json_quotable_character[static_cast<uint8_t>(c)]) {
+      return true;
+    }
+  }
+  return false;
+}
+
+#if SIMDJSON_EXPERIMENTAL_HAS_NEON
+simdjson_inline bool fast_needs_escaping(std::string_view view) {
+  if (view.size() < 16) {
+    return simple_needs_escaping(view);
+  }
+  size_t i = 0;
+  uint8x16_t running = vdupq_n_u8(0);
+  uint8x16_t v34 = vdupq_n_u8(34);
+  uint8x16_t v92 = vdupq_n_u8(92);
+
+  for (; i + 15 < view.size(); i += 16) {
+    uint8x16_t word = vld1q_u8((const uint8_t *)view.data() + i);
+    running = vorrq_u8(running, vceqq_u8(word, v34));
+    running = vorrq_u8(running, vceqq_u8(word, v92));
+    running = vorrq_u8(running, vcltq_u8(word, vdupq_n_u8(32)));
+  }
+  if (i < view.size()) {
+    uint8x16_t word =
+        vld1q_u8((const uint8_t *)view.data() + view.length() - 16);
+    running = vorrq_u8(running, vceqq_u8(word, v34));
+    running = vorrq_u8(running, vceqq_u8(word, v92));
+    running = vorrq_u8(running, vcltq_u8(word, vdupq_n_u8(32)));
+  }
+  return vmaxvq_u32(vreinterpretq_u32_u8(running)) != 0;
+}
+#elif SIMDJSON_EXPERIMENTAL_HAS_SSE2
+simdjson_inline bool fast_needs_escaping(std::string_view view) {
+  if (view.size() < 16) {
+    return simple_needs_escaping(view);
+  }
+  size_t i = 0;
+  __m128i running = _mm_setzero_si128();
+  for (; i + 15 < view.size(); i += 16) {
+
+    __m128i word = _mm_loadu_si128(reinterpret_cast<const __m128i *>(view.data() + i));
+    running = _mm_or_si128(running, _mm_cmpeq_epi8(word, _mm_set1_epi8(34)));
+    running = _mm_or_si128(running, _mm_cmpeq_epi8(word, _mm_set1_epi8(92)));
+    running = _mm_or_si128(
+        running, _mm_cmpeq_epi8(_mm_subs_epu8(word, _mm_set1_epi8(31)),
+                                _mm_setzero_si128()));
+  }
+  if (i < view.size()) {
+    __m128i word =
+        _mm_loadu_si128(reinterpret_cast<const __m128i *>(view.data() + view.length() - 16));
+    running = _mm_or_si128(running, _mm_cmpeq_epi8(word, _mm_set1_epi8(34)));
+    running = _mm_or_si128(running, _mm_cmpeq_epi8(word, _mm_set1_epi8(92)));
+    running = _mm_or_si128(
+        running, _mm_cmpeq_epi8(_mm_subs_epu8(word, _mm_set1_epi8(31)),
+                                _mm_setzero_si128()));
+  }
+  return _mm_movemask_epi8(running) != 0;
+}
+#else
+simdjson_inline bool fast_needs_escaping(std::string_view view) {
+  return simple_needs_escaping(view);
+}
+#endif
+
+
+SIMDJSON_CONSTEXPR_LAMBDA inline size_t
+find_next_json_quotable_character(const std::string_view view,
+                                  size_t location) noexcept {
+
+  for (auto pos = view.begin() + location; pos != view.end(); ++pos) {
+    if (json_quotable_character[static_cast<uint8_t>(*pos)]) {
+      return pos - view.begin();
+    }
+  }
+  return size_t(view.size());
+}
+
+SIMDJSON_CONSTEXPR_LAMBDA static std::string_view control_chars[] = {
+    "\\x0000", "\\x0001", "\\x0002", "\\x0003", "\\x0004", "\\x0005", "\\x0006",
+    "\\x0007", "\\x0008", "\\t",     "\\n",     "\\x000b", "\\f",     "\\r",
+    "\\x000e", "\\x000f", "\\x0010", "\\x0011", "\\x0012", "\\x0013", "\\x0014",
+    "\\x0015", "\\x0016", "\\x0017", "\\x0018", "\\x0019", "\\x001a", "\\x001b",
+    "\\x001c", "\\x001d", "\\x001e", "\\x001f"};
+
+SIMDJSON_CONSTEXPR_LAMBDA void escape_json_char(char c, char *&out) {
+  if (c == '"') {
+    memcpy(out, "\\\"", 2);
+    out += 2;
+  } else if (c == '\\') {
+    memcpy(out, "\\\\", 2);
+    out += 2;
+  } else {
+    std::string_view v = control_chars[uint8_t(c)];
+    memcpy(out, v.data(), v.size());
+    out += v.size();
+  }
+}
+
+inline size_t write_string_escaped(const std::string_view input, char *out) {
+  size_t mysize = input.size();
+  if (!fast_needs_escaping(input)) { // fast path!
+    memcpy(out, input.data(), input.size());
+    return input.size();
+  }
+  const char *const initout = out;
+  size_t location = find_next_json_quotable_character(input, 0);
+  memcpy(out, input.data(), location);
+  out += location;
+  escape_json_char(input[location], out);
+  location += 1;
+  while (location < mysize) {
+    size_t newlocation = find_next_json_quotable_character(input, location);
+    memcpy(out, input.data() + location, newlocation - location);
+    out += newlocation - location;
+    location = newlocation;
+    if (location == mysize) {
+      break;
+    }
+    escape_json_char(input[location], out);
+    location += 1;
+  }
+  return out - initout;
+}
+
+#if SIMDJSON_CONSTEVAL
+// unoptimized, meant for compile-time execution
+consteval std::string consteval_to_quoted_escaped(std::string_view input) {
+  std::string out = "\"";
+  for (char c : input) {
+    if (json_quotable_character[uint8_t(c)]) {
+      if (c == '"') {
+        out.append("\\\"");
+      } else if (c == '\\') {
+        out.append("\\\\");
+      } else {
+        std::string_view v = control_chars[uint8_t(c)];
+        out.append(v);
+      }
+    } else {
+      out.push_back(c);
+    }
+  }
+  out.push_back('"');
+  return out;
+}
+#endif // SIMDJSON_CONSTEVAL
+
+simdjson_inline string_builder::string_builder(size_t initial_capacity)
+    : buffer(new(std::nothrow) char[initial_capacity]), position(0),
+      capacity(buffer.get() != nullptr ? initial_capacity : 0),
+      is_valid(buffer.get() != nullptr) {}
+
+simdjson_inline bool string_builder::capacity_check(size_t upcoming_bytes) {
+  // We use the convention that when is_valid is false, then the capacity and
+  // the position are 0.
+  // Most of the time, this function will return true.
+  if (simdjson_likely(upcoming_bytes <= capacity - position)) {
+    return true;
+  }
+  // check for overflow, most of the time there is no overflow
+  if (simdjson_likely(position + upcoming_bytes < position)) {
+    return false;
+  }
+  // We will rarely get here.
+  grow_buffer((std::max)(capacity * 2, position + upcoming_bytes));
+  // If the buffer allocation failed, we set is_valid to false.
+  return is_valid;
+}
+
+simdjson_inline void string_builder::grow_buffer(size_t desired_capacity) {
+  if (!is_valid) {
+    return;
+  }
+  std::unique_ptr<char[]> new_buffer(new (std::nothrow) char[desired_capacity]);
+  if (new_buffer.get() == nullptr) {
+    set_valid(false);
+    return;
+  }
+  std::memcpy(new_buffer.get(), buffer.get(), position);
+  buffer.swap(new_buffer);
+  capacity = desired_capacity;
+}
+
+simdjson_inline void string_builder::set_valid(bool valid) noexcept {
+  if (!valid) {
+    is_valid = false;
+    capacity = 0;
+    position = 0;
+    buffer.reset();
+  } else {
+    is_valid = true;
+  }
+}
+
+simdjson_inline size_t string_builder::size() const noexcept {
+  return position;
+}
+
+simdjson_inline void string_builder::append(char c) noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position++] = c;
+  }
+}
+
+simdjson_inline void string_builder::append_null() noexcept {
+  constexpr char null_literal[] = "null";
+  constexpr size_t null_len = sizeof(null_literal) - 1;
+  if (capacity_check(null_len)) {
+    std::memcpy(buffer.get() + position, null_literal, null_len);
+    position += null_len;
+  }
+}
+
+simdjson_inline void string_builder::clear() noexcept {
+  position = 0;
+  // if it was invalid, we should try to repair it
+  if (!is_valid) {
+    capacity = 0;
+    buffer.reset();
+    is_valid = true;
+  }
+}
+
+namespace internal {
+
+// We could specialize further for 32-bit integers.
+simdjson_really_inline int int_log2(uint32_t x) { return (63 - leading_zeroes(x | 1)); }
+
+simdjson_really_inline int fast_digit_count(uint32_t x) {
+  static uint64_t table[] = {
+      4294967296,  8589934582,  8589934582,  8589934582,  12884901788,
+      12884901788, 12884901788, 17179868184, 17179868184, 17179868184,
+      21474826480, 21474826480, 21474826480, 21474826480, 25769703776,
+      25769703776, 25769703776, 30063771072, 30063771072, 30063771072,
+      34349738368, 34349738368, 34349738368, 34349738368, 38554705664,
+      38554705664, 38554705664, 41949672960, 41949672960, 41949672960,
+      42949672960, 42949672960};
+  return uint32_t((x + table[int_log2(x)]) >> 32);
+}
+
+simdjson_really_inline int int_log2(uint64_t x) { return 63 - leading_zeroes(x | 1); }
+
+simdjson_really_inline int fast_digit_count(uint64_t x) {
+  static uint64_t table[] = {9,
+                             99,
+                             999,
+                             9999,
+                             99999,
+                             999999,
+                             9999999,
+                             99999999,
+                             999999999,
+                             9999999999,
+                             99999999999,
+                             999999999999,
+                             9999999999999,
+                             99999999999999,
+                             999999999999999ULL,
+                             9999999999999999ULL,
+                             99999999999999999ULL,
+                             999999999999999999ULL,
+                             9999999999999999999ULL};
+  int y = (19 * int_log2(x) >> 6);
+  y += x > table[y];
+  return y + 1;
+}
+
+template <typename number_type, typename = typename std::enable_if<
+                                    std::is_unsigned<number_type>::value>::type>
+simdjson_really_inline size_t digit_count(number_type v) noexcept {
+  static_assert(sizeof(number_type) == 8 || sizeof(number_type) == 4 ||
+                    sizeof(number_type) == 2 || sizeof(number_type) == 1,
+                "We only support 8-bit, 16-bit, 32-bit and 64-bit numbers");
+  return fast_digit_count(v);
+}
+static const char decimal_table[200] = {
+  0x30, 0x30, 0x30, 0x31, 0x30, 0x32, 0x30, 0x33, 0x30, 0x34, 0x30, 0x35,
+  0x30, 0x36, 0x30, 0x37, 0x30, 0x38, 0x30, 0x39, 0x31, 0x30, 0x31, 0x31,
+  0x31, 0x32, 0x31, 0x33, 0x31, 0x34, 0x31, 0x35, 0x31, 0x36, 0x31, 0x37,
+  0x31, 0x38, 0x31, 0x39, 0x32, 0x30, 0x32, 0x31, 0x32, 0x32, 0x32, 0x33,
+  0x32, 0x34, 0x32, 0x35, 0x32, 0x36, 0x32, 0x37, 0x32, 0x38, 0x32, 0x39,
+  0x33, 0x30, 0x33, 0x31, 0x33, 0x32, 0x33, 0x33, 0x33, 0x34, 0x33, 0x35,
+  0x33, 0x36, 0x33, 0x37, 0x33, 0x38, 0x33, 0x39, 0x34, 0x30, 0x34, 0x31,
+  0x34, 0x32, 0x34, 0x33, 0x34, 0x34, 0x34, 0x35, 0x34, 0x36, 0x34, 0x37,
+  0x34, 0x38, 0x34, 0x39, 0x35, 0x30, 0x35, 0x31, 0x35, 0x32, 0x35, 0x33,
+  0x35, 0x34, 0x35, 0x35, 0x35, 0x36, 0x35, 0x37, 0x35, 0x38, 0x35, 0x39,
+  0x36, 0x30, 0x36, 0x31, 0x36, 0x32, 0x36, 0x33, 0x36, 0x34, 0x36, 0x35,
+  0x36, 0x36, 0x36, 0x37, 0x36, 0x38, 0x36, 0x39, 0x37, 0x30, 0x37, 0x31,
+  0x37, 0x32, 0x37, 0x33, 0x37, 0x34, 0x37, 0x35, 0x37, 0x36, 0x37, 0x37,
+  0x37, 0x38, 0x37, 0x39, 0x38, 0x30, 0x38, 0x31, 0x38, 0x32, 0x38, 0x33,
+  0x38, 0x34, 0x38, 0x35, 0x38, 0x36, 0x38, 0x37, 0x38, 0x38, 0x38, 0x39,
+  0x39, 0x30, 0x39, 0x31, 0x39, 0x32, 0x39, 0x33, 0x39, 0x34, 0x39, 0x35,
+  0x39, 0x36, 0x39, 0x37, 0x39, 0x38, 0x39, 0x39,
+};
+} // namespace internal
+
+template <typename number_type, typename>
+simdjson_inline void string_builder::append(number_type v) noexcept {
+  static_assert(std::is_same<number_type, bool>::value ||
+                    std::is_integral<number_type>::value ||
+                    std::is_floating_point<number_type>::value,
+                "Unsupported number type");
+  // If C++17 is available, we can 'if constexpr' here.
+  SIMDJSON_IF_CONSTEXPR(std::is_same<number_type, bool>::value) {
+    if (v) {
+      constexpr char true_literal[] = "true";
+      constexpr size_t true_len = sizeof(true_literal) - 1;
+      if (capacity_check(true_len)) {
+        std::memcpy(buffer.get() + position, true_literal, true_len);
+        position += true_len;
+      }
+    } else {
+      constexpr char false_literal[] = "false";
+      constexpr size_t false_len = sizeof(false_literal) - 1;
+      if (capacity_check(false_len)) {
+        std::memcpy(buffer.get() + position, false_literal, false_len);
+        position += false_len;
+      }
+    }
+  }
+  else SIMDJSON_IF_CONSTEXPR(std::is_unsigned<number_type>::value) {
+    constexpr size_t max_number_size = 20;
+    if (capacity_check(max_number_size)) {
+      using unsigned_type = typename std::make_unsigned<number_type>::type;
+      unsigned_type pv = static_cast<unsigned_type>(v);
+      size_t dc = internal::digit_count(pv);
+      char *write_pointer = buffer.get() + position + dc - 1;
+      while (pv >= 100) {
+        memcpy(write_pointer - 1, &internal::decimal_table[(pv % 100)*2], 2);
+        write_pointer -= 2;
+        pv /= 100;
+      }
+      if (pv >= 10) {
+        *write_pointer-- = char('0' + (pv % 10));
+        pv /= 10;
+      }
+      *write_pointer = char('0' + pv);
+      position += dc;
+    }
+  }
+  else SIMDJSON_IF_CONSTEXPR(std::is_integral<number_type>::value) {
+    constexpr size_t max_number_size = 20;
+    if (capacity_check(max_number_size)) {
+      using unsigned_type = typename std::make_unsigned<number_type>::type;
+      bool negative = v < 0;
+      unsigned_type pv = static_cast<unsigned_type>(v);
+      if (negative) {
+        pv = 0 - pv; // the 0 is for Microsoft
+      }
+      size_t dc = internal::digit_count(pv);
+      if (negative) {
+        buffer.get()[position++] = '-';
+      }
+      char *write_pointer = buffer.get() + position + dc - 1;
+      while (pv >= 100) {
+        memcpy(write_pointer - 1, &internal::decimal_table[(pv % 100)*2], 2);
+        write_pointer -= 2;
+        pv /= 100;
+      }
+      if (pv >= 10) {
+        *write_pointer-- = char('0' + (pv % 10));
+        pv /= 10;
+      }
+      *write_pointer = char('0' + pv);
+      position += dc;
+    }
+  }
+  else SIMDJSON_IF_CONSTEXPR(std::is_floating_point<number_type>::value) {
+    constexpr size_t max_number_size = 24;
+    if (capacity_check(max_number_size)) {
+      // We could specialize for float.
+      char *end = simdjson::internal::to_chars(buffer.get() + position, nullptr,
+                                               double(v));
+      position = end - buffer.get();
+    }
+  }
+}
+
+simdjson_inline void
+string_builder::escape_and_append(std::string_view input) noexcept {
+  // escaping might turn a control character into \x00xx so 6 characters.
+  if (capacity_check(6 * input.size())) {
+    position += write_string_escaped(input, buffer.get() + position);
+  }
+}
+
+simdjson_inline void
+string_builder::escape_and_append_with_quotes(std::string_view input) noexcept {
+  // escaping might turn a control character into \x00xx so 6 characters.
+  if (capacity_check(2 + 6 * input.size())) {
+    buffer.get()[position++] = '"';
+    position += write_string_escaped(input, buffer.get() + position);
+    buffer.get()[position++] = '"';
+  }
+}
+
+simdjson_inline void
+string_builder::escape_and_append_with_quotes(char input) noexcept {
+  // escaping might turn a control character into \x00xx so 6 characters.
+  if (capacity_check(2 + 6 * 1)) {
+    buffer.get()[position++] = '"';
+    std::string_view cinput(&input, 1);
+    position += write_string_escaped(cinput, buffer.get() + position);
+    buffer.get()[position++] = '"';
+  }
+}
+
+simdjson_inline void string_builder::escape_and_append_with_quotes(const char* input)  noexcept {
+  std::string_view cinput(input);
+  escape_and_append_with_quotes(cinput);
+}
+
+simdjson_inline void string_builder::append_raw(const char *c) noexcept {
+  size_t len = std::strlen(c);
+  append_raw(c, len);
+}
+
+simdjson_inline void
+string_builder::append_raw(std::string_view input) noexcept {
+  if (capacity_check(input.size())) {
+    std::memcpy(buffer.get() + position, input.data(), input.size());
+    position += input.size();
+  }
+}
+
+simdjson_inline void string_builder::append_raw(const char *str,
+                                                size_t len) noexcept {
+  if (capacity_check(len)) {
+    std::memcpy(buffer.get() + position, str, len);
+    position += len;
+  }
+}
+
+#if SIMDJSON_EXCEPTIONS
+simdjson_inline string_builder::operator std::string() const noexcept(false) {
+  return std::string(std::string_view());
+}
+
+simdjson_inline string_builder::operator std::string_view() const
+    noexcept(false) simdjson_lifetime_bound {
+  return view();
+}
+#endif
+
+simdjson_inline simdjson_result<std::string_view>
+string_builder::view() const noexcept {
+  if (!is_valid) {
+    return simdjson::OUT_OF_CAPACITY;
+  }
+  return std::string_view(buffer.get(), position);
+}
+
+simdjson_inline simdjson_result<const char *> string_builder::c_str() noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position] = '\0';
+    return buffer.get();
+  }
+  return simdjson::OUT_OF_CAPACITY;
+}
+
+simdjson_inline bool string_builder::validate_unicode() const noexcept {
+  return simdjson::validate_utf8(buffer.get(), position);
+}
+
+simdjson_inline void string_builder::start_object()  noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position++] = '{';
+  }
+}
+
+
+simdjson_inline void string_builder::end_object()  noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position++] = '}';
+  }
+}
+
+
+simdjson_inline void string_builder::start_array()  noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position++] = '[';
+  }
+}
+
+
+simdjson_inline void string_builder::end_array()  noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position++] = ']';
+  }
+}
+
+
+simdjson_inline void string_builder::append_comma()  noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position++] = ',';
+  }
+}
+
+
+simdjson_inline void string_builder::append_colon()  noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position++] = ':';
+  }
+}
+
+template<typename key_type, typename value_type>
+simdjson_inline void string_builder::append_key_value(key_type key, value_type value) noexcept {
+  static_assert(
+    std::is_arithmetic<value_type>::value ||
+    std::is_same<value_type, char>::value ||
+    std::is_same<value_type, const char*>::value ||
+    std::is_convertible<value_type, std::string_view>::value ||
+    std::is_same<value_type, std::nullptr_t>::value,
+    "Unsupported value type");
+  static_assert(
+    std::is_same<key_type, const char*>::value ||
+    std::is_convertible<key_type, std::string_view>::value,
+    "Unsupported key type");
+  escape_and_append_with_quotes(key);
+  append_colon();
+  SIMDJSON_IF_CONSTEXPR(std::is_same<value_type, std::nullptr_t>::value) {
+    append_null();
+  } else SIMDJSON_IF_CONSTEXPR(std::is_same<value_type, char>::value) {
+    escape_and_append_with_quotes(value);
+  } else SIMDJSON_IF_CONSTEXPR(std::is_convertible<value_type, std::string_view>::value) {
+    escape_and_append_with_quotes(value);
+  } else SIMDJSON_IF_CONSTEXPR(std::is_same<value_type, const char*>::value) {
+    escape_and_append_with_quotes(value);
+  } else {
+    append(value);
+  }
+}
+
+} // namespace builder
+} // namespace westmere
+} // namespace simdjson
+
+#endif // SIMDJSON_GENERIC_STRING_BUILDER_INL_H
+/* end file simdjson/generic/ondemand/json_string_builder-inl.h for westmere */
+/* including simdjson/generic/ondemand/json_builder.h for westmere: #include "simdjson/generic/ondemand/json_builder.h" */
+/* begin file simdjson/generic/ondemand/json_builder.h for westmere */
+/**
+ * This file is part of the builder API. It is temporarily in the ondemand directory
+ * but we will move it to a builder directory later.
+ */
+#ifndef SIMDJSON_GENERIC_BUILDER_H
+
+/* amalgamation skipped (editor-only): #ifndef SIMDJSON_CONDITIONAL_INCLUDE */
+/* amalgamation skipped (editor-only): #define SIMDJSON_GENERIC_STRING_BUILDER_H */
+/* amalgamation skipped (editor-only): #include "simdjson/generic/builder/json_string_builder.h" */
+/* amalgamation skipped (editor-only): #include "simdjson/concepts.h" */
+/* amalgamation skipped (editor-only): #endif // SIMDJSON_CONDITIONAL_INCLUDE */
+#if SIMDJSON_STATIC_REFLECTION
+
+#include <charconv>
+#include <cstring>
+#include <experimental/meta>
+#include <memory>
+#include <optional>
+#include <string_view>
+#include <type_traits>
+#include <utility>
+// #include <static_reflection> // for std::define_static_string - header not available yet
+
+namespace simdjson {
+namespace westmere {
+namespace builder {
+
+// Concept that checks if a type is a container but not a string (because
+// strings handling must be handled differently)
+template <typename T>
+concept container_but_not_string =
+    requires(T a) {
+      { a.size() } -> std::convertible_to<std::size_t>;
+      {
+        a[std::declval<std::size_t>()]
+      }; // check if elements are accessible for the subscript operator
+    } && !std::is_same_v<T, std::string> &&
+    !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char *>;
+
+template <class T>
+  requires(container_but_not_string<T>)
+constexpr void atom(string_builder &b, const T &t) {
+  if (t.size() == 0) {
+    b.append_raw("[]");
+    return;
+  }
+  b.append('[');
+  atom(b, t[0]);
+  for (size_t i = 1; i < t.size(); ++i) {
+    b.append(',');
+    atom(b, t[i]);
+  }
+  b.append(']');
+}
+
+template <class T>
+  requires(std::is_same_v<T, std::string> ||
+           std::is_same_v<T, std::string_view> ||
+           std::is_same_v<T, const char *> ||
+           std::is_same_v<T, char>)
+constexpr void atom(string_builder &b, const T &t) {
+  b.escape_and_append_with_quotes(t);
+}
+
+template <concepts::string_view_keyed_map T>
+constexpr void atom(string_builder &b, const T &m) {
+  if (m.empty()) {
+    b.append_raw("{}");
+    return;
+  }
+  b.append('{');
+  bool first = true;
+  for (const auto& [key, value] : m) {
+    if (!first) {
+      b.append(',');
+    }
+    first = false;
+    // Keys must be convertible to string_view per the concept
+    b.escape_and_append_with_quotes(key);
+    b.append(':');
+    atom(b, value);
+  }
+  b.append('}');
+}
+
+
+template<typename number_type,
+         typename = typename std::enable_if<std::is_arithmetic<number_type>::value && !std::is_same_v<number_type, char>>::type>
+constexpr void atom(string_builder &b, const number_type t) {
+  b.append(t);
+}
+#if SIMDJSON_CONSTEVAL
+consteval std::string consteval_to_quoted_escaped(std::string_view input);
+#endif
+
+template <class T>
+  requires(std::is_class_v<T> && !container_but_not_string<T> &&
+           !concepts::string_view_keyed_map<T> &&
+           !concepts::optional_type<T> &&
+           !concepts::smart_pointer<T> &&
+           !concepts::appendable_containers<T> &&
+           !std::is_same_v<T, std::string> &&
+           !std::is_same_v<T, std::string_view> &&
+           !std::is_same_v<T, const char*> &&
+           !std::is_same_v<T, char>)
+constexpr void atom(string_builder &b, const T &t) {
+  int i = 0;
+  b.append('{');
+  [:expand(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked())):] >> [&]<auto dm>() {
+    if (i != 0)
+      b.append(',');
+    constexpr auto key = std::define_static_string(consteval_to_quoted_escaped(std::meta::identifier_of(dm)));
+    b.append_raw(key);
+    b.append(':');
+    atom(b, t.[:dm:]);
+    i++;
+  };
+  b.append('}');
+}
+
+// Support for optional types (std::optional, etc.)
+template <concepts::optional_type T>
+constexpr void atom(string_builder &b, const T &opt) {
+  if (opt) {
+    atom(b, opt.value());
+  } else {
+    b.append_raw("null");
+  }
+}
+
+// Support for smart pointers (std::unique_ptr, std::shared_ptr, etc.)
+template <concepts::smart_pointer T>
+constexpr void atom(string_builder &b, const T &ptr) {
+  if (ptr) {
+    atom(b, *ptr);
+  } else {
+    b.append_raw("null");
+  }
+}
+
+// Support for enums - serialize as string representation using expand approach from P2996R12
+template <typename T>
+  requires(std::is_enum_v<T>)
+void atom(string_builder &b, const T &e) {
+#if SIMDJSON_STATIC_REFLECTION
+  std::string_view result = "<unnamed>";
+  [:expand(std::meta::enumerators_of(^^T)):] >> [&]<auto enum_val>{
+    if (e == [:enum_val:]) {
+      result = std::meta::identifier_of(enum_val);
+    }
+  };
+
+  if (result != "<unnamed>") {
+    b.append_raw("\"");
+    b.append_raw(result);
+    b.append_raw("\"");
+  } else {
+    // Fallback to integer if enum value not found
+    atom(b, static_cast<std::underlying_type_t<T>>(e));
+  }
+#else
+  // Fallback: serialize as integer if reflection not available
+  atom(b, static_cast<std::underlying_type_t<T>>(e));
+#endif
+}
+
+// Support for appendable containers that don't have operator[] (sets, etc.)
+template <concepts::appendable_containers T>
+  requires(!container_but_not_string<T> && !concepts::string_view_keyed_map<T> &&
+           !concepts::optional_type<T> && !concepts::smart_pointer<T> &&
+           !std::is_same_v<T, std::string> &&
+           !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char*>)
+constexpr void atom(string_builder &b, const T &container) {
+  if (container.empty()) {
+    b.append_raw("[]");
+    return;
+  }
+  b.append('[');
+  bool first = true;
+  for (const auto& item : container) {
+    if (!first) {
+      b.append(',');
+    }
+    first = false;
+    atom(b, item);
+  }
+  b.append(']');
+}
+
+// append functions that delegate to atom functions for primitive types
+template <class T>
+  requires(std::is_arithmetic_v<T> && !std::is_same_v<T, char>)
+void append(string_builder &b, const T &t) {
+  atom(b, t);
+}
+
+template <class T>
+  requires(std::is_same_v<T, std::string> ||
+           std::is_same_v<T, std::string_view> ||
+           std::is_same_v<T, const char *> ||
+           std::is_same_v<T, char>)
+void append(string_builder &b, const T &t) {
+  atom(b, t);
+}
+
+template <concepts::optional_type T>
+void append(string_builder &b, const T &t) {
+  atom(b, t);
+}
+
+template <concepts::smart_pointer T>
+void append(string_builder &b, const T &t) {
+  atom(b, t);
+}
+
+template <concepts::appendable_containers T>
+  requires(!container_but_not_string<T> && !concepts::string_view_keyed_map<T> &&
+           !concepts::optional_type<T> && !concepts::smart_pointer<T> &&
+           !std::is_same_v<T, std::string> &&
+           !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char*>)
+void append(string_builder &b, const T &t) {
+  atom(b, t);
+}
+
+template <concepts::string_view_keyed_map T>
+void append(string_builder &b, const T &t) {
+  atom(b, t);
+}
+
+// works for struct
+template <class Z>
+  requires(std::is_class_v<Z> && !container_but_not_string<Z> &&
+           !concepts::string_view_keyed_map<Z> &&
+           !concepts::optional_type<Z> &&
+           !concepts::smart_pointer<Z> &&
+           !concepts::appendable_containers<Z> &&
+           !std::is_same_v<Z, std::string> &&
+           !std::is_same_v<Z, std::string_view> &&
+           !std::is_same_v<Z, const char*> &&
+           !std::is_same_v<Z, char>)
+void append(string_builder &b, const Z &z) {
+  int i = 0;
+  b.append('{');
+  [:expand(std::meta::nonstatic_data_members_of(^^Z, std::meta::access_context::unchecked())):] >> [&]<auto dm>() {
+    if (i != 0)
+      b.append(',');
+    constexpr auto key = std::define_static_string(consteval_to_quoted_escaped(std::meta::identifier_of(dm)));
+    b.append_raw(key);
+    b.append(':');
+    atom(b, z.[:dm:]);
+    i++;
+  };
+  b.append('}');
+}
+
+// works for container
+template <class Z>
+  requires(container_but_not_string<Z>)
+void append(string_builder &b, const Z &z) {
+  if (z.size() == 0) {
+    b.append_raw("[]");
+    return;
+  }
+  b.append('[');
+  atom(b, z[0]);
+  for (size_t i = 1; i < z.size(); ++i) {
+    b.append(',');
+    atom(b, z[i]);
+  }
+  b.append(']');
+}
+
+template <class Z>
+simdjson_result<std::string> to_json_string(const Z &z, size_t initial_capacity = 1024) {
+  string_builder b(initial_capacity);
+  append(b, z);
+  std::string_view s;
+  if(auto e = b.view().get(s); e) { return e; }
+  return std::string(s);
+}
+
+template <class Z>
+simdjson_error to_json(const Z &z, std::string &s) {
+  string_builder b;
+  append(b, z);
+  std::string_view view;
+  if(auto e = b.view().get(view); e) { return e; }
+  s.assign(view);
+  return SUCCESS;
+}
+
+template <class Z>
+string_builder& operator<<(string_builder& b, const Z& z) {
+  append(b, z);
+  return b;
+}
+} // namespace builder
+} // namespace westmere
+} // namespace simdjson
+#endif // SIMDJSON_STATIC_REFLECTION
+
+#endif
+/* end file simdjson/generic/ondemand/json_builder.h for westmere */
 
 /* end file simdjson/generic/ondemand/amalgamated.h for westmere */
 /* including simdjson/westmere/end.h: #include "simdjson/westmere/end.h" */
@@ -101200,6 +111734,31 @@ simdjson_inline backslash_and_quote backslash_and_quote::copy_and_find(const uin
   };
 }
 
+
+struct escaping {
+  static constexpr uint32_t BYTES_PROCESSED = 16;
+  simdjson_inline static escaping copy_and_find(const uint8_t *src, uint8_t *dst);
+
+  simdjson_inline bool has_escape() { return escape_bits != 0; }
+  simdjson_inline int escape_index() { return trailing_zeroes(escape_bits); }
+
+  uint64_t escape_bits;
+}; // struct escaping
+
+
+
+simdjson_inline escaping escaping::copy_and_find(const uint8_t *src, uint8_t *dst) {
+  static_assert(SIMDJSON_PADDING >= (BYTES_PROCESSED - 1), "escaping finder must process fewer than SIMDJSON_PADDING bytes");
+  simd8<uint8_t> v(src);
+  v.store(dst);
+  simd8<bool> is_quote = (v == '"');
+  simd8<bool> is_backslash = (v == '\\');
+  simd8<bool> is_control = (v < 32);
+  return {
+    (is_backslash | is_quote | is_control).to_bitmask()
+  };
+}
+
 } // unnamed namespace
 } // namespace lsx
 } // namespace simdjson
@@ -101347,7 +111906,7 @@ template <typename T, typename ValT = lsx::ondemand::value>
 concept custom_deserializable = tag_invocable<deserialize_tag, ValT&, T&>;
 
 template <typename T, typename ValT = lsx::ondemand::value>
-concept deserializable = custom_deserializable<T, ValT> || is_builtin_deserializable_v<T>;
+concept deserializable = custom_deserializable<T, ValT> || is_builtin_deserializable_v<T> || concepts::optional_type<T>;
 
 template <typename T, typename ValT = lsx::ondemand::value>
 concept nothrow_custom_deserializable = nothrow_tag_invocable<deserialize_tag, ValT&, T&>;
@@ -101358,9 +111917,25 @@ concept nothrow_deserializable = nothrow_custom_deserializable<T, ValT> || is_bu
 
 /// Deserialize Tag
 inline constexpr struct deserialize_tag {
+  using array_type = lsx::ondemand::array;
+  using object_type = lsx::ondemand::object;
   using value_type = lsx::ondemand::value;
   using document_type = lsx::ondemand::document;
   using document_reference_type = lsx::ondemand::document_reference;
+
+  // Customization Point for array
+  template <typename T>
+    requires custom_deserializable<T, value_type>
+  [[nodiscard]] constexpr /* error_code */ auto operator()(array_type &object, T& output) const noexcept(nothrow_custom_deserializable<T, value_type>) {
+    return tag_invoke(*this, object, output);
+  }
+
+  // Customization Point for object
+  template <typename T>
+    requires custom_deserializable<T, value_type>
+  [[nodiscard]] constexpr /* error_code */ auto operator()(object_type &object, T& output) const noexcept(nothrow_custom_deserializable<T, value_type>) {
+    return tag_invoke(*this, object, output);
+  }
 
   // Customization Point for value
   template <typename T>
@@ -101929,6 +112504,7 @@ public:
    *
    * You may use get_double(), get_bool(), get_uint64(), get_int64(),
    * get_object(), get_array(), get_raw_json_string(), or get_string() instead.
+   * When SIMDJSON_SUPPORTS_DESERIALIZATION is set, custom types are also supported.
    *
    * @returns A value of the given type, parsed from the JSON.
    * @returns INCORRECT_TYPE If the JSON value is not the given type.
@@ -101952,6 +112528,7 @@ public:
    * Get this value as the given type.
    *
    * Supported types: object, array, raw_json_string, string_view, uint64_t, int64_t, double, bool
+   * If the macro SIMDJSON_SUPPORTS_DESERIALIZATION is set, then custom types are also supported.
    *
    * @param out This is set to a value of the given type, parsed from the JSON. If there is an error, this may not be initialized.
    * @returns INCORRECT_TYPE If the JSON value is not an object.
@@ -101968,6 +112545,19 @@ public:
   #if SIMDJSON_SUPPORTS_DESERIALIZATION
   if constexpr (custom_deserializable<T, value>) {
       return deserialize(*this, out);
+  } else if constexpr (concepts::optional_type<T>) {
+      using value_type = typename std::remove_cvref_t<T>::value_type;
+
+      // Check if the value is null
+      if (is_null()) {
+        out.reset(); // Set to nullopt
+        return SUCCESS;
+      }
+
+      if (!out) {
+        out.emplace();
+      }
+      return get<value_type>(out.value());
   } else {
     static_assert(!sizeof(T), "The get<T> method with type T is not implemented by the simdjson library. "
       "And you do not seem to have added support for it. Indeed, we have that "
@@ -104194,6 +114784,37 @@ public:
    *         - INDEX_OUT_OF_BOUNDS if the array index is larger than an array length
    */
   simdjson_inline simdjson_result<value> at(size_t index) noexcept;
+
+#if SIMDJSON_SUPPORTS_DESERIALIZATION
+  /**
+   * Get this array as the given type.
+   *
+   * @param out This is set to a value of the given type, parsed from the JSON. If there is an error, this may not be initialized.
+   * @returns INCORRECT_TYPE If the JSON array is not of the given type.
+   * @returns SUCCESS If the parse succeeded and the out parameter was set to the value.
+   */
+  template <typename T>
+  simdjson_inline error_code get(T &out)
+     noexcept(custom_deserializable<T, array> ? nothrow_custom_deserializable<T, array> : true) {
+    static_assert(custom_deserializable<T, array>);
+    return deserialize(*this, out);
+  }
+  /**
+   * Get this array as the given type.
+   *
+   * @returns A value of the given type, parsed from the JSON.
+   * @returns INCORRECT_TYPE If the JSON value is not the given type.
+   */
+  template <typename T>
+  simdjson_inline simdjson_result<T> get()
+    noexcept(custom_deserializable<T, value> ? nothrow_custom_deserializable<T, value> : true)
+  {
+    static_assert(std::is_default_constructible<T>::value, "The specified type is not default constructible.");
+    T out{};
+    SIMDJSON_TRY(get<T>(out));
+    return out;
+  }
+#endif // SIMDJSON_SUPPORTS_DESERIALIZATION
 protected:
   /**
    * Go to the end of the array, no matter where you are right now.
@@ -104272,7 +114893,28 @@ public:
   simdjson_inline simdjson_result<lsx::ondemand::value> at_pointer(std::string_view json_pointer) noexcept;
   simdjson_inline simdjson_result<lsx::ondemand::value> at_path(std::string_view json_path) noexcept;
   simdjson_inline simdjson_result<std::string_view> raw_json() noexcept;
+#if SIMDJSON_SUPPORTS_DESERIALIZATION
+  // TODO: move this code into object-inl.h
 
+  template<typename T>
+  simdjson_inline simdjson_result<T> get() noexcept {
+    if (error()) { return error(); }
+    if constexpr (std::is_same_v<T, lsx::ondemand::array>) {
+      return first;
+    }
+    return first.get<T>();
+  }
+  template<typename T>
+  simdjson_inline error_code get(T& out) noexcept {
+    if (error()) { return error(); }
+    if constexpr (std::is_same_v<T, lsx::ondemand::array>) {
+      out = first;
+    } else {
+      SIMDJSON_TRY( first.get<T>(out) );
+    }
+    return SUCCESS;
+  }
+#endif // SIMDJSON_SUPPORTS_DESERIALIZATION
 };
 
 } // namespace simdjson
@@ -104317,7 +114959,8 @@ public:
    *
    * Part of the std::iterator interface.
    */
-  simdjson_inline simdjson_result<value> operator*() noexcept; // MUST ONLY BE CALLED ONCE PER ITERATION.
+  simdjson_inline simdjson_result<value>
+  operator*() noexcept; // MUST ONLY BE CALLED ONCE PER ITERATION.
   /**
    * Check if we are at the end of the JSON.
    *
@@ -104341,6 +114984,11 @@ public:
    */
   simdjson_inline array_iterator &operator++() noexcept;
 
+  /**
+   * Check if the array is at the end.
+   */
+  [[nodiscard]] simdjson_inline bool at_end() const noexcept;
+
 private:
   value_iterator iter{};
 
@@ -104359,7 +115007,6 @@ namespace simdjson {
 
 template<>
 struct simdjson_result<lsx::ondemand::array_iterator> : public lsx::implementation_simdjson_result_base<lsx::ondemand::array_iterator> {
-public:
   simdjson_inline simdjson_result(lsx::ondemand::array_iterator &&value) noexcept; ///< @private
   simdjson_inline simdjson_result(error_code error) noexcept; ///< @private
   simdjson_inline simdjson_result() noexcept = default;
@@ -104372,6 +115019,8 @@ public:
   simdjson_inline bool operator==(const simdjson_result<lsx::ondemand::array_iterator> &) const noexcept;
   simdjson_inline bool operator!=(const simdjson_result<lsx::ondemand::array_iterator> &) const noexcept;
   simdjson_inline simdjson_result<lsx::ondemand::array_iterator> &operator++() noexcept;
+
+  [[nodiscard]] simdjson_inline bool at_end() const noexcept;
 };
 
 } // namespace simdjson
@@ -104606,7 +115255,7 @@ public:
    * Be mindful that the document instance must remain in scope while you are accessing object, array and value instances.
    *
    * @param out This is set to a value of the given type, parsed from the JSON. If there is an error, this may not be initialized.
-   * @returns INCORRECT_TYPE If the JSON value is not an object.
+   * @returns INCORRECT_TYPE If the JSON value is of the given type.
    * @returns SUCCESS If the parse succeeded and the out parameter was set to the value.
    */
   template<typename T>
@@ -104704,7 +115353,7 @@ public:
    *          time it parses a document or when it is destroyed.
    * @exception simdjson_error(INCORRECT_TYPE) if the JSON value is not a string.
    */
-  simdjson_inline operator std::string_view() noexcept(false);
+  simdjson_inline operator std::string_view() noexcept(false) simdjson_lifetime_bound;
   /**
    * Cast this JSON value to a raw_json_string.
    *
@@ -104713,7 +115362,7 @@ public:
    * @returns A pointer to the raw JSON for the given string.
    * @exception simdjson_error(INCORRECT_TYPE) if the JSON value is not a string.
    */
-  simdjson_inline operator raw_json_string() noexcept(false);
+  simdjson_inline operator raw_json_string() noexcept(false) simdjson_lifetime_bound;
   /**
    * Cast this JSON value to a bool.
    *
@@ -106093,6 +116742,36 @@ public:
    */
   simdjson_inline simdjson_result<std::string_view> raw_json() noexcept;
 
+#if SIMDJSON_SUPPORTS_DESERIALIZATION
+  /**
+   * Get this object as the given type.
+   *
+   * @param out This is set to a value of the given type, parsed from the JSON. If there is an error, this may not be initialized.
+   * @returns INCORRECT_TYPE If the JSON object is not of the given type.
+   * @returns SUCCESS If the parse succeeded and the out parameter was set to the value.
+   */
+  template <typename T>
+  simdjson_inline error_code get(T &out)
+     noexcept(custom_deserializable<T, object> ? nothrow_custom_deserializable<T, object> : true) {
+    static_assert(custom_deserializable<T, object>);
+    return deserialize(*this, out);
+  }
+  /**
+   * Get this array as the given type.
+   *
+   * @returns A value of the given type, parsed from the JSON.
+   * @returns INCORRECT_TYPE If the JSON value is not the given type.
+   */
+  template <typename T>
+  simdjson_inline simdjson_result<T> get()
+    noexcept(custom_deserializable<T, value> ? nothrow_custom_deserializable<T, value> : true)
+  {
+    static_assert(std::is_default_constructible<T>::value, "The specified type is not default constructible.");
+    T out{};
+    SIMDJSON_TRY(get<T>(out));
+    return out;
+  }
+#endif // SIMDJSON_SUPPORTS_DESERIALIZATION
 protected:
   /**
    * Go to the end of the object, no matter where you are right now.
@@ -106136,12 +116815,32 @@ public:
   simdjson_inline simdjson_result<lsx::ondemand::value> operator[](std::string_view key) && noexcept;
   simdjson_inline simdjson_result<lsx::ondemand::value> at_pointer(std::string_view json_pointer) noexcept;
   simdjson_inline simdjson_result<lsx::ondemand::value> at_path(std::string_view json_path) noexcept;
-
   inline simdjson_result<bool> reset() noexcept;
   inline simdjson_result<bool> is_empty() noexcept;
   inline simdjson_result<size_t> count_fields() & noexcept;
   inline simdjson_result<std::string_view> raw_json() noexcept;
+  #if SIMDJSON_SUPPORTS_DESERIALIZATION
+  // TODO: move this code into object-inl.h
 
+  template<typename T>
+  simdjson_inline simdjson_result<T> get() noexcept {
+    if (error()) { return error(); }
+    if constexpr (std::is_same_v<T, lsx::ondemand::object>) {
+      return first;
+    }
+    return first.get<T>();
+  }
+  template<typename T>
+  simdjson_inline error_code get(T& out) noexcept {
+    if (error()) { return error(); }
+    if constexpr (std::is_same_v<T, lsx::ondemand::object>) {
+      out = first;
+    } else {
+      SIMDJSON_TRY( first.get<T>(out) );
+    }
+    return SUCCESS;
+  }
+#endif // SIMDJSON_SUPPORTS_DESERIALIZATION
 };
 
 } // namespace simdjson
@@ -106270,6 +116969,20 @@ inline simdjson_result<std::string_view> to_json_string(simdjson_result<lsx::ond
 inline simdjson_result<std::string_view> to_json_string(simdjson_result<lsx::ondemand::value> x);
 inline simdjson_result<std::string_view> to_json_string(simdjson_result<lsx::ondemand::object> x);
 inline simdjson_result<std::string_view> to_json_string(simdjson_result<lsx::ondemand::array> x);
+
+#if SIMDJSON_STATIC_REFLECTION
+/**
+ * Create a JSON string from any user-defined type using static reflection.
+ * Only available when SIMDJSON_STATIC_REFLECTION is enabled.
+ */
+template<typename T>
+  requires(!std::same_as<T, lsx::ondemand::document> &&
+           !std::same_as<T, lsx::ondemand::value> &&
+           !std::same_as<T, lsx::ondemand::object> &&
+           !std::same_as<T, lsx::ondemand::array>)
+inline std::string to_json_string(const T& obj);
+#endif
+
 } // namespace simdjson
 
 /**
@@ -106346,12 +117059,17 @@ inline std::ostream& operator<<(std::ostream& out, simdjson::simdjson_result<sim
 #ifndef SIMDJSON_ONDEMAND_DESERIALIZE_H
 /* amalgamation skipped (editor-only): #ifndef SIMDJSON_CONDITIONAL_INCLUDE */
 /* amalgamation skipped (editor-only): #define SIMDJSON_ONDEMAND_DESERIALIZE_H */
+/* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/object.h" */
 /* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/array.h" */
 /* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/base.h" */
 /* amalgamation skipped (editor-only): #endif // SIMDJSON_CONDITIONAL_INCLUDE */
 
 #include <concepts>
 #include <limits>
+#if SIMDJSON_STATIC_REFLECTION
+#include <experimental/meta>
+// #include <static_reflection> // for std::define_static_string - header not available yet
+#endif
 
 namespace simdjson {
 template <typename T>
@@ -106398,6 +117116,22 @@ error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept {
   return SUCCESS;
 }
 
+//////////////////////////////
+// String deserialization
+//////////////////////////////
+
+// just a character!
+error_code tag_invoke(deserialize_tag, auto &val, char &out) noexcept {
+  std::string_view x;
+  SIMDJSON_TRY(val.get_string().get(x));
+  if(x.size() != 1) {
+    return INCORRECT_TYPE;
+  }
+  out = x[0];
+  return SUCCESS;
+}
+
+// any string-like type (can be constructed from std::string_view)
 template <concepts::constructible_from_string_view T, typename ValT>
   requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(std::is_nothrow_constructible_v<T, std::string_view>) {
@@ -106419,15 +117153,20 @@ template <concepts::appendable_containers T, typename ValT>
   requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(false) {
   using value_type = typename std::remove_cvref_t<T>::value_type;
-  static_assert(
+  /*static_assert(
       deserializable<value_type, ValT>,
-      "The specified type inside the container must itself be deserializable");
+      "The specified type inside the container must itself be deserializable");*/
   static_assert(
       std::is_default_constructible_v<value_type>,
       "The specified type inside the container must default constructible.");
 
   lsx::ondemand::array arr;
-  SIMDJSON_TRY(val.get_array().get(arr));
+  if constexpr (std::is_same_v<std::remove_cvref_t<ValT>, lsx::ondemand::array>) {
+    arr = val;
+  } else {
+    SIMDJSON_TRY(val.get_array().get(arr));
+  }
+
   for (auto v : arr) {
     if constexpr (concepts::returns_reference<T>) {
       if (auto const err = v.get<value_type>().get(concepts::emplace_one(out));
@@ -106484,7 +117223,45 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(false) {
  return SUCCESS;
 }
 
+template <concepts::string_view_keyed_map T>
+error_code tag_invoke(deserialize_tag, lsx::ondemand::object &obj, T &out) noexcept {
+  using value_type = typename std::remove_cvref_t<T>::mapped_type;
 
+  out.clear();
+  for (auto field : obj) {
+    std::string_view key;
+    SIMDJSON_TRY(field.unescaped_key().get(key));
+
+    lsx::ondemand::value value_obj;
+    SIMDJSON_TRY(field.value().get(value_obj));
+
+    value_type this_value;
+    SIMDJSON_TRY(value_obj.get(this_value));
+    out.emplace(typename T::key_type(key), std::move(this_value));
+  }
+  return SUCCESS;
+}
+
+template <concepts::string_view_keyed_map T>
+error_code tag_invoke(deserialize_tag, lsx::ondemand::value &val, T &out) noexcept {
+  lsx::ondemand::object obj;
+  SIMDJSON_TRY(val.get_object().get(obj));
+  return simdjson::deserialize(obj, out);
+}
+
+template <concepts::string_view_keyed_map T>
+error_code tag_invoke(deserialize_tag, lsx::ondemand::document &doc, T &out) noexcept {
+  lsx::ondemand::object obj;
+  SIMDJSON_TRY(doc.get_object().get(obj));
+  return simdjson::deserialize(obj, out);
+}
+
+template <concepts::string_view_keyed_map T>
+error_code tag_invoke(deserialize_tag, lsx::ondemand::document_reference &doc, T &out) noexcept {
+  lsx::ondemand::object obj;
+  SIMDJSON_TRY(doc.get_object().get(obj));
+  return simdjson::deserialize(obj, out);
+}
 
 
 /**
@@ -106527,22 +117304,334 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(nothrow_deser
 /**
  * This CPO (Customization Point Object) will help deserialize into optional types.
  */
-template <concepts::optional_type T, typename ValT>
+template <concepts::optional_type T>
   requires(!require_custom_serialization<T>)
-error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(nothrow_deserializable<typename std::remove_cvref_t<T>::value_type, ValT>) {
+error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept(nothrow_deserializable<typename std::remove_cvref_t<T>::value_type, decltype(val)>) {
   using value_type = typename std::remove_cvref_t<T>::value_type;
 
-  static_assert(
-      deserializable<value_type, ValT>,
-      "The specified type inside the unique_ptr must itself be deserializable");
-  static_assert(
-      std::is_default_constructible_v<value_type>,
-      "The specified type inside the unique_ptr must default constructible.");
+  // Check if the value is null
+  if (val.is_null()) {
+    out.reset(); // Set to nullopt
+    return SUCCESS;
+  }
 
   if (!out) {
     out.emplace();
   }
   SIMDJSON_TRY(val.template get<value_type>(out.value()));
+  return SUCCESS;
+}
+
+
+#if SIMDJSON_STATIC_REFLECTION
+
+
+template <typename T>
+constexpr bool user_defined_type = (std::is_class_v<T>
+&& !std::is_same_v<T, std::string> && !std::is_same_v<T, std::string_view> && !concepts::optional_type<T> &&
+!concepts::appendable_containers<T> && !require_custom_serialization<T>);
+
+
+// workaround from
+// https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2024/p2996r10.html#back-and-forth
+// for missing expansion statements
+namespace __impl {
+  template<auto... vals>
+  struct replicator_type {
+    template<typename F>
+      constexpr void operator>>(F body) const {
+        (body.template operator()<vals>(), ...);
+      }
+  };
+
+  template<auto... vals>
+  replicator_type<vals...> replicator = {};
+}
+
+template<typename R>
+consteval auto expand(R range) {
+  std::vector<std::meta::info> args;
+  for (auto r : range) {
+    args.push_back(reflect_constant(r));
+  }
+  return substitute(^^__impl::replicator, args);
+}
+// end of workaround
+
+template <typename T, typename ValT>
+  requires(user_defined_type<T> && std::is_class_v<T>)
+error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept {
+  lsx::ondemand::object obj;
+  if constexpr (std::is_same_v<std::remove_cvref_t<ValT>, lsx::ondemand::object>) {
+    obj = val;
+  } else {
+    SIMDJSON_TRY(val.get_object().get(obj));
+  }
+  error_code e = simdjson::SUCCESS;
+
+  [:expand(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked())):] >> [&]<auto mem>() {
+    if constexpr (!std::meta::is_const(mem) && std::meta::is_public(mem)) {
+      constexpr std::string_view key = std::define_static_string(std::meta::identifier_of(mem));
+      // Note: removed static assert as optional types are now handled generically
+      // as long we are succesful or the field is not found, we continue
+      if(e == simdjson::SUCCESS || e == simdjson::NO_SUCH_FIELD) {
+        e = obj[key].get(out.[:mem:]);
+      }
+    }
+  };
+  return e;
+}
+
+// Support for enum deserialization - deserialize from string representation using expand approach from P2996R12
+template <typename T, typename ValT>
+  requires(std::is_enum_v<T>)
+error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept {
+#if SIMDJSON_STATIC_REFLECTION
+  std::string_view str;
+  SIMDJSON_TRY(val.get_string().get(str));
+
+  bool found = false;
+  [:expand(std::meta::enumerators_of(^^T)):] >> [&]<auto enum_val>{
+    if (!found && str == std::meta::identifier_of(enum_val)) {
+      out = [:enum_val:];
+      found = true;
+    }
+  };
+
+  return found ? SUCCESS : INCORRECT_TYPE;
+#else
+  // Fallback: deserialize as integer if reflection not available
+  std::underlying_type_t<T> int_val;
+  SIMDJSON_TRY(val.get(int_val));
+  out = static_cast<T>(int_val);
+  return SUCCESS;
+#endif
+}
+
+template <typename simdjson_value, typename T>
+  requires(user_defined_type<std::remove_cvref_t<T>>)
+error_code tag_invoke(deserialize_tag, simdjson_value &val, std::unique_ptr<T> &out) noexcept {
+  if (!out) {
+    out = std::make_unique<T>();
+    if (!out) {
+      return MEMALLOC;
+    }
+  }
+  if (auto err = val.get(*out)) {
+    out.reset();
+    return err;
+  }
+  return SUCCESS;
+}
+
+template <typename simdjson_value, typename T>
+  requires(user_defined_type<std::remove_cvref_t<T>>)
+error_code tag_invoke(deserialize_tag, simdjson_value &val, std::shared_ptr<T> &out) noexcept {
+  if (!out) {
+    out = std::make_shared<T>();
+    if (!out) {
+      return MEMALLOC;
+    }
+  }
+  if (auto err = val.get(*out)) {
+    out.reset();
+    return err;
+  }
+  return SUCCESS;
+}
+
+#endif // SIMDJSON_STATIC_REFLECTION
+
+////////////////////////////////////////
+// Unique pointers
+////////////////////////////////////////
+error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<bool> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_unique<bool>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_bool().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<int64_t> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_unique<int64_t>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_int64().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<uint64_t> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_unique<uint64_t>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_uint64().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<double> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_unique<double>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_double().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<std::string_view> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_unique<std::string_view>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_string().get(*out));
+  return SUCCESS;
+}
+
+
+////////////////////////////////////////
+// Shared pointers
+////////////////////////////////////////
+error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<bool> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_shared<bool>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_bool().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<int64_t> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_shared<int64_t>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_int64().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<uint64_t> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_shared<uint64_t>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_uint64().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<double> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_shared<double>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_double().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<std::string_view> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_shared<std::string_view>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_string().get(*out));
+  return SUCCESS;
+}
+
+
+////////////////////////////////////////
+// Explicit optional specializations
+////////////////////////////////////////
+
+////////////////////////////////////////
+// Explicit smart pointer specializations for string and int types
+////////////////////////////////////////
+error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<std::string> &out) noexcept {
+  // Check if the value is null
+  if (val.is_null()) {
+    out.reset(); // Set to nullptr
+    return SUCCESS;
+  }
+
+  if (!out) {
+    out = std::make_unique<std::string>();
+  }
+  std::string_view str;
+  SIMDJSON_TRY(val.get_string().get(str));
+  *out = std::string{str};
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<std::string> &out) noexcept {
+  // Check if the value is null
+  if (val.is_null()) {
+    out.reset(); // Set to nullptr
+    return SUCCESS;
+  }
+
+  if (!out) {
+    out = std::make_shared<std::string>();
+  }
+  std::string_view str;
+  SIMDJSON_TRY(val.get_string().get(str));
+  *out = std::string{str};
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<int> &out) noexcept {
+  // Check if the value is null
+  if (val.is_null()) {
+    out.reset(); // Set to nullptr
+    return SUCCESS;
+  }
+
+  if (!out) {
+    out = std::make_unique<int>();
+  }
+  int64_t temp;
+  SIMDJSON_TRY(val.get_int64().get(temp));
+  *out = static_cast<int>(temp);
   return SUCCESS;
 }
 
@@ -106833,6 +117922,9 @@ simdjson_inline array_iterator &array_iterator::operator++() noexcept {
   return *this;
 }
 
+simdjson_inline bool array_iterator::at_end() const noexcept {
+  return iter.at_end();
+}
 } // namespace ondemand
 } // namespace lsx
 } // namespace simdjson
@@ -106869,7 +117961,9 @@ simdjson_inline simdjson_result<lsx::ondemand::array_iterator> &simdjson_result<
   ++(first);
   return *this;
 }
-
+simdjson_inline bool simdjson_result<lsx::ondemand::array_iterator>::at_end() const noexcept {
+  return !first.iter.is_valid() || first.at_end();
+}
 } // namespace simdjson
 
 #endif // SIMDJSON_GENERIC_ONDEMAND_ARRAY_ITERATOR_INL_H
@@ -107627,8 +118721,8 @@ simdjson_inline document::operator object() & noexcept(false) { return get_objec
 simdjson_inline document::operator uint64_t() noexcept(false) { return get_uint64(); }
 simdjson_inline document::operator int64_t() noexcept(false) { return get_int64(); }
 simdjson_inline document::operator double() noexcept(false) { return get_double(); }
-simdjson_inline document::operator std::string_view() noexcept(false) { return get_string(false); }
-simdjson_inline document::operator raw_json_string() noexcept(false) { return get_raw_json_string(); }
+simdjson_inline document::operator std::string_view() noexcept(false) simdjson_lifetime_bound { return get_string(false); }
+simdjson_inline document::operator raw_json_string() noexcept(false) simdjson_lifetime_bound { return get_raw_json_string(); }
 simdjson_inline document::operator bool() noexcept(false) { return get_bool(); }
 simdjson_inline document::operator value() noexcept(false) { return get_value(); }
 
@@ -109185,6 +120279,8 @@ simdjson_inline void json_iterator::assert_valid_position(token_position positio
 #ifndef SIMDJSON_CLANG_VISUAL_STUDIO
   SIMDJSON_ASSUME( position >= &parser->implementation->structural_indexes[0] );
   SIMDJSON_ASSUME( position < &parser->implementation->structural_indexes[parser->implementation->n_structural_indexes] );
+#else
+  (void)position; // Suppress unused parameter warning
 #endif
 }
 
@@ -110033,6 +121129,7 @@ simdjson_inline  simdjson_result<std::string_view> simdjson_result<lsx::ondemand
   if (error()) { return error(); }
   return first.raw_json();
 }
+
 } // namespace simdjson
 
 #endif // SIMDJSON_GENERIC_ONDEMAND_OBJECT_INL_H
@@ -110608,6 +121705,9 @@ simdjson_inline simdjson_warn_unused simdjson_result<std::string_view> simdjson_
 /* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/object.h" */
 /* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/serialization.h" */
 /* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/value.h" */
+/* amalgamation skipped (editor-only): #if SIMDJSON_STATIC_REFLECTION */
+/* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/json_builder.h" */
+/* amalgamation skipped (editor-only): #endif */
 /* amalgamation skipped (editor-only): #endif // SIMDJSON_CONDITIONAL_INCLUDE */
 
 namespace simdjson {
@@ -112029,6 +123129,1151 @@ simdjson_inline simdjson_result<lsx::ondemand::value_iterator>::simdjson_result(
 #endif // SIMDJSON_GENERIC_ONDEMAND_VALUE_ITERATOR_INL_H
 /* end file simdjson/generic/ondemand/value_iterator-inl.h for lsx */
 
+// JSON builder, ideally they should not be part of the ondemand directory
+// but it is convenient for now to have them here.
+/* including simdjson/generic/ondemand/json_string_builder.h for lsx: #include "simdjson/generic/ondemand/json_string_builder.h" */
+/* begin file simdjson/generic/ondemand/json_string_builder.h for lsx */
+/**
+ * This file is part of the builder API. It is temporarily in the ondemand directory
+ * but we will move it to a builder directory later.
+ */
+#ifndef SIMDJSON_GENERIC_STRING_BUILDER_H
+
+/* amalgamation skipped (editor-only): #ifndef SIMDJSON_CONDITIONAL_INCLUDE */
+/* amalgamation skipped (editor-only): #define SIMDJSON_GENERIC_STRING_BUILDER_H */
+/* amalgamation skipped (editor-only): #include "simdjson/generic/implementation_simdjson_result_base.h" */
+/* amalgamation skipped (editor-only): #endif // SIMDJSON_CONDITIONAL_INCLUDE */
+
+namespace simdjson {
+namespace lsx {
+namespace builder {
+
+/**
+ * A builder for JSON strings representing documents. This is a low-level
+ * builder that is not meant to be used directly by end-users. Though it
+ * supports atomic types (Booleans, strings), it does not support composed
+ * types (arrays and objects).
+ *
+ * Ultimately, this class can support kernel-specific optimizations. E.g.,
+ * it may make use of SIMD instructions to escape strings faster.
+ */
+class string_builder {
+public:
+  simdjson_inline string_builder(size_t initial_capacity = 1024);
+
+  /**
+   * Append number (includes Booleans). Booleans are mapped to the strings
+   * false and true. Numbers are converted to strings abiding by the JSON standard.
+   * Floating-point numbers are converted to the shortest string that 'correctly'
+   * represents the number.
+   */
+  template<typename number_type,
+         typename = typename std::enable_if<std::is_arithmetic<number_type>::value>::type>
+  simdjson_inline void append(number_type v) noexcept;
+
+  /**
+   * Append character c.
+   */
+  simdjson_inline void append(char c)  noexcept;
+
+  /**
+   * Append the string 'null'.
+   */
+  simdjson_inline void append_null()  noexcept;
+
+  /**
+   * Clear the content.
+   */
+  simdjson_inline void clear()  noexcept;
+
+  /**
+   * Append the std::string_view, after escaping it.
+   * There is no UTF-8 validation.
+   */
+  simdjson_inline void escape_and_append(std::string_view input)  noexcept;
+
+  /**
+   * Append the std::string_view surrounded by double quotes, after escaping it.
+   * There is no UTF-8 validation.
+   */
+  simdjson_inline void escape_and_append_with_quotes(std::string_view input)  noexcept;
+
+  /**
+   * Append the character surrounded by double quotes, after escaping it.
+   * There is no UTF-8 validation.
+   */
+  simdjson_inline void escape_and_append_with_quotes(char input)  noexcept;
+
+  /**
+   * Append the character surrounded by double quotes, after escaping it.
+   * There is no UTF-8 validation.
+   */
+   simdjson_inline void escape_and_append_with_quotes(const char* input)  noexcept;
+
+  /**
+   * Append the C string directly, without escaping.
+   * There is no UTF-8 validation.
+   */
+  simdjson_inline void append_raw(const char *c)  noexcept;
+
+  /**
+   * Append "{" to the buffer.
+   */
+  simdjson_inline void start_object()  noexcept;
+
+  /**
+   * Append "}" to the buffer.
+   */
+  simdjson_inline void end_object()  noexcept;
+
+  /**
+   * Append "[" to the buffer.
+   */
+  simdjson_inline void start_array()  noexcept;
+
+  /**
+   * Append "]" to the buffer.
+   */
+  simdjson_inline void end_array()  noexcept;
+
+  /**
+   * Append "," to the buffer.
+   */
+  simdjson_inline void append_comma()  noexcept;
+
+  /**
+   * Append ":" to the buffer.
+   */
+  simdjson_inline void append_colon()  noexcept;
+
+  /**
+   * Append a key-value pair to the buffer.
+   * The key is escaped and surrounded by double quotes.
+   * The value is escaped if it is a string.
+   */
+   template<typename key_type, typename value_type>
+  simdjson_inline void append_key_value(key_type key, value_type value) noexcept;
+  /**
+   * Append the std::string_view directly, without escaping.
+   * There is no UTF-8 validation.
+   */
+  simdjson_inline void append_raw(std::string_view input)  noexcept;
+
+  /**
+   * Append len characters from str.
+   * There is no UTF-8 validation.
+   */
+  simdjson_inline void append_raw(const char *str, size_t len) noexcept;
+#if SIMDJSON_EXCEPTIONS
+  /**
+   * Creates an std::string from the written JSON buffer.
+   * Throws if memory allocation failed
+   *
+   * The result may not be valid UTF-8 if some of your content was not valid UTF-8.
+   * Use validate_unicode() to check the content if needed.
+   */
+  simdjson_inline operator std::string() const noexcept(false);
+
+  /**
+   * Creates an std::string_view from the written JSON buffer.
+   * Throws if memory allocation failed.
+   *
+   * The result may not be valid UTF-8 if some of your content was not valid UTF-8.
+   * Use validate_unicode() to check the content if needed.
+   */
+  simdjson_inline operator std::string_view() const noexcept(false) simdjson_lifetime_bound;
+#endif
+
+  /**
+   * Returns a view on the written JSON buffer. Returns an error
+   * if memory allocation failed.
+   *
+   * The result may not be valid UTF-8 if some of your content was not valid UTF-8.
+   * Use validate_unicode() to check the content.
+   */
+  simdjson_inline simdjson_result<std::string_view> view() const noexcept;
+
+  /**
+   * Appends the null character to the buffer and returns
+   * a pointer to the beginning of the written JSON buffer.
+   * Returns an error if memory allocation failed.
+   * The result is null-terminated.
+   *
+   * The result may not be valid UTF-8 if some of your content was not valid UTF-8.
+   * Use validate_unicode() to check the content.
+   */
+  simdjson_inline simdjson_result<const char *> c_str() noexcept;
+
+  /**
+   * Return true if the content is valid UTF-8.
+   */
+  simdjson_inline bool validate_unicode() const noexcept;
+
+  /**
+   * Returns the current size of the written JSON buffer.
+   * If an error occurred, returns 0.
+   */
+  simdjson_inline size_t size() const noexcept;
+
+private:
+  /**
+   * Returns true if we can write at least upcoming_bytes bytes.
+   * The underlying buffer is reallocated if needed. It is designed
+   * to be called before writing to the buffer. It should be fast.
+   */
+  simdjson_inline bool capacity_check(size_t upcoming_bytes);
+
+  /**
+   * Grow the buffer to at least desired_capacity bytes.
+   * If the allocation fails, is_valid is set to false. We expect
+   * that this function would not be repeatedly called.
+   */
+  simdjson_inline void grow_buffer(size_t desired_capacity);
+
+  /**
+   * We use this helper function to make sure that is_valid is kept consistent.
+   */
+  simdjson_inline void set_valid(bool valid) noexcept;
+
+  std::unique_ptr<char[]> buffer{};
+  size_t position{0};
+  size_t capacity{0};
+  bool is_valid{true};
+};
+
+
+
+}
+}
+} // namespace simdjson
+
+#endif // SIMDJSON_GENERIC_STRING_BUILDER_H
+/* end file simdjson/generic/ondemand/json_string_builder.h for lsx */
+/* including simdjson/generic/ondemand/json_string_builder-inl.h for lsx: #include "simdjson/generic/ondemand/json_string_builder-inl.h" */
+/* begin file simdjson/generic/ondemand/json_string_builder-inl.h for lsx */
+/**
+ * This file is part of the builder API. It is temporarily in the ondemand
+ * directory but we will move it to a builder directory later.
+ */
+#include <array>
+#include <cstring>
+#include <type_traits>
+#ifndef SIMDJSON_GENERIC_STRING_BUILDER_INL_H
+
+/* amalgamation skipped (editor-only): #ifndef SIMDJSON_CONDITIONAL_INCLUDE */
+/* amalgamation skipped (editor-only): #define SIMDJSON_GENERIC_STRING_BUILDER_INL_H */
+/* amalgamation skipped (editor-only): #include "simdjson/generic/builder/json_string_builder.h" */
+/* amalgamation skipped (editor-only): #endif // SIMDJSON_CONDITIONAL_INCLUDE */
+
+/*
+ * Empirically, we have found that an inlined optimization is important for
+ * performance. The following macros are not ideal. We should find a better
+ * way to inline the code.
+ */
+
+#if defined(__SSE2__) || defined(__x86_64__) || defined(__x86_64) ||           \
+    (defined(_M_AMD64) || defined(_M_X64) ||                                   \
+     (defined(_M_IX86_FP) && _M_IX86_FP == 2))
+#ifndef SIMDJSON_EXPERIMENTAL_HAS_SSE2
+#define SIMDJSON_EXPERIMENTAL_HAS_SSE2 1
+#endif
+#endif
+
+#if defined(__aarch64__) || defined(_M_ARM64)
+#ifndef SIMDJSON_EXPERIMENTAL_HAS_NEON
+#define SIMDJSON_EXPERIMENTAL_HAS_NEON 1
+#endif
+#endif
+#if SIMDJSON_EXPERIMENTAL_HAS_NEON
+#include <arm_neon.h>
+#endif
+#if SIMDJSON_EXPERIMENTAL_HAS_SSE2
+#include <emmintrin.h>
+#endif
+
+namespace simdjson {
+namespace lsx {
+namespace builder {
+
+static SIMDJSON_CONSTEXPR_LAMBDA std::array<uint8_t, 256> json_quotable_character = {
+  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+  1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+
+/**
+
+A possible SWAR implementation of has_json_escapable_byte. It is not used because
+it is slower than the current implementation. It is kept here for reference (to show
+that we tried it).
+
+inline bool has_json_escapable_byte(uint64_t x) {
+  uint64_t is_ascii = 0x8080808080808080ULL & ~x;
+  uint64_t xor2 = x ^ 0x0202020202020202ULL;
+  uint64_t lt32_or_eq34 = xor2 - 0x2121212121212121ULL;
+  uint64_t sub92 = x ^ 0x5C5C5C5C5C5C5C5CULL;
+  uint64_t eq92 = (sub92 - 0x0101010101010101ULL);
+  return ((lt32_or_eq34 | eq92) & is_ascii) != 0;
+}
+
+**/
+
+SIMDJSON_CONSTEXPR_LAMBDA simdjson_inline bool
+simple_needs_escaping(std::string_view v) {
+  for (char c : v) {
+    // a table lookup is faster than a series of comparisons
+    if(json_quotable_character[static_cast<uint8_t>(c)]) {
+      return true;
+    }
+  }
+  return false;
+}
+
+#if SIMDJSON_EXPERIMENTAL_HAS_NEON
+simdjson_inline bool fast_needs_escaping(std::string_view view) {
+  if (view.size() < 16) {
+    return simple_needs_escaping(view);
+  }
+  size_t i = 0;
+  uint8x16_t running = vdupq_n_u8(0);
+  uint8x16_t v34 = vdupq_n_u8(34);
+  uint8x16_t v92 = vdupq_n_u8(92);
+
+  for (; i + 15 < view.size(); i += 16) {
+    uint8x16_t word = vld1q_u8((const uint8_t *)view.data() + i);
+    running = vorrq_u8(running, vceqq_u8(word, v34));
+    running = vorrq_u8(running, vceqq_u8(word, v92));
+    running = vorrq_u8(running, vcltq_u8(word, vdupq_n_u8(32)));
+  }
+  if (i < view.size()) {
+    uint8x16_t word =
+        vld1q_u8((const uint8_t *)view.data() + view.length() - 16);
+    running = vorrq_u8(running, vceqq_u8(word, v34));
+    running = vorrq_u8(running, vceqq_u8(word, v92));
+    running = vorrq_u8(running, vcltq_u8(word, vdupq_n_u8(32)));
+  }
+  return vmaxvq_u32(vreinterpretq_u32_u8(running)) != 0;
+}
+#elif SIMDJSON_EXPERIMENTAL_HAS_SSE2
+simdjson_inline bool fast_needs_escaping(std::string_view view) {
+  if (view.size() < 16) {
+    return simple_needs_escaping(view);
+  }
+  size_t i = 0;
+  __m128i running = _mm_setzero_si128();
+  for (; i + 15 < view.size(); i += 16) {
+
+    __m128i word = _mm_loadu_si128(reinterpret_cast<const __m128i *>(view.data() + i));
+    running = _mm_or_si128(running, _mm_cmpeq_epi8(word, _mm_set1_epi8(34)));
+    running = _mm_or_si128(running, _mm_cmpeq_epi8(word, _mm_set1_epi8(92)));
+    running = _mm_or_si128(
+        running, _mm_cmpeq_epi8(_mm_subs_epu8(word, _mm_set1_epi8(31)),
+                                _mm_setzero_si128()));
+  }
+  if (i < view.size()) {
+    __m128i word =
+        _mm_loadu_si128(reinterpret_cast<const __m128i *>(view.data() + view.length() - 16));
+    running = _mm_or_si128(running, _mm_cmpeq_epi8(word, _mm_set1_epi8(34)));
+    running = _mm_or_si128(running, _mm_cmpeq_epi8(word, _mm_set1_epi8(92)));
+    running = _mm_or_si128(
+        running, _mm_cmpeq_epi8(_mm_subs_epu8(word, _mm_set1_epi8(31)),
+                                _mm_setzero_si128()));
+  }
+  return _mm_movemask_epi8(running) != 0;
+}
+#else
+simdjson_inline bool fast_needs_escaping(std::string_view view) {
+  return simple_needs_escaping(view);
+}
+#endif
+
+
+SIMDJSON_CONSTEXPR_LAMBDA inline size_t
+find_next_json_quotable_character(const std::string_view view,
+                                  size_t location) noexcept {
+
+  for (auto pos = view.begin() + location; pos != view.end(); ++pos) {
+    if (json_quotable_character[static_cast<uint8_t>(*pos)]) {
+      return pos - view.begin();
+    }
+  }
+  return size_t(view.size());
+}
+
+SIMDJSON_CONSTEXPR_LAMBDA static std::string_view control_chars[] = {
+    "\\x0000", "\\x0001", "\\x0002", "\\x0003", "\\x0004", "\\x0005", "\\x0006",
+    "\\x0007", "\\x0008", "\\t",     "\\n",     "\\x000b", "\\f",     "\\r",
+    "\\x000e", "\\x000f", "\\x0010", "\\x0011", "\\x0012", "\\x0013", "\\x0014",
+    "\\x0015", "\\x0016", "\\x0017", "\\x0018", "\\x0019", "\\x001a", "\\x001b",
+    "\\x001c", "\\x001d", "\\x001e", "\\x001f"};
+
+SIMDJSON_CONSTEXPR_LAMBDA void escape_json_char(char c, char *&out) {
+  if (c == '"') {
+    memcpy(out, "\\\"", 2);
+    out += 2;
+  } else if (c == '\\') {
+    memcpy(out, "\\\\", 2);
+    out += 2;
+  } else {
+    std::string_view v = control_chars[uint8_t(c)];
+    memcpy(out, v.data(), v.size());
+    out += v.size();
+  }
+}
+
+inline size_t write_string_escaped(const std::string_view input, char *out) {
+  size_t mysize = input.size();
+  if (!fast_needs_escaping(input)) { // fast path!
+    memcpy(out, input.data(), input.size());
+    return input.size();
+  }
+  const char *const initout = out;
+  size_t location = find_next_json_quotable_character(input, 0);
+  memcpy(out, input.data(), location);
+  out += location;
+  escape_json_char(input[location], out);
+  location += 1;
+  while (location < mysize) {
+    size_t newlocation = find_next_json_quotable_character(input, location);
+    memcpy(out, input.data() + location, newlocation - location);
+    out += newlocation - location;
+    location = newlocation;
+    if (location == mysize) {
+      break;
+    }
+    escape_json_char(input[location], out);
+    location += 1;
+  }
+  return out - initout;
+}
+
+#if SIMDJSON_CONSTEVAL
+// unoptimized, meant for compile-time execution
+consteval std::string consteval_to_quoted_escaped(std::string_view input) {
+  std::string out = "\"";
+  for (char c : input) {
+    if (json_quotable_character[uint8_t(c)]) {
+      if (c == '"') {
+        out.append("\\\"");
+      } else if (c == '\\') {
+        out.append("\\\\");
+      } else {
+        std::string_view v = control_chars[uint8_t(c)];
+        out.append(v);
+      }
+    } else {
+      out.push_back(c);
+    }
+  }
+  out.push_back('"');
+  return out;
+}
+#endif // SIMDJSON_CONSTEVAL
+
+simdjson_inline string_builder::string_builder(size_t initial_capacity)
+    : buffer(new(std::nothrow) char[initial_capacity]), position(0),
+      capacity(buffer.get() != nullptr ? initial_capacity : 0),
+      is_valid(buffer.get() != nullptr) {}
+
+simdjson_inline bool string_builder::capacity_check(size_t upcoming_bytes) {
+  // We use the convention that when is_valid is false, then the capacity and
+  // the position are 0.
+  // Most of the time, this function will return true.
+  if (simdjson_likely(upcoming_bytes <= capacity - position)) {
+    return true;
+  }
+  // check for overflow, most of the time there is no overflow
+  if (simdjson_likely(position + upcoming_bytes < position)) {
+    return false;
+  }
+  // We will rarely get here.
+  grow_buffer((std::max)(capacity * 2, position + upcoming_bytes));
+  // If the buffer allocation failed, we set is_valid to false.
+  return is_valid;
+}
+
+simdjson_inline void string_builder::grow_buffer(size_t desired_capacity) {
+  if (!is_valid) {
+    return;
+  }
+  std::unique_ptr<char[]> new_buffer(new (std::nothrow) char[desired_capacity]);
+  if (new_buffer.get() == nullptr) {
+    set_valid(false);
+    return;
+  }
+  std::memcpy(new_buffer.get(), buffer.get(), position);
+  buffer.swap(new_buffer);
+  capacity = desired_capacity;
+}
+
+simdjson_inline void string_builder::set_valid(bool valid) noexcept {
+  if (!valid) {
+    is_valid = false;
+    capacity = 0;
+    position = 0;
+    buffer.reset();
+  } else {
+    is_valid = true;
+  }
+}
+
+simdjson_inline size_t string_builder::size() const noexcept {
+  return position;
+}
+
+simdjson_inline void string_builder::append(char c) noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position++] = c;
+  }
+}
+
+simdjson_inline void string_builder::append_null() noexcept {
+  constexpr char null_literal[] = "null";
+  constexpr size_t null_len = sizeof(null_literal) - 1;
+  if (capacity_check(null_len)) {
+    std::memcpy(buffer.get() + position, null_literal, null_len);
+    position += null_len;
+  }
+}
+
+simdjson_inline void string_builder::clear() noexcept {
+  position = 0;
+  // if it was invalid, we should try to repair it
+  if (!is_valid) {
+    capacity = 0;
+    buffer.reset();
+    is_valid = true;
+  }
+}
+
+namespace internal {
+
+// We could specialize further for 32-bit integers.
+simdjson_really_inline int int_log2(uint32_t x) { return (63 - leading_zeroes(x | 1)); }
+
+simdjson_really_inline int fast_digit_count(uint32_t x) {
+  static uint64_t table[] = {
+      4294967296,  8589934582,  8589934582,  8589934582,  12884901788,
+      12884901788, 12884901788, 17179868184, 17179868184, 17179868184,
+      21474826480, 21474826480, 21474826480, 21474826480, 25769703776,
+      25769703776, 25769703776, 30063771072, 30063771072, 30063771072,
+      34349738368, 34349738368, 34349738368, 34349738368, 38554705664,
+      38554705664, 38554705664, 41949672960, 41949672960, 41949672960,
+      42949672960, 42949672960};
+  return uint32_t((x + table[int_log2(x)]) >> 32);
+}
+
+simdjson_really_inline int int_log2(uint64_t x) { return 63 - leading_zeroes(x | 1); }
+
+simdjson_really_inline int fast_digit_count(uint64_t x) {
+  static uint64_t table[] = {9,
+                             99,
+                             999,
+                             9999,
+                             99999,
+                             999999,
+                             9999999,
+                             99999999,
+                             999999999,
+                             9999999999,
+                             99999999999,
+                             999999999999,
+                             9999999999999,
+                             99999999999999,
+                             999999999999999ULL,
+                             9999999999999999ULL,
+                             99999999999999999ULL,
+                             999999999999999999ULL,
+                             9999999999999999999ULL};
+  int y = (19 * int_log2(x) >> 6);
+  y += x > table[y];
+  return y + 1;
+}
+
+template <typename number_type, typename = typename std::enable_if<
+                                    std::is_unsigned<number_type>::value>::type>
+simdjson_really_inline size_t digit_count(number_type v) noexcept {
+  static_assert(sizeof(number_type) == 8 || sizeof(number_type) == 4 ||
+                    sizeof(number_type) == 2 || sizeof(number_type) == 1,
+                "We only support 8-bit, 16-bit, 32-bit and 64-bit numbers");
+  return fast_digit_count(v);
+}
+static const char decimal_table[200] = {
+  0x30, 0x30, 0x30, 0x31, 0x30, 0x32, 0x30, 0x33, 0x30, 0x34, 0x30, 0x35,
+  0x30, 0x36, 0x30, 0x37, 0x30, 0x38, 0x30, 0x39, 0x31, 0x30, 0x31, 0x31,
+  0x31, 0x32, 0x31, 0x33, 0x31, 0x34, 0x31, 0x35, 0x31, 0x36, 0x31, 0x37,
+  0x31, 0x38, 0x31, 0x39, 0x32, 0x30, 0x32, 0x31, 0x32, 0x32, 0x32, 0x33,
+  0x32, 0x34, 0x32, 0x35, 0x32, 0x36, 0x32, 0x37, 0x32, 0x38, 0x32, 0x39,
+  0x33, 0x30, 0x33, 0x31, 0x33, 0x32, 0x33, 0x33, 0x33, 0x34, 0x33, 0x35,
+  0x33, 0x36, 0x33, 0x37, 0x33, 0x38, 0x33, 0x39, 0x34, 0x30, 0x34, 0x31,
+  0x34, 0x32, 0x34, 0x33, 0x34, 0x34, 0x34, 0x35, 0x34, 0x36, 0x34, 0x37,
+  0x34, 0x38, 0x34, 0x39, 0x35, 0x30, 0x35, 0x31, 0x35, 0x32, 0x35, 0x33,
+  0x35, 0x34, 0x35, 0x35, 0x35, 0x36, 0x35, 0x37, 0x35, 0x38, 0x35, 0x39,
+  0x36, 0x30, 0x36, 0x31, 0x36, 0x32, 0x36, 0x33, 0x36, 0x34, 0x36, 0x35,
+  0x36, 0x36, 0x36, 0x37, 0x36, 0x38, 0x36, 0x39, 0x37, 0x30, 0x37, 0x31,
+  0x37, 0x32, 0x37, 0x33, 0x37, 0x34, 0x37, 0x35, 0x37, 0x36, 0x37, 0x37,
+  0x37, 0x38, 0x37, 0x39, 0x38, 0x30, 0x38, 0x31, 0x38, 0x32, 0x38, 0x33,
+  0x38, 0x34, 0x38, 0x35, 0x38, 0x36, 0x38, 0x37, 0x38, 0x38, 0x38, 0x39,
+  0x39, 0x30, 0x39, 0x31, 0x39, 0x32, 0x39, 0x33, 0x39, 0x34, 0x39, 0x35,
+  0x39, 0x36, 0x39, 0x37, 0x39, 0x38, 0x39, 0x39,
+};
+} // namespace internal
+
+template <typename number_type, typename>
+simdjson_inline void string_builder::append(number_type v) noexcept {
+  static_assert(std::is_same<number_type, bool>::value ||
+                    std::is_integral<number_type>::value ||
+                    std::is_floating_point<number_type>::value,
+                "Unsupported number type");
+  // If C++17 is available, we can 'if constexpr' here.
+  SIMDJSON_IF_CONSTEXPR(std::is_same<number_type, bool>::value) {
+    if (v) {
+      constexpr char true_literal[] = "true";
+      constexpr size_t true_len = sizeof(true_literal) - 1;
+      if (capacity_check(true_len)) {
+        std::memcpy(buffer.get() + position, true_literal, true_len);
+        position += true_len;
+      }
+    } else {
+      constexpr char false_literal[] = "false";
+      constexpr size_t false_len = sizeof(false_literal) - 1;
+      if (capacity_check(false_len)) {
+        std::memcpy(buffer.get() + position, false_literal, false_len);
+        position += false_len;
+      }
+    }
+  }
+  else SIMDJSON_IF_CONSTEXPR(std::is_unsigned<number_type>::value) {
+    constexpr size_t max_number_size = 20;
+    if (capacity_check(max_number_size)) {
+      using unsigned_type = typename std::make_unsigned<number_type>::type;
+      unsigned_type pv = static_cast<unsigned_type>(v);
+      size_t dc = internal::digit_count(pv);
+      char *write_pointer = buffer.get() + position + dc - 1;
+      while (pv >= 100) {
+        memcpy(write_pointer - 1, &internal::decimal_table[(pv % 100)*2], 2);
+        write_pointer -= 2;
+        pv /= 100;
+      }
+      if (pv >= 10) {
+        *write_pointer-- = char('0' + (pv % 10));
+        pv /= 10;
+      }
+      *write_pointer = char('0' + pv);
+      position += dc;
+    }
+  }
+  else SIMDJSON_IF_CONSTEXPR(std::is_integral<number_type>::value) {
+    constexpr size_t max_number_size = 20;
+    if (capacity_check(max_number_size)) {
+      using unsigned_type = typename std::make_unsigned<number_type>::type;
+      bool negative = v < 0;
+      unsigned_type pv = static_cast<unsigned_type>(v);
+      if (negative) {
+        pv = 0 - pv; // the 0 is for Microsoft
+      }
+      size_t dc = internal::digit_count(pv);
+      if (negative) {
+        buffer.get()[position++] = '-';
+      }
+      char *write_pointer = buffer.get() + position + dc - 1;
+      while (pv >= 100) {
+        memcpy(write_pointer - 1, &internal::decimal_table[(pv % 100)*2], 2);
+        write_pointer -= 2;
+        pv /= 100;
+      }
+      if (pv >= 10) {
+        *write_pointer-- = char('0' + (pv % 10));
+        pv /= 10;
+      }
+      *write_pointer = char('0' + pv);
+      position += dc;
+    }
+  }
+  else SIMDJSON_IF_CONSTEXPR(std::is_floating_point<number_type>::value) {
+    constexpr size_t max_number_size = 24;
+    if (capacity_check(max_number_size)) {
+      // We could specialize for float.
+      char *end = simdjson::internal::to_chars(buffer.get() + position, nullptr,
+                                               double(v));
+      position = end - buffer.get();
+    }
+  }
+}
+
+simdjson_inline void
+string_builder::escape_and_append(std::string_view input) noexcept {
+  // escaping might turn a control character into \x00xx so 6 characters.
+  if (capacity_check(6 * input.size())) {
+    position += write_string_escaped(input, buffer.get() + position);
+  }
+}
+
+simdjson_inline void
+string_builder::escape_and_append_with_quotes(std::string_view input) noexcept {
+  // escaping might turn a control character into \x00xx so 6 characters.
+  if (capacity_check(2 + 6 * input.size())) {
+    buffer.get()[position++] = '"';
+    position += write_string_escaped(input, buffer.get() + position);
+    buffer.get()[position++] = '"';
+  }
+}
+
+simdjson_inline void
+string_builder::escape_and_append_with_quotes(char input) noexcept {
+  // escaping might turn a control character into \x00xx so 6 characters.
+  if (capacity_check(2 + 6 * 1)) {
+    buffer.get()[position++] = '"';
+    std::string_view cinput(&input, 1);
+    position += write_string_escaped(cinput, buffer.get() + position);
+    buffer.get()[position++] = '"';
+  }
+}
+
+simdjson_inline void string_builder::escape_and_append_with_quotes(const char* input)  noexcept {
+  std::string_view cinput(input);
+  escape_and_append_with_quotes(cinput);
+}
+
+simdjson_inline void string_builder::append_raw(const char *c) noexcept {
+  size_t len = std::strlen(c);
+  append_raw(c, len);
+}
+
+simdjson_inline void
+string_builder::append_raw(std::string_view input) noexcept {
+  if (capacity_check(input.size())) {
+    std::memcpy(buffer.get() + position, input.data(), input.size());
+    position += input.size();
+  }
+}
+
+simdjson_inline void string_builder::append_raw(const char *str,
+                                                size_t len) noexcept {
+  if (capacity_check(len)) {
+    std::memcpy(buffer.get() + position, str, len);
+    position += len;
+  }
+}
+
+#if SIMDJSON_EXCEPTIONS
+simdjson_inline string_builder::operator std::string() const noexcept(false) {
+  return std::string(std::string_view());
+}
+
+simdjson_inline string_builder::operator std::string_view() const
+    noexcept(false) simdjson_lifetime_bound {
+  return view();
+}
+#endif
+
+simdjson_inline simdjson_result<std::string_view>
+string_builder::view() const noexcept {
+  if (!is_valid) {
+    return simdjson::OUT_OF_CAPACITY;
+  }
+  return std::string_view(buffer.get(), position);
+}
+
+simdjson_inline simdjson_result<const char *> string_builder::c_str() noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position] = '\0';
+    return buffer.get();
+  }
+  return simdjson::OUT_OF_CAPACITY;
+}
+
+simdjson_inline bool string_builder::validate_unicode() const noexcept {
+  return simdjson::validate_utf8(buffer.get(), position);
+}
+
+simdjson_inline void string_builder::start_object()  noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position++] = '{';
+  }
+}
+
+
+simdjson_inline void string_builder::end_object()  noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position++] = '}';
+  }
+}
+
+
+simdjson_inline void string_builder::start_array()  noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position++] = '[';
+  }
+}
+
+
+simdjson_inline void string_builder::end_array()  noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position++] = ']';
+  }
+}
+
+
+simdjson_inline void string_builder::append_comma()  noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position++] = ',';
+  }
+}
+
+
+simdjson_inline void string_builder::append_colon()  noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position++] = ':';
+  }
+}
+
+template<typename key_type, typename value_type>
+simdjson_inline void string_builder::append_key_value(key_type key, value_type value) noexcept {
+  static_assert(
+    std::is_arithmetic<value_type>::value ||
+    std::is_same<value_type, char>::value ||
+    std::is_same<value_type, const char*>::value ||
+    std::is_convertible<value_type, std::string_view>::value ||
+    std::is_same<value_type, std::nullptr_t>::value,
+    "Unsupported value type");
+  static_assert(
+    std::is_same<key_type, const char*>::value ||
+    std::is_convertible<key_type, std::string_view>::value,
+    "Unsupported key type");
+  escape_and_append_with_quotes(key);
+  append_colon();
+  SIMDJSON_IF_CONSTEXPR(std::is_same<value_type, std::nullptr_t>::value) {
+    append_null();
+  } else SIMDJSON_IF_CONSTEXPR(std::is_same<value_type, char>::value) {
+    escape_and_append_with_quotes(value);
+  } else SIMDJSON_IF_CONSTEXPR(std::is_convertible<value_type, std::string_view>::value) {
+    escape_and_append_with_quotes(value);
+  } else SIMDJSON_IF_CONSTEXPR(std::is_same<value_type, const char*>::value) {
+    escape_and_append_with_quotes(value);
+  } else {
+    append(value);
+  }
+}
+
+} // namespace builder
+} // namespace lsx
+} // namespace simdjson
+
+#endif // SIMDJSON_GENERIC_STRING_BUILDER_INL_H
+/* end file simdjson/generic/ondemand/json_string_builder-inl.h for lsx */
+/* including simdjson/generic/ondemand/json_builder.h for lsx: #include "simdjson/generic/ondemand/json_builder.h" */
+/* begin file simdjson/generic/ondemand/json_builder.h for lsx */
+/**
+ * This file is part of the builder API. It is temporarily in the ondemand directory
+ * but we will move it to a builder directory later.
+ */
+#ifndef SIMDJSON_GENERIC_BUILDER_H
+
+/* amalgamation skipped (editor-only): #ifndef SIMDJSON_CONDITIONAL_INCLUDE */
+/* amalgamation skipped (editor-only): #define SIMDJSON_GENERIC_STRING_BUILDER_H */
+/* amalgamation skipped (editor-only): #include "simdjson/generic/builder/json_string_builder.h" */
+/* amalgamation skipped (editor-only): #include "simdjson/concepts.h" */
+/* amalgamation skipped (editor-only): #endif // SIMDJSON_CONDITIONAL_INCLUDE */
+#if SIMDJSON_STATIC_REFLECTION
+
+#include <charconv>
+#include <cstring>
+#include <experimental/meta>
+#include <memory>
+#include <optional>
+#include <string_view>
+#include <type_traits>
+#include <utility>
+// #include <static_reflection> // for std::define_static_string - header not available yet
+
+namespace simdjson {
+namespace lsx {
+namespace builder {
+
+// Concept that checks if a type is a container but not a string (because
+// strings handling must be handled differently)
+template <typename T>
+concept container_but_not_string =
+    requires(T a) {
+      { a.size() } -> std::convertible_to<std::size_t>;
+      {
+        a[std::declval<std::size_t>()]
+      }; // check if elements are accessible for the subscript operator
+    } && !std::is_same_v<T, std::string> &&
+    !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char *>;
+
+template <class T>
+  requires(container_but_not_string<T>)
+constexpr void atom(string_builder &b, const T &t) {
+  if (t.size() == 0) {
+    b.append_raw("[]");
+    return;
+  }
+  b.append('[');
+  atom(b, t[0]);
+  for (size_t i = 1; i < t.size(); ++i) {
+    b.append(',');
+    atom(b, t[i]);
+  }
+  b.append(']');
+}
+
+template <class T>
+  requires(std::is_same_v<T, std::string> ||
+           std::is_same_v<T, std::string_view> ||
+           std::is_same_v<T, const char *> ||
+           std::is_same_v<T, char>)
+constexpr void atom(string_builder &b, const T &t) {
+  b.escape_and_append_with_quotes(t);
+}
+
+template <concepts::string_view_keyed_map T>
+constexpr void atom(string_builder &b, const T &m) {
+  if (m.empty()) {
+    b.append_raw("{}");
+    return;
+  }
+  b.append('{');
+  bool first = true;
+  for (const auto& [key, value] : m) {
+    if (!first) {
+      b.append(',');
+    }
+    first = false;
+    // Keys must be convertible to string_view per the concept
+    b.escape_and_append_with_quotes(key);
+    b.append(':');
+    atom(b, value);
+  }
+  b.append('}');
+}
+
+
+template<typename number_type,
+         typename = typename std::enable_if<std::is_arithmetic<number_type>::value && !std::is_same_v<number_type, char>>::type>
+constexpr void atom(string_builder &b, const number_type t) {
+  b.append(t);
+}
+#if SIMDJSON_CONSTEVAL
+consteval std::string consteval_to_quoted_escaped(std::string_view input);
+#endif
+
+template <class T>
+  requires(std::is_class_v<T> && !container_but_not_string<T> &&
+           !concepts::string_view_keyed_map<T> &&
+           !concepts::optional_type<T> &&
+           !concepts::smart_pointer<T> &&
+           !concepts::appendable_containers<T> &&
+           !std::is_same_v<T, std::string> &&
+           !std::is_same_v<T, std::string_view> &&
+           !std::is_same_v<T, const char*> &&
+           !std::is_same_v<T, char>)
+constexpr void atom(string_builder &b, const T &t) {
+  int i = 0;
+  b.append('{');
+  [:expand(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked())):] >> [&]<auto dm>() {
+    if (i != 0)
+      b.append(',');
+    constexpr auto key = std::define_static_string(consteval_to_quoted_escaped(std::meta::identifier_of(dm)));
+    b.append_raw(key);
+    b.append(':');
+    atom(b, t.[:dm:]);
+    i++;
+  };
+  b.append('}');
+}
+
+// Support for optional types (std::optional, etc.)
+template <concepts::optional_type T>
+constexpr void atom(string_builder &b, const T &opt) {
+  if (opt) {
+    atom(b, opt.value());
+  } else {
+    b.append_raw("null");
+  }
+}
+
+// Support for smart pointers (std::unique_ptr, std::shared_ptr, etc.)
+template <concepts::smart_pointer T>
+constexpr void atom(string_builder &b, const T &ptr) {
+  if (ptr) {
+    atom(b, *ptr);
+  } else {
+    b.append_raw("null");
+  }
+}
+
+// Support for enums - serialize as string representation using expand approach from P2996R12
+template <typename T>
+  requires(std::is_enum_v<T>)
+void atom(string_builder &b, const T &e) {
+#if SIMDJSON_STATIC_REFLECTION
+  std::string_view result = "<unnamed>";
+  [:expand(std::meta::enumerators_of(^^T)):] >> [&]<auto enum_val>{
+    if (e == [:enum_val:]) {
+      result = std::meta::identifier_of(enum_val);
+    }
+  };
+
+  if (result != "<unnamed>") {
+    b.append_raw("\"");
+    b.append_raw(result);
+    b.append_raw("\"");
+  } else {
+    // Fallback to integer if enum value not found
+    atom(b, static_cast<std::underlying_type_t<T>>(e));
+  }
+#else
+  // Fallback: serialize as integer if reflection not available
+  atom(b, static_cast<std::underlying_type_t<T>>(e));
+#endif
+}
+
+// Support for appendable containers that don't have operator[] (sets, etc.)
+template <concepts::appendable_containers T>
+  requires(!container_but_not_string<T> && !concepts::string_view_keyed_map<T> &&
+           !concepts::optional_type<T> && !concepts::smart_pointer<T> &&
+           !std::is_same_v<T, std::string> &&
+           !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char*>)
+constexpr void atom(string_builder &b, const T &container) {
+  if (container.empty()) {
+    b.append_raw("[]");
+    return;
+  }
+  b.append('[');
+  bool first = true;
+  for (const auto& item : container) {
+    if (!first) {
+      b.append(',');
+    }
+    first = false;
+    atom(b, item);
+  }
+  b.append(']');
+}
+
+// append functions that delegate to atom functions for primitive types
+template <class T>
+  requires(std::is_arithmetic_v<T> && !std::is_same_v<T, char>)
+void append(string_builder &b, const T &t) {
+  atom(b, t);
+}
+
+template <class T>
+  requires(std::is_same_v<T, std::string> ||
+           std::is_same_v<T, std::string_view> ||
+           std::is_same_v<T, const char *> ||
+           std::is_same_v<T, char>)
+void append(string_builder &b, const T &t) {
+  atom(b, t);
+}
+
+template <concepts::optional_type T>
+void append(string_builder &b, const T &t) {
+  atom(b, t);
+}
+
+template <concepts::smart_pointer T>
+void append(string_builder &b, const T &t) {
+  atom(b, t);
+}
+
+template <concepts::appendable_containers T>
+  requires(!container_but_not_string<T> && !concepts::string_view_keyed_map<T> &&
+           !concepts::optional_type<T> && !concepts::smart_pointer<T> &&
+           !std::is_same_v<T, std::string> &&
+           !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char*>)
+void append(string_builder &b, const T &t) {
+  atom(b, t);
+}
+
+template <concepts::string_view_keyed_map T>
+void append(string_builder &b, const T &t) {
+  atom(b, t);
+}
+
+// works for struct
+template <class Z>
+  requires(std::is_class_v<Z> && !container_but_not_string<Z> &&
+           !concepts::string_view_keyed_map<Z> &&
+           !concepts::optional_type<Z> &&
+           !concepts::smart_pointer<Z> &&
+           !concepts::appendable_containers<Z> &&
+           !std::is_same_v<Z, std::string> &&
+           !std::is_same_v<Z, std::string_view> &&
+           !std::is_same_v<Z, const char*> &&
+           !std::is_same_v<Z, char>)
+void append(string_builder &b, const Z &z) {
+  int i = 0;
+  b.append('{');
+  [:expand(std::meta::nonstatic_data_members_of(^^Z, std::meta::access_context::unchecked())):] >> [&]<auto dm>() {
+    if (i != 0)
+      b.append(',');
+    constexpr auto key = std::define_static_string(consteval_to_quoted_escaped(std::meta::identifier_of(dm)));
+    b.append_raw(key);
+    b.append(':');
+    atom(b, z.[:dm:]);
+    i++;
+  };
+  b.append('}');
+}
+
+// works for container
+template <class Z>
+  requires(container_but_not_string<Z>)
+void append(string_builder &b, const Z &z) {
+  if (z.size() == 0) {
+    b.append_raw("[]");
+    return;
+  }
+  b.append('[');
+  atom(b, z[0]);
+  for (size_t i = 1; i < z.size(); ++i) {
+    b.append(',');
+    atom(b, z[i]);
+  }
+  b.append(']');
+}
+
+template <class Z>
+simdjson_result<std::string> to_json_string(const Z &z, size_t initial_capacity = 1024) {
+  string_builder b(initial_capacity);
+  append(b, z);
+  std::string_view s;
+  if(auto e = b.view().get(s); e) { return e; }
+  return std::string(s);
+}
+
+template <class Z>
+simdjson_error to_json(const Z &z, std::string &s) {
+  string_builder b;
+  append(b, z);
+  std::string_view view;
+  if(auto e = b.view().get(view); e) { return e; }
+  s.assign(view);
+  return SUCCESS;
+}
+
+template <class Z>
+string_builder& operator<<(string_builder& b, const Z& z) {
+  append(b, z);
+  return b;
+}
+} // namespace builder
+} // namespace lsx
+} // namespace simdjson
+#endif // SIMDJSON_STATIC_REFLECTION
+
+#endif
+/* end file simdjson/generic/ondemand/json_builder.h for lsx */
 
 /* end file simdjson/generic/ondemand/amalgamated.h for lsx */
 /* including simdjson/lsx/end.h: #include "simdjson/lsx/end.h" */
@@ -112660,6 +124905,31 @@ simdjson_inline backslash_and_quote backslash_and_quote::copy_and_find(const uin
   };
 }
 
+
+struct escaping {
+  static constexpr uint32_t BYTES_PROCESSED = 16;
+  simdjson_inline static escaping copy_and_find(const uint8_t *src, uint8_t *dst);
+
+  simdjson_inline bool has_escape() { return escape_bits != 0; }
+  simdjson_inline int escape_index() { return trailing_zeroes(escape_bits); }
+
+  uint64_t escape_bits;
+}; // struct escaping
+
+
+
+simdjson_inline escaping escaping::copy_and_find(const uint8_t *src, uint8_t *dst) {
+  static_assert(SIMDJSON_PADDING >= (BYTES_PROCESSED - 1), "escaping finder must process fewer than SIMDJSON_PADDING bytes");
+  simd8<uint8_t> v(src);
+  v.store(dst);
+  simd8<bool> is_quote = (v == '"');
+  simd8<bool> is_backslash = (v == '\\');
+  simd8<bool> is_control = (v < 32);
+  return {
+    (is_backslash | is_quote | is_control).to_bitmask()
+  };
+}
+
 } // unnamed namespace
 } // namespace lasx
 } // namespace simdjson
@@ -112807,7 +125077,7 @@ template <typename T, typename ValT = lasx::ondemand::value>
 concept custom_deserializable = tag_invocable<deserialize_tag, ValT&, T&>;
 
 template <typename T, typename ValT = lasx::ondemand::value>
-concept deserializable = custom_deserializable<T, ValT> || is_builtin_deserializable_v<T>;
+concept deserializable = custom_deserializable<T, ValT> || is_builtin_deserializable_v<T> || concepts::optional_type<T>;
 
 template <typename T, typename ValT = lasx::ondemand::value>
 concept nothrow_custom_deserializable = nothrow_tag_invocable<deserialize_tag, ValT&, T&>;
@@ -112818,9 +125088,25 @@ concept nothrow_deserializable = nothrow_custom_deserializable<T, ValT> || is_bu
 
 /// Deserialize Tag
 inline constexpr struct deserialize_tag {
+  using array_type = lasx::ondemand::array;
+  using object_type = lasx::ondemand::object;
   using value_type = lasx::ondemand::value;
   using document_type = lasx::ondemand::document;
   using document_reference_type = lasx::ondemand::document_reference;
+
+  // Customization Point for array
+  template <typename T>
+    requires custom_deserializable<T, value_type>
+  [[nodiscard]] constexpr /* error_code */ auto operator()(array_type &object, T& output) const noexcept(nothrow_custom_deserializable<T, value_type>) {
+    return tag_invoke(*this, object, output);
+  }
+
+  // Customization Point for object
+  template <typename T>
+    requires custom_deserializable<T, value_type>
+  [[nodiscard]] constexpr /* error_code */ auto operator()(object_type &object, T& output) const noexcept(nothrow_custom_deserializable<T, value_type>) {
+    return tag_invoke(*this, object, output);
+  }
 
   // Customization Point for value
   template <typename T>
@@ -113389,6 +125675,7 @@ public:
    *
    * You may use get_double(), get_bool(), get_uint64(), get_int64(),
    * get_object(), get_array(), get_raw_json_string(), or get_string() instead.
+   * When SIMDJSON_SUPPORTS_DESERIALIZATION is set, custom types are also supported.
    *
    * @returns A value of the given type, parsed from the JSON.
    * @returns INCORRECT_TYPE If the JSON value is not the given type.
@@ -113412,6 +125699,7 @@ public:
    * Get this value as the given type.
    *
    * Supported types: object, array, raw_json_string, string_view, uint64_t, int64_t, double, bool
+   * If the macro SIMDJSON_SUPPORTS_DESERIALIZATION is set, then custom types are also supported.
    *
    * @param out This is set to a value of the given type, parsed from the JSON. If there is an error, this may not be initialized.
    * @returns INCORRECT_TYPE If the JSON value is not an object.
@@ -113428,6 +125716,19 @@ public:
   #if SIMDJSON_SUPPORTS_DESERIALIZATION
   if constexpr (custom_deserializable<T, value>) {
       return deserialize(*this, out);
+  } else if constexpr (concepts::optional_type<T>) {
+      using value_type = typename std::remove_cvref_t<T>::value_type;
+
+      // Check if the value is null
+      if (is_null()) {
+        out.reset(); // Set to nullopt
+        return SUCCESS;
+      }
+
+      if (!out) {
+        out.emplace();
+      }
+      return get<value_type>(out.value());
   } else {
     static_assert(!sizeof(T), "The get<T> method with type T is not implemented by the simdjson library. "
       "And you do not seem to have added support for it. Indeed, we have that "
@@ -115654,6 +127955,37 @@ public:
    *         - INDEX_OUT_OF_BOUNDS if the array index is larger than an array length
    */
   simdjson_inline simdjson_result<value> at(size_t index) noexcept;
+
+#if SIMDJSON_SUPPORTS_DESERIALIZATION
+  /**
+   * Get this array as the given type.
+   *
+   * @param out This is set to a value of the given type, parsed from the JSON. If there is an error, this may not be initialized.
+   * @returns INCORRECT_TYPE If the JSON array is not of the given type.
+   * @returns SUCCESS If the parse succeeded and the out parameter was set to the value.
+   */
+  template <typename T>
+  simdjson_inline error_code get(T &out)
+     noexcept(custom_deserializable<T, array> ? nothrow_custom_deserializable<T, array> : true) {
+    static_assert(custom_deserializable<T, array>);
+    return deserialize(*this, out);
+  }
+  /**
+   * Get this array as the given type.
+   *
+   * @returns A value of the given type, parsed from the JSON.
+   * @returns INCORRECT_TYPE If the JSON value is not the given type.
+   */
+  template <typename T>
+  simdjson_inline simdjson_result<T> get()
+    noexcept(custom_deserializable<T, value> ? nothrow_custom_deserializable<T, value> : true)
+  {
+    static_assert(std::is_default_constructible<T>::value, "The specified type is not default constructible.");
+    T out{};
+    SIMDJSON_TRY(get<T>(out));
+    return out;
+  }
+#endif // SIMDJSON_SUPPORTS_DESERIALIZATION
 protected:
   /**
    * Go to the end of the array, no matter where you are right now.
@@ -115732,7 +128064,28 @@ public:
   simdjson_inline simdjson_result<lasx::ondemand::value> at_pointer(std::string_view json_pointer) noexcept;
   simdjson_inline simdjson_result<lasx::ondemand::value> at_path(std::string_view json_path) noexcept;
   simdjson_inline simdjson_result<std::string_view> raw_json() noexcept;
+#if SIMDJSON_SUPPORTS_DESERIALIZATION
+  // TODO: move this code into object-inl.h
 
+  template<typename T>
+  simdjson_inline simdjson_result<T> get() noexcept {
+    if (error()) { return error(); }
+    if constexpr (std::is_same_v<T, lasx::ondemand::array>) {
+      return first;
+    }
+    return first.get<T>();
+  }
+  template<typename T>
+  simdjson_inline error_code get(T& out) noexcept {
+    if (error()) { return error(); }
+    if constexpr (std::is_same_v<T, lasx::ondemand::array>) {
+      out = first;
+    } else {
+      SIMDJSON_TRY( first.get<T>(out) );
+    }
+    return SUCCESS;
+  }
+#endif // SIMDJSON_SUPPORTS_DESERIALIZATION
 };
 
 } // namespace simdjson
@@ -115777,7 +128130,8 @@ public:
    *
    * Part of the std::iterator interface.
    */
-  simdjson_inline simdjson_result<value> operator*() noexcept; // MUST ONLY BE CALLED ONCE PER ITERATION.
+  simdjson_inline simdjson_result<value>
+  operator*() noexcept; // MUST ONLY BE CALLED ONCE PER ITERATION.
   /**
    * Check if we are at the end of the JSON.
    *
@@ -115801,6 +128155,11 @@ public:
    */
   simdjson_inline array_iterator &operator++() noexcept;
 
+  /**
+   * Check if the array is at the end.
+   */
+  [[nodiscard]] simdjson_inline bool at_end() const noexcept;
+
 private:
   value_iterator iter{};
 
@@ -115819,7 +128178,6 @@ namespace simdjson {
 
 template<>
 struct simdjson_result<lasx::ondemand::array_iterator> : public lasx::implementation_simdjson_result_base<lasx::ondemand::array_iterator> {
-public:
   simdjson_inline simdjson_result(lasx::ondemand::array_iterator &&value) noexcept; ///< @private
   simdjson_inline simdjson_result(error_code error) noexcept; ///< @private
   simdjson_inline simdjson_result() noexcept = default;
@@ -115832,6 +128190,8 @@ public:
   simdjson_inline bool operator==(const simdjson_result<lasx::ondemand::array_iterator> &) const noexcept;
   simdjson_inline bool operator!=(const simdjson_result<lasx::ondemand::array_iterator> &) const noexcept;
   simdjson_inline simdjson_result<lasx::ondemand::array_iterator> &operator++() noexcept;
+
+  [[nodiscard]] simdjson_inline bool at_end() const noexcept;
 };
 
 } // namespace simdjson
@@ -116066,7 +128426,7 @@ public:
    * Be mindful that the document instance must remain in scope while you are accessing object, array and value instances.
    *
    * @param out This is set to a value of the given type, parsed from the JSON. If there is an error, this may not be initialized.
-   * @returns INCORRECT_TYPE If the JSON value is not an object.
+   * @returns INCORRECT_TYPE If the JSON value is of the given type.
    * @returns SUCCESS If the parse succeeded and the out parameter was set to the value.
    */
   template<typename T>
@@ -116164,7 +128524,7 @@ public:
    *          time it parses a document or when it is destroyed.
    * @exception simdjson_error(INCORRECT_TYPE) if the JSON value is not a string.
    */
-  simdjson_inline operator std::string_view() noexcept(false);
+  simdjson_inline operator std::string_view() noexcept(false) simdjson_lifetime_bound;
   /**
    * Cast this JSON value to a raw_json_string.
    *
@@ -116173,7 +128533,7 @@ public:
    * @returns A pointer to the raw JSON for the given string.
    * @exception simdjson_error(INCORRECT_TYPE) if the JSON value is not a string.
    */
-  simdjson_inline operator raw_json_string() noexcept(false);
+  simdjson_inline operator raw_json_string() noexcept(false) simdjson_lifetime_bound;
   /**
    * Cast this JSON value to a bool.
    *
@@ -117553,6 +129913,36 @@ public:
    */
   simdjson_inline simdjson_result<std::string_view> raw_json() noexcept;
 
+#if SIMDJSON_SUPPORTS_DESERIALIZATION
+  /**
+   * Get this object as the given type.
+   *
+   * @param out This is set to a value of the given type, parsed from the JSON. If there is an error, this may not be initialized.
+   * @returns INCORRECT_TYPE If the JSON object is not of the given type.
+   * @returns SUCCESS If the parse succeeded and the out parameter was set to the value.
+   */
+  template <typename T>
+  simdjson_inline error_code get(T &out)
+     noexcept(custom_deserializable<T, object> ? nothrow_custom_deserializable<T, object> : true) {
+    static_assert(custom_deserializable<T, object>);
+    return deserialize(*this, out);
+  }
+  /**
+   * Get this array as the given type.
+   *
+   * @returns A value of the given type, parsed from the JSON.
+   * @returns INCORRECT_TYPE If the JSON value is not the given type.
+   */
+  template <typename T>
+  simdjson_inline simdjson_result<T> get()
+    noexcept(custom_deserializable<T, value> ? nothrow_custom_deserializable<T, value> : true)
+  {
+    static_assert(std::is_default_constructible<T>::value, "The specified type is not default constructible.");
+    T out{};
+    SIMDJSON_TRY(get<T>(out));
+    return out;
+  }
+#endif // SIMDJSON_SUPPORTS_DESERIALIZATION
 protected:
   /**
    * Go to the end of the object, no matter where you are right now.
@@ -117596,12 +129986,32 @@ public:
   simdjson_inline simdjson_result<lasx::ondemand::value> operator[](std::string_view key) && noexcept;
   simdjson_inline simdjson_result<lasx::ondemand::value> at_pointer(std::string_view json_pointer) noexcept;
   simdjson_inline simdjson_result<lasx::ondemand::value> at_path(std::string_view json_path) noexcept;
-
   inline simdjson_result<bool> reset() noexcept;
   inline simdjson_result<bool> is_empty() noexcept;
   inline simdjson_result<size_t> count_fields() & noexcept;
   inline simdjson_result<std::string_view> raw_json() noexcept;
+  #if SIMDJSON_SUPPORTS_DESERIALIZATION
+  // TODO: move this code into object-inl.h
 
+  template<typename T>
+  simdjson_inline simdjson_result<T> get() noexcept {
+    if (error()) { return error(); }
+    if constexpr (std::is_same_v<T, lasx::ondemand::object>) {
+      return first;
+    }
+    return first.get<T>();
+  }
+  template<typename T>
+  simdjson_inline error_code get(T& out) noexcept {
+    if (error()) { return error(); }
+    if constexpr (std::is_same_v<T, lasx::ondemand::object>) {
+      out = first;
+    } else {
+      SIMDJSON_TRY( first.get<T>(out) );
+    }
+    return SUCCESS;
+  }
+#endif // SIMDJSON_SUPPORTS_DESERIALIZATION
 };
 
 } // namespace simdjson
@@ -117730,6 +130140,20 @@ inline simdjson_result<std::string_view> to_json_string(simdjson_result<lasx::on
 inline simdjson_result<std::string_view> to_json_string(simdjson_result<lasx::ondemand::value> x);
 inline simdjson_result<std::string_view> to_json_string(simdjson_result<lasx::ondemand::object> x);
 inline simdjson_result<std::string_view> to_json_string(simdjson_result<lasx::ondemand::array> x);
+
+#if SIMDJSON_STATIC_REFLECTION
+/**
+ * Create a JSON string from any user-defined type using static reflection.
+ * Only available when SIMDJSON_STATIC_REFLECTION is enabled.
+ */
+template<typename T>
+  requires(!std::same_as<T, lasx::ondemand::document> &&
+           !std::same_as<T, lasx::ondemand::value> &&
+           !std::same_as<T, lasx::ondemand::object> &&
+           !std::same_as<T, lasx::ondemand::array>)
+inline std::string to_json_string(const T& obj);
+#endif
+
 } // namespace simdjson
 
 /**
@@ -117806,12 +130230,17 @@ inline std::ostream& operator<<(std::ostream& out, simdjson::simdjson_result<sim
 #ifndef SIMDJSON_ONDEMAND_DESERIALIZE_H
 /* amalgamation skipped (editor-only): #ifndef SIMDJSON_CONDITIONAL_INCLUDE */
 /* amalgamation skipped (editor-only): #define SIMDJSON_ONDEMAND_DESERIALIZE_H */
+/* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/object.h" */
 /* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/array.h" */
 /* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/base.h" */
 /* amalgamation skipped (editor-only): #endif // SIMDJSON_CONDITIONAL_INCLUDE */
 
 #include <concepts>
 #include <limits>
+#if SIMDJSON_STATIC_REFLECTION
+#include <experimental/meta>
+// #include <static_reflection> // for std::define_static_string - header not available yet
+#endif
 
 namespace simdjson {
 template <typename T>
@@ -117858,6 +130287,22 @@ error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept {
   return SUCCESS;
 }
 
+//////////////////////////////
+// String deserialization
+//////////////////////////////
+
+// just a character!
+error_code tag_invoke(deserialize_tag, auto &val, char &out) noexcept {
+  std::string_view x;
+  SIMDJSON_TRY(val.get_string().get(x));
+  if(x.size() != 1) {
+    return INCORRECT_TYPE;
+  }
+  out = x[0];
+  return SUCCESS;
+}
+
+// any string-like type (can be constructed from std::string_view)
 template <concepts::constructible_from_string_view T, typename ValT>
   requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(std::is_nothrow_constructible_v<T, std::string_view>) {
@@ -117879,15 +130324,20 @@ template <concepts::appendable_containers T, typename ValT>
   requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(false) {
   using value_type = typename std::remove_cvref_t<T>::value_type;
-  static_assert(
+  /*static_assert(
       deserializable<value_type, ValT>,
-      "The specified type inside the container must itself be deserializable");
+      "The specified type inside the container must itself be deserializable");*/
   static_assert(
       std::is_default_constructible_v<value_type>,
       "The specified type inside the container must default constructible.");
 
   lasx::ondemand::array arr;
-  SIMDJSON_TRY(val.get_array().get(arr));
+  if constexpr (std::is_same_v<std::remove_cvref_t<ValT>, lasx::ondemand::array>) {
+    arr = val;
+  } else {
+    SIMDJSON_TRY(val.get_array().get(arr));
+  }
+
   for (auto v : arr) {
     if constexpr (concepts::returns_reference<T>) {
       if (auto const err = v.get<value_type>().get(concepts::emplace_one(out));
@@ -117944,7 +130394,45 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(false) {
  return SUCCESS;
 }
 
+template <concepts::string_view_keyed_map T>
+error_code tag_invoke(deserialize_tag, lasx::ondemand::object &obj, T &out) noexcept {
+  using value_type = typename std::remove_cvref_t<T>::mapped_type;
 
+  out.clear();
+  for (auto field : obj) {
+    std::string_view key;
+    SIMDJSON_TRY(field.unescaped_key().get(key));
+
+    lasx::ondemand::value value_obj;
+    SIMDJSON_TRY(field.value().get(value_obj));
+
+    value_type this_value;
+    SIMDJSON_TRY(value_obj.get(this_value));
+    out.emplace(typename T::key_type(key), std::move(this_value));
+  }
+  return SUCCESS;
+}
+
+template <concepts::string_view_keyed_map T>
+error_code tag_invoke(deserialize_tag, lasx::ondemand::value &val, T &out) noexcept {
+  lasx::ondemand::object obj;
+  SIMDJSON_TRY(val.get_object().get(obj));
+  return simdjson::deserialize(obj, out);
+}
+
+template <concepts::string_view_keyed_map T>
+error_code tag_invoke(deserialize_tag, lasx::ondemand::document &doc, T &out) noexcept {
+  lasx::ondemand::object obj;
+  SIMDJSON_TRY(doc.get_object().get(obj));
+  return simdjson::deserialize(obj, out);
+}
+
+template <concepts::string_view_keyed_map T>
+error_code tag_invoke(deserialize_tag, lasx::ondemand::document_reference &doc, T &out) noexcept {
+  lasx::ondemand::object obj;
+  SIMDJSON_TRY(doc.get_object().get(obj));
+  return simdjson::deserialize(obj, out);
+}
 
 
 /**
@@ -117987,22 +130475,334 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(nothrow_deser
 /**
  * This CPO (Customization Point Object) will help deserialize into optional types.
  */
-template <concepts::optional_type T, typename ValT>
+template <concepts::optional_type T>
   requires(!require_custom_serialization<T>)
-error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(nothrow_deserializable<typename std::remove_cvref_t<T>::value_type, ValT>) {
+error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept(nothrow_deserializable<typename std::remove_cvref_t<T>::value_type, decltype(val)>) {
   using value_type = typename std::remove_cvref_t<T>::value_type;
 
-  static_assert(
-      deserializable<value_type, ValT>,
-      "The specified type inside the unique_ptr must itself be deserializable");
-  static_assert(
-      std::is_default_constructible_v<value_type>,
-      "The specified type inside the unique_ptr must default constructible.");
+  // Check if the value is null
+  if (val.is_null()) {
+    out.reset(); // Set to nullopt
+    return SUCCESS;
+  }
 
   if (!out) {
     out.emplace();
   }
   SIMDJSON_TRY(val.template get<value_type>(out.value()));
+  return SUCCESS;
+}
+
+
+#if SIMDJSON_STATIC_REFLECTION
+
+
+template <typename T>
+constexpr bool user_defined_type = (std::is_class_v<T>
+&& !std::is_same_v<T, std::string> && !std::is_same_v<T, std::string_view> && !concepts::optional_type<T> &&
+!concepts::appendable_containers<T> && !require_custom_serialization<T>);
+
+
+// workaround from
+// https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2024/p2996r10.html#back-and-forth
+// for missing expansion statements
+namespace __impl {
+  template<auto... vals>
+  struct replicator_type {
+    template<typename F>
+      constexpr void operator>>(F body) const {
+        (body.template operator()<vals>(), ...);
+      }
+  };
+
+  template<auto... vals>
+  replicator_type<vals...> replicator = {};
+}
+
+template<typename R>
+consteval auto expand(R range) {
+  std::vector<std::meta::info> args;
+  for (auto r : range) {
+    args.push_back(reflect_constant(r));
+  }
+  return substitute(^^__impl::replicator, args);
+}
+// end of workaround
+
+template <typename T, typename ValT>
+  requires(user_defined_type<T> && std::is_class_v<T>)
+error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept {
+  lasx::ondemand::object obj;
+  if constexpr (std::is_same_v<std::remove_cvref_t<ValT>, lasx::ondemand::object>) {
+    obj = val;
+  } else {
+    SIMDJSON_TRY(val.get_object().get(obj));
+  }
+  error_code e = simdjson::SUCCESS;
+
+  [:expand(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked())):] >> [&]<auto mem>() {
+    if constexpr (!std::meta::is_const(mem) && std::meta::is_public(mem)) {
+      constexpr std::string_view key = std::define_static_string(std::meta::identifier_of(mem));
+      // Note: removed static assert as optional types are now handled generically
+      // as long we are succesful or the field is not found, we continue
+      if(e == simdjson::SUCCESS || e == simdjson::NO_SUCH_FIELD) {
+        e = obj[key].get(out.[:mem:]);
+      }
+    }
+  };
+  return e;
+}
+
+// Support for enum deserialization - deserialize from string representation using expand approach from P2996R12
+template <typename T, typename ValT>
+  requires(std::is_enum_v<T>)
+error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept {
+#if SIMDJSON_STATIC_REFLECTION
+  std::string_view str;
+  SIMDJSON_TRY(val.get_string().get(str));
+
+  bool found = false;
+  [:expand(std::meta::enumerators_of(^^T)):] >> [&]<auto enum_val>{
+    if (!found && str == std::meta::identifier_of(enum_val)) {
+      out = [:enum_val:];
+      found = true;
+    }
+  };
+
+  return found ? SUCCESS : INCORRECT_TYPE;
+#else
+  // Fallback: deserialize as integer if reflection not available
+  std::underlying_type_t<T> int_val;
+  SIMDJSON_TRY(val.get(int_val));
+  out = static_cast<T>(int_val);
+  return SUCCESS;
+#endif
+}
+
+template <typename simdjson_value, typename T>
+  requires(user_defined_type<std::remove_cvref_t<T>>)
+error_code tag_invoke(deserialize_tag, simdjson_value &val, std::unique_ptr<T> &out) noexcept {
+  if (!out) {
+    out = std::make_unique<T>();
+    if (!out) {
+      return MEMALLOC;
+    }
+  }
+  if (auto err = val.get(*out)) {
+    out.reset();
+    return err;
+  }
+  return SUCCESS;
+}
+
+template <typename simdjson_value, typename T>
+  requires(user_defined_type<std::remove_cvref_t<T>>)
+error_code tag_invoke(deserialize_tag, simdjson_value &val, std::shared_ptr<T> &out) noexcept {
+  if (!out) {
+    out = std::make_shared<T>();
+    if (!out) {
+      return MEMALLOC;
+    }
+  }
+  if (auto err = val.get(*out)) {
+    out.reset();
+    return err;
+  }
+  return SUCCESS;
+}
+
+#endif // SIMDJSON_STATIC_REFLECTION
+
+////////////////////////////////////////
+// Unique pointers
+////////////////////////////////////////
+error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<bool> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_unique<bool>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_bool().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<int64_t> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_unique<int64_t>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_int64().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<uint64_t> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_unique<uint64_t>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_uint64().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<double> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_unique<double>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_double().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<std::string_view> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_unique<std::string_view>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_string().get(*out));
+  return SUCCESS;
+}
+
+
+////////////////////////////////////////
+// Shared pointers
+////////////////////////////////////////
+error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<bool> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_shared<bool>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_bool().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<int64_t> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_shared<int64_t>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_int64().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<uint64_t> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_shared<uint64_t>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_uint64().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<double> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_shared<double>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_double().get(*out));
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<std::string_view> &out) noexcept {
+  if (val.is_null()) {
+    out.reset();
+    return SUCCESS;
+  }
+  if (!out) {
+    out = std::make_shared<std::string_view>();
+    if (!out) { return MEMALLOC; }
+  }
+  SIMDJSON_TRY(val.get_string().get(*out));
+  return SUCCESS;
+}
+
+
+////////////////////////////////////////
+// Explicit optional specializations
+////////////////////////////////////////
+
+////////////////////////////////////////
+// Explicit smart pointer specializations for string and int types
+////////////////////////////////////////
+error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<std::string> &out) noexcept {
+  // Check if the value is null
+  if (val.is_null()) {
+    out.reset(); // Set to nullptr
+    return SUCCESS;
+  }
+
+  if (!out) {
+    out = std::make_unique<std::string>();
+  }
+  std::string_view str;
+  SIMDJSON_TRY(val.get_string().get(str));
+  *out = std::string{str};
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<std::string> &out) noexcept {
+  // Check if the value is null
+  if (val.is_null()) {
+    out.reset(); // Set to nullptr
+    return SUCCESS;
+  }
+
+  if (!out) {
+    out = std::make_shared<std::string>();
+  }
+  std::string_view str;
+  SIMDJSON_TRY(val.get_string().get(str));
+  *out = std::string{str};
+  return SUCCESS;
+}
+
+error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<int> &out) noexcept {
+  // Check if the value is null
+  if (val.is_null()) {
+    out.reset(); // Set to nullptr
+    return SUCCESS;
+  }
+
+  if (!out) {
+    out = std::make_unique<int>();
+  }
+  int64_t temp;
+  SIMDJSON_TRY(val.get_int64().get(temp));
+  *out = static_cast<int>(temp);
   return SUCCESS;
 }
 
@@ -118293,6 +131093,9 @@ simdjson_inline array_iterator &array_iterator::operator++() noexcept {
   return *this;
 }
 
+simdjson_inline bool array_iterator::at_end() const noexcept {
+  return iter.at_end();
+}
 } // namespace ondemand
 } // namespace lasx
 } // namespace simdjson
@@ -118329,7 +131132,9 @@ simdjson_inline simdjson_result<lasx::ondemand::array_iterator> &simdjson_result
   ++(first);
   return *this;
 }
-
+simdjson_inline bool simdjson_result<lasx::ondemand::array_iterator>::at_end() const noexcept {
+  return !first.iter.is_valid() || first.at_end();
+}
 } // namespace simdjson
 
 #endif // SIMDJSON_GENERIC_ONDEMAND_ARRAY_ITERATOR_INL_H
@@ -119087,8 +131892,8 @@ simdjson_inline document::operator object() & noexcept(false) { return get_objec
 simdjson_inline document::operator uint64_t() noexcept(false) { return get_uint64(); }
 simdjson_inline document::operator int64_t() noexcept(false) { return get_int64(); }
 simdjson_inline document::operator double() noexcept(false) { return get_double(); }
-simdjson_inline document::operator std::string_view() noexcept(false) { return get_string(false); }
-simdjson_inline document::operator raw_json_string() noexcept(false) { return get_raw_json_string(); }
+simdjson_inline document::operator std::string_view() noexcept(false) simdjson_lifetime_bound { return get_string(false); }
+simdjson_inline document::operator raw_json_string() noexcept(false) simdjson_lifetime_bound { return get_raw_json_string(); }
 simdjson_inline document::operator bool() noexcept(false) { return get_bool(); }
 simdjson_inline document::operator value() noexcept(false) { return get_value(); }
 
@@ -120645,6 +133450,8 @@ simdjson_inline void json_iterator::assert_valid_position(token_position positio
 #ifndef SIMDJSON_CLANG_VISUAL_STUDIO
   SIMDJSON_ASSUME( position >= &parser->implementation->structural_indexes[0] );
   SIMDJSON_ASSUME( position < &parser->implementation->structural_indexes[parser->implementation->n_structural_indexes] );
+#else
+  (void)position; // Suppress unused parameter warning
 #endif
 }
 
@@ -121493,6 +134300,7 @@ simdjson_inline  simdjson_result<std::string_view> simdjson_result<lasx::ondeman
   if (error()) { return error(); }
   return first.raw_json();
 }
+
 } // namespace simdjson
 
 #endif // SIMDJSON_GENERIC_ONDEMAND_OBJECT_INL_H
@@ -122068,6 +134876,9 @@ simdjson_inline simdjson_warn_unused simdjson_result<std::string_view> simdjson_
 /* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/object.h" */
 /* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/serialization.h" */
 /* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/value.h" */
+/* amalgamation skipped (editor-only): #if SIMDJSON_STATIC_REFLECTION */
+/* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/json_builder.h" */
+/* amalgamation skipped (editor-only): #endif */
 /* amalgamation skipped (editor-only): #endif // SIMDJSON_CONDITIONAL_INCLUDE */
 
 namespace simdjson {
@@ -123489,6 +136300,1151 @@ simdjson_inline simdjson_result<lasx::ondemand::value_iterator>::simdjson_result
 #endif // SIMDJSON_GENERIC_ONDEMAND_VALUE_ITERATOR_INL_H
 /* end file simdjson/generic/ondemand/value_iterator-inl.h for lasx */
 
+// JSON builder, ideally they should not be part of the ondemand directory
+// but it is convenient for now to have them here.
+/* including simdjson/generic/ondemand/json_string_builder.h for lasx: #include "simdjson/generic/ondemand/json_string_builder.h" */
+/* begin file simdjson/generic/ondemand/json_string_builder.h for lasx */
+/**
+ * This file is part of the builder API. It is temporarily in the ondemand directory
+ * but we will move it to a builder directory later.
+ */
+#ifndef SIMDJSON_GENERIC_STRING_BUILDER_H
+
+/* amalgamation skipped (editor-only): #ifndef SIMDJSON_CONDITIONAL_INCLUDE */
+/* amalgamation skipped (editor-only): #define SIMDJSON_GENERIC_STRING_BUILDER_H */
+/* amalgamation skipped (editor-only): #include "simdjson/generic/implementation_simdjson_result_base.h" */
+/* amalgamation skipped (editor-only): #endif // SIMDJSON_CONDITIONAL_INCLUDE */
+
+namespace simdjson {
+namespace lasx {
+namespace builder {
+
+/**
+ * A builder for JSON strings representing documents. This is a low-level
+ * builder that is not meant to be used directly by end-users. Though it
+ * supports atomic types (Booleans, strings), it does not support composed
+ * types (arrays and objects).
+ *
+ * Ultimately, this class can support kernel-specific optimizations. E.g.,
+ * it may make use of SIMD instructions to escape strings faster.
+ */
+class string_builder {
+public:
+  simdjson_inline string_builder(size_t initial_capacity = 1024);
+
+  /**
+   * Append number (includes Booleans). Booleans are mapped to the strings
+   * false and true. Numbers are converted to strings abiding by the JSON standard.
+   * Floating-point numbers are converted to the shortest string that 'correctly'
+   * represents the number.
+   */
+  template<typename number_type,
+         typename = typename std::enable_if<std::is_arithmetic<number_type>::value>::type>
+  simdjson_inline void append(number_type v) noexcept;
+
+  /**
+   * Append character c.
+   */
+  simdjson_inline void append(char c)  noexcept;
+
+  /**
+   * Append the string 'null'.
+   */
+  simdjson_inline void append_null()  noexcept;
+
+  /**
+   * Clear the content.
+   */
+  simdjson_inline void clear()  noexcept;
+
+  /**
+   * Append the std::string_view, after escaping it.
+   * There is no UTF-8 validation.
+   */
+  simdjson_inline void escape_and_append(std::string_view input)  noexcept;
+
+  /**
+   * Append the std::string_view surrounded by double quotes, after escaping it.
+   * There is no UTF-8 validation.
+   */
+  simdjson_inline void escape_and_append_with_quotes(std::string_view input)  noexcept;
+
+  /**
+   * Append the character surrounded by double quotes, after escaping it.
+   * There is no UTF-8 validation.
+   */
+  simdjson_inline void escape_and_append_with_quotes(char input)  noexcept;
+
+  /**
+   * Append the character surrounded by double quotes, after escaping it.
+   * There is no UTF-8 validation.
+   */
+   simdjson_inline void escape_and_append_with_quotes(const char* input)  noexcept;
+
+  /**
+   * Append the C string directly, without escaping.
+   * There is no UTF-8 validation.
+   */
+  simdjson_inline void append_raw(const char *c)  noexcept;
+
+  /**
+   * Append "{" to the buffer.
+   */
+  simdjson_inline void start_object()  noexcept;
+
+  /**
+   * Append "}" to the buffer.
+   */
+  simdjson_inline void end_object()  noexcept;
+
+  /**
+   * Append "[" to the buffer.
+   */
+  simdjson_inline void start_array()  noexcept;
+
+  /**
+   * Append "]" to the buffer.
+   */
+  simdjson_inline void end_array()  noexcept;
+
+  /**
+   * Append "," to the buffer.
+   */
+  simdjson_inline void append_comma()  noexcept;
+
+  /**
+   * Append ":" to the buffer.
+   */
+  simdjson_inline void append_colon()  noexcept;
+
+  /**
+   * Append a key-value pair to the buffer.
+   * The key is escaped and surrounded by double quotes.
+   * The value is escaped if it is a string.
+   */
+   template<typename key_type, typename value_type>
+  simdjson_inline void append_key_value(key_type key, value_type value) noexcept;
+  /**
+   * Append the std::string_view directly, without escaping.
+   * There is no UTF-8 validation.
+   */
+  simdjson_inline void append_raw(std::string_view input)  noexcept;
+
+  /**
+   * Append len characters from str.
+   * There is no UTF-8 validation.
+   */
+  simdjson_inline void append_raw(const char *str, size_t len) noexcept;
+#if SIMDJSON_EXCEPTIONS
+  /**
+   * Creates an std::string from the written JSON buffer.
+   * Throws if memory allocation failed
+   *
+   * The result may not be valid UTF-8 if some of your content was not valid UTF-8.
+   * Use validate_unicode() to check the content if needed.
+   */
+  simdjson_inline operator std::string() const noexcept(false);
+
+  /**
+   * Creates an std::string_view from the written JSON buffer.
+   * Throws if memory allocation failed.
+   *
+   * The result may not be valid UTF-8 if some of your content was not valid UTF-8.
+   * Use validate_unicode() to check the content if needed.
+   */
+  simdjson_inline operator std::string_view() const noexcept(false) simdjson_lifetime_bound;
+#endif
+
+  /**
+   * Returns a view on the written JSON buffer. Returns an error
+   * if memory allocation failed.
+   *
+   * The result may not be valid UTF-8 if some of your content was not valid UTF-8.
+   * Use validate_unicode() to check the content.
+   */
+  simdjson_inline simdjson_result<std::string_view> view() const noexcept;
+
+  /**
+   * Appends the null character to the buffer and returns
+   * a pointer to the beginning of the written JSON buffer.
+   * Returns an error if memory allocation failed.
+   * The result is null-terminated.
+   *
+   * The result may not be valid UTF-8 if some of your content was not valid UTF-8.
+   * Use validate_unicode() to check the content.
+   */
+  simdjson_inline simdjson_result<const char *> c_str() noexcept;
+
+  /**
+   * Return true if the content is valid UTF-8.
+   */
+  simdjson_inline bool validate_unicode() const noexcept;
+
+  /**
+   * Returns the current size of the written JSON buffer.
+   * If an error occurred, returns 0.
+   */
+  simdjson_inline size_t size() const noexcept;
+
+private:
+  /**
+   * Returns true if we can write at least upcoming_bytes bytes.
+   * The underlying buffer is reallocated if needed. It is designed
+   * to be called before writing to the buffer. It should be fast.
+   */
+  simdjson_inline bool capacity_check(size_t upcoming_bytes);
+
+  /**
+   * Grow the buffer to at least desired_capacity bytes.
+   * If the allocation fails, is_valid is set to false. We expect
+   * that this function would not be repeatedly called.
+   */
+  simdjson_inline void grow_buffer(size_t desired_capacity);
+
+  /**
+   * We use this helper function to make sure that is_valid is kept consistent.
+   */
+  simdjson_inline void set_valid(bool valid) noexcept;
+
+  std::unique_ptr<char[]> buffer{};
+  size_t position{0};
+  size_t capacity{0};
+  bool is_valid{true};
+};
+
+
+
+}
+}
+} // namespace simdjson
+
+#endif // SIMDJSON_GENERIC_STRING_BUILDER_H
+/* end file simdjson/generic/ondemand/json_string_builder.h for lasx */
+/* including simdjson/generic/ondemand/json_string_builder-inl.h for lasx: #include "simdjson/generic/ondemand/json_string_builder-inl.h" */
+/* begin file simdjson/generic/ondemand/json_string_builder-inl.h for lasx */
+/**
+ * This file is part of the builder API. It is temporarily in the ondemand
+ * directory but we will move it to a builder directory later.
+ */
+#include <array>
+#include <cstring>
+#include <type_traits>
+#ifndef SIMDJSON_GENERIC_STRING_BUILDER_INL_H
+
+/* amalgamation skipped (editor-only): #ifndef SIMDJSON_CONDITIONAL_INCLUDE */
+/* amalgamation skipped (editor-only): #define SIMDJSON_GENERIC_STRING_BUILDER_INL_H */
+/* amalgamation skipped (editor-only): #include "simdjson/generic/builder/json_string_builder.h" */
+/* amalgamation skipped (editor-only): #endif // SIMDJSON_CONDITIONAL_INCLUDE */
+
+/*
+ * Empirically, we have found that an inlined optimization is important for
+ * performance. The following macros are not ideal. We should find a better
+ * way to inline the code.
+ */
+
+#if defined(__SSE2__) || defined(__x86_64__) || defined(__x86_64) ||           \
+    (defined(_M_AMD64) || defined(_M_X64) ||                                   \
+     (defined(_M_IX86_FP) && _M_IX86_FP == 2))
+#ifndef SIMDJSON_EXPERIMENTAL_HAS_SSE2
+#define SIMDJSON_EXPERIMENTAL_HAS_SSE2 1
+#endif
+#endif
+
+#if defined(__aarch64__) || defined(_M_ARM64)
+#ifndef SIMDJSON_EXPERIMENTAL_HAS_NEON
+#define SIMDJSON_EXPERIMENTAL_HAS_NEON 1
+#endif
+#endif
+#if SIMDJSON_EXPERIMENTAL_HAS_NEON
+#include <arm_neon.h>
+#endif
+#if SIMDJSON_EXPERIMENTAL_HAS_SSE2
+#include <emmintrin.h>
+#endif
+
+namespace simdjson {
+namespace lasx {
+namespace builder {
+
+static SIMDJSON_CONSTEXPR_LAMBDA std::array<uint8_t, 256> json_quotable_character = {
+  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+  1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+
+/**
+
+A possible SWAR implementation of has_json_escapable_byte. It is not used because
+it is slower than the current implementation. It is kept here for reference (to show
+that we tried it).
+
+inline bool has_json_escapable_byte(uint64_t x) {
+  uint64_t is_ascii = 0x8080808080808080ULL & ~x;
+  uint64_t xor2 = x ^ 0x0202020202020202ULL;
+  uint64_t lt32_or_eq34 = xor2 - 0x2121212121212121ULL;
+  uint64_t sub92 = x ^ 0x5C5C5C5C5C5C5C5CULL;
+  uint64_t eq92 = (sub92 - 0x0101010101010101ULL);
+  return ((lt32_or_eq34 | eq92) & is_ascii) != 0;
+}
+
+**/
+
+SIMDJSON_CONSTEXPR_LAMBDA simdjson_inline bool
+simple_needs_escaping(std::string_view v) {
+  for (char c : v) {
+    // a table lookup is faster than a series of comparisons
+    if(json_quotable_character[static_cast<uint8_t>(c)]) {
+      return true;
+    }
+  }
+  return false;
+}
+
+#if SIMDJSON_EXPERIMENTAL_HAS_NEON
+simdjson_inline bool fast_needs_escaping(std::string_view view) {
+  if (view.size() < 16) {
+    return simple_needs_escaping(view);
+  }
+  size_t i = 0;
+  uint8x16_t running = vdupq_n_u8(0);
+  uint8x16_t v34 = vdupq_n_u8(34);
+  uint8x16_t v92 = vdupq_n_u8(92);
+
+  for (; i + 15 < view.size(); i += 16) {
+    uint8x16_t word = vld1q_u8((const uint8_t *)view.data() + i);
+    running = vorrq_u8(running, vceqq_u8(word, v34));
+    running = vorrq_u8(running, vceqq_u8(word, v92));
+    running = vorrq_u8(running, vcltq_u8(word, vdupq_n_u8(32)));
+  }
+  if (i < view.size()) {
+    uint8x16_t word =
+        vld1q_u8((const uint8_t *)view.data() + view.length() - 16);
+    running = vorrq_u8(running, vceqq_u8(word, v34));
+    running = vorrq_u8(running, vceqq_u8(word, v92));
+    running = vorrq_u8(running, vcltq_u8(word, vdupq_n_u8(32)));
+  }
+  return vmaxvq_u32(vreinterpretq_u32_u8(running)) != 0;
+}
+#elif SIMDJSON_EXPERIMENTAL_HAS_SSE2
+simdjson_inline bool fast_needs_escaping(std::string_view view) {
+  if (view.size() < 16) {
+    return simple_needs_escaping(view);
+  }
+  size_t i = 0;
+  __m128i running = _mm_setzero_si128();
+  for (; i + 15 < view.size(); i += 16) {
+
+    __m128i word = _mm_loadu_si128(reinterpret_cast<const __m128i *>(view.data() + i));
+    running = _mm_or_si128(running, _mm_cmpeq_epi8(word, _mm_set1_epi8(34)));
+    running = _mm_or_si128(running, _mm_cmpeq_epi8(word, _mm_set1_epi8(92)));
+    running = _mm_or_si128(
+        running, _mm_cmpeq_epi8(_mm_subs_epu8(word, _mm_set1_epi8(31)),
+                                _mm_setzero_si128()));
+  }
+  if (i < view.size()) {
+    __m128i word =
+        _mm_loadu_si128(reinterpret_cast<const __m128i *>(view.data() + view.length() - 16));
+    running = _mm_or_si128(running, _mm_cmpeq_epi8(word, _mm_set1_epi8(34)));
+    running = _mm_or_si128(running, _mm_cmpeq_epi8(word, _mm_set1_epi8(92)));
+    running = _mm_or_si128(
+        running, _mm_cmpeq_epi8(_mm_subs_epu8(word, _mm_set1_epi8(31)),
+                                _mm_setzero_si128()));
+  }
+  return _mm_movemask_epi8(running) != 0;
+}
+#else
+simdjson_inline bool fast_needs_escaping(std::string_view view) {
+  return simple_needs_escaping(view);
+}
+#endif
+
+
+SIMDJSON_CONSTEXPR_LAMBDA inline size_t
+find_next_json_quotable_character(const std::string_view view,
+                                  size_t location) noexcept {
+
+  for (auto pos = view.begin() + location; pos != view.end(); ++pos) {
+    if (json_quotable_character[static_cast<uint8_t>(*pos)]) {
+      return pos - view.begin();
+    }
+  }
+  return size_t(view.size());
+}
+
+SIMDJSON_CONSTEXPR_LAMBDA static std::string_view control_chars[] = {
+    "\\x0000", "\\x0001", "\\x0002", "\\x0003", "\\x0004", "\\x0005", "\\x0006",
+    "\\x0007", "\\x0008", "\\t",     "\\n",     "\\x000b", "\\f",     "\\r",
+    "\\x000e", "\\x000f", "\\x0010", "\\x0011", "\\x0012", "\\x0013", "\\x0014",
+    "\\x0015", "\\x0016", "\\x0017", "\\x0018", "\\x0019", "\\x001a", "\\x001b",
+    "\\x001c", "\\x001d", "\\x001e", "\\x001f"};
+
+SIMDJSON_CONSTEXPR_LAMBDA void escape_json_char(char c, char *&out) {
+  if (c == '"') {
+    memcpy(out, "\\\"", 2);
+    out += 2;
+  } else if (c == '\\') {
+    memcpy(out, "\\\\", 2);
+    out += 2;
+  } else {
+    std::string_view v = control_chars[uint8_t(c)];
+    memcpy(out, v.data(), v.size());
+    out += v.size();
+  }
+}
+
+inline size_t write_string_escaped(const std::string_view input, char *out) {
+  size_t mysize = input.size();
+  if (!fast_needs_escaping(input)) { // fast path!
+    memcpy(out, input.data(), input.size());
+    return input.size();
+  }
+  const char *const initout = out;
+  size_t location = find_next_json_quotable_character(input, 0);
+  memcpy(out, input.data(), location);
+  out += location;
+  escape_json_char(input[location], out);
+  location += 1;
+  while (location < mysize) {
+    size_t newlocation = find_next_json_quotable_character(input, location);
+    memcpy(out, input.data() + location, newlocation - location);
+    out += newlocation - location;
+    location = newlocation;
+    if (location == mysize) {
+      break;
+    }
+    escape_json_char(input[location], out);
+    location += 1;
+  }
+  return out - initout;
+}
+
+#if SIMDJSON_CONSTEVAL
+// unoptimized, meant for compile-time execution
+consteval std::string consteval_to_quoted_escaped(std::string_view input) {
+  std::string out = "\"";
+  for (char c : input) {
+    if (json_quotable_character[uint8_t(c)]) {
+      if (c == '"') {
+        out.append("\\\"");
+      } else if (c == '\\') {
+        out.append("\\\\");
+      } else {
+        std::string_view v = control_chars[uint8_t(c)];
+        out.append(v);
+      }
+    } else {
+      out.push_back(c);
+    }
+  }
+  out.push_back('"');
+  return out;
+}
+#endif // SIMDJSON_CONSTEVAL
+
+simdjson_inline string_builder::string_builder(size_t initial_capacity)
+    : buffer(new(std::nothrow) char[initial_capacity]), position(0),
+      capacity(buffer.get() != nullptr ? initial_capacity : 0),
+      is_valid(buffer.get() != nullptr) {}
+
+simdjson_inline bool string_builder::capacity_check(size_t upcoming_bytes) {
+  // We use the convention that when is_valid is false, then the capacity and
+  // the position are 0.
+  // Most of the time, this function will return true.
+  if (simdjson_likely(upcoming_bytes <= capacity - position)) {
+    return true;
+  }
+  // check for overflow, most of the time there is no overflow
+  if (simdjson_likely(position + upcoming_bytes < position)) {
+    return false;
+  }
+  // We will rarely get here.
+  grow_buffer((std::max)(capacity * 2, position + upcoming_bytes));
+  // If the buffer allocation failed, we set is_valid to false.
+  return is_valid;
+}
+
+simdjson_inline void string_builder::grow_buffer(size_t desired_capacity) {
+  if (!is_valid) {
+    return;
+  }
+  std::unique_ptr<char[]> new_buffer(new (std::nothrow) char[desired_capacity]);
+  if (new_buffer.get() == nullptr) {
+    set_valid(false);
+    return;
+  }
+  std::memcpy(new_buffer.get(), buffer.get(), position);
+  buffer.swap(new_buffer);
+  capacity = desired_capacity;
+}
+
+simdjson_inline void string_builder::set_valid(bool valid) noexcept {
+  if (!valid) {
+    is_valid = false;
+    capacity = 0;
+    position = 0;
+    buffer.reset();
+  } else {
+    is_valid = true;
+  }
+}
+
+simdjson_inline size_t string_builder::size() const noexcept {
+  return position;
+}
+
+simdjson_inline void string_builder::append(char c) noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position++] = c;
+  }
+}
+
+simdjson_inline void string_builder::append_null() noexcept {
+  constexpr char null_literal[] = "null";
+  constexpr size_t null_len = sizeof(null_literal) - 1;
+  if (capacity_check(null_len)) {
+    std::memcpy(buffer.get() + position, null_literal, null_len);
+    position += null_len;
+  }
+}
+
+simdjson_inline void string_builder::clear() noexcept {
+  position = 0;
+  // if it was invalid, we should try to repair it
+  if (!is_valid) {
+    capacity = 0;
+    buffer.reset();
+    is_valid = true;
+  }
+}
+
+namespace internal {
+
+// We could specialize further for 32-bit integers.
+simdjson_really_inline int int_log2(uint32_t x) { return (63 - leading_zeroes(x | 1)); }
+
+simdjson_really_inline int fast_digit_count(uint32_t x) {
+  static uint64_t table[] = {
+      4294967296,  8589934582,  8589934582,  8589934582,  12884901788,
+      12884901788, 12884901788, 17179868184, 17179868184, 17179868184,
+      21474826480, 21474826480, 21474826480, 21474826480, 25769703776,
+      25769703776, 25769703776, 30063771072, 30063771072, 30063771072,
+      34349738368, 34349738368, 34349738368, 34349738368, 38554705664,
+      38554705664, 38554705664, 41949672960, 41949672960, 41949672960,
+      42949672960, 42949672960};
+  return uint32_t((x + table[int_log2(x)]) >> 32);
+}
+
+simdjson_really_inline int int_log2(uint64_t x) { return 63 - leading_zeroes(x | 1); }
+
+simdjson_really_inline int fast_digit_count(uint64_t x) {
+  static uint64_t table[] = {9,
+                             99,
+                             999,
+                             9999,
+                             99999,
+                             999999,
+                             9999999,
+                             99999999,
+                             999999999,
+                             9999999999,
+                             99999999999,
+                             999999999999,
+                             9999999999999,
+                             99999999999999,
+                             999999999999999ULL,
+                             9999999999999999ULL,
+                             99999999999999999ULL,
+                             999999999999999999ULL,
+                             9999999999999999999ULL};
+  int y = (19 * int_log2(x) >> 6);
+  y += x > table[y];
+  return y + 1;
+}
+
+template <typename number_type, typename = typename std::enable_if<
+                                    std::is_unsigned<number_type>::value>::type>
+simdjson_really_inline size_t digit_count(number_type v) noexcept {
+  static_assert(sizeof(number_type) == 8 || sizeof(number_type) == 4 ||
+                    sizeof(number_type) == 2 || sizeof(number_type) == 1,
+                "We only support 8-bit, 16-bit, 32-bit and 64-bit numbers");
+  return fast_digit_count(v);
+}
+static const char decimal_table[200] = {
+  0x30, 0x30, 0x30, 0x31, 0x30, 0x32, 0x30, 0x33, 0x30, 0x34, 0x30, 0x35,
+  0x30, 0x36, 0x30, 0x37, 0x30, 0x38, 0x30, 0x39, 0x31, 0x30, 0x31, 0x31,
+  0x31, 0x32, 0x31, 0x33, 0x31, 0x34, 0x31, 0x35, 0x31, 0x36, 0x31, 0x37,
+  0x31, 0x38, 0x31, 0x39, 0x32, 0x30, 0x32, 0x31, 0x32, 0x32, 0x32, 0x33,
+  0x32, 0x34, 0x32, 0x35, 0x32, 0x36, 0x32, 0x37, 0x32, 0x38, 0x32, 0x39,
+  0x33, 0x30, 0x33, 0x31, 0x33, 0x32, 0x33, 0x33, 0x33, 0x34, 0x33, 0x35,
+  0x33, 0x36, 0x33, 0x37, 0x33, 0x38, 0x33, 0x39, 0x34, 0x30, 0x34, 0x31,
+  0x34, 0x32, 0x34, 0x33, 0x34, 0x34, 0x34, 0x35, 0x34, 0x36, 0x34, 0x37,
+  0x34, 0x38, 0x34, 0x39, 0x35, 0x30, 0x35, 0x31, 0x35, 0x32, 0x35, 0x33,
+  0x35, 0x34, 0x35, 0x35, 0x35, 0x36, 0x35, 0x37, 0x35, 0x38, 0x35, 0x39,
+  0x36, 0x30, 0x36, 0x31, 0x36, 0x32, 0x36, 0x33, 0x36, 0x34, 0x36, 0x35,
+  0x36, 0x36, 0x36, 0x37, 0x36, 0x38, 0x36, 0x39, 0x37, 0x30, 0x37, 0x31,
+  0x37, 0x32, 0x37, 0x33, 0x37, 0x34, 0x37, 0x35, 0x37, 0x36, 0x37, 0x37,
+  0x37, 0x38, 0x37, 0x39, 0x38, 0x30, 0x38, 0x31, 0x38, 0x32, 0x38, 0x33,
+  0x38, 0x34, 0x38, 0x35, 0x38, 0x36, 0x38, 0x37, 0x38, 0x38, 0x38, 0x39,
+  0x39, 0x30, 0x39, 0x31, 0x39, 0x32, 0x39, 0x33, 0x39, 0x34, 0x39, 0x35,
+  0x39, 0x36, 0x39, 0x37, 0x39, 0x38, 0x39, 0x39,
+};
+} // namespace internal
+
+template <typename number_type, typename>
+simdjson_inline void string_builder::append(number_type v) noexcept {
+  static_assert(std::is_same<number_type, bool>::value ||
+                    std::is_integral<number_type>::value ||
+                    std::is_floating_point<number_type>::value,
+                "Unsupported number type");
+  // If C++17 is available, we can 'if constexpr' here.
+  SIMDJSON_IF_CONSTEXPR(std::is_same<number_type, bool>::value) {
+    if (v) {
+      constexpr char true_literal[] = "true";
+      constexpr size_t true_len = sizeof(true_literal) - 1;
+      if (capacity_check(true_len)) {
+        std::memcpy(buffer.get() + position, true_literal, true_len);
+        position += true_len;
+      }
+    } else {
+      constexpr char false_literal[] = "false";
+      constexpr size_t false_len = sizeof(false_literal) - 1;
+      if (capacity_check(false_len)) {
+        std::memcpy(buffer.get() + position, false_literal, false_len);
+        position += false_len;
+      }
+    }
+  }
+  else SIMDJSON_IF_CONSTEXPR(std::is_unsigned<number_type>::value) {
+    constexpr size_t max_number_size = 20;
+    if (capacity_check(max_number_size)) {
+      using unsigned_type = typename std::make_unsigned<number_type>::type;
+      unsigned_type pv = static_cast<unsigned_type>(v);
+      size_t dc = internal::digit_count(pv);
+      char *write_pointer = buffer.get() + position + dc - 1;
+      while (pv >= 100) {
+        memcpy(write_pointer - 1, &internal::decimal_table[(pv % 100)*2], 2);
+        write_pointer -= 2;
+        pv /= 100;
+      }
+      if (pv >= 10) {
+        *write_pointer-- = char('0' + (pv % 10));
+        pv /= 10;
+      }
+      *write_pointer = char('0' + pv);
+      position += dc;
+    }
+  }
+  else SIMDJSON_IF_CONSTEXPR(std::is_integral<number_type>::value) {
+    constexpr size_t max_number_size = 20;
+    if (capacity_check(max_number_size)) {
+      using unsigned_type = typename std::make_unsigned<number_type>::type;
+      bool negative = v < 0;
+      unsigned_type pv = static_cast<unsigned_type>(v);
+      if (negative) {
+        pv = 0 - pv; // the 0 is for Microsoft
+      }
+      size_t dc = internal::digit_count(pv);
+      if (negative) {
+        buffer.get()[position++] = '-';
+      }
+      char *write_pointer = buffer.get() + position + dc - 1;
+      while (pv >= 100) {
+        memcpy(write_pointer - 1, &internal::decimal_table[(pv % 100)*2], 2);
+        write_pointer -= 2;
+        pv /= 100;
+      }
+      if (pv >= 10) {
+        *write_pointer-- = char('0' + (pv % 10));
+        pv /= 10;
+      }
+      *write_pointer = char('0' + pv);
+      position += dc;
+    }
+  }
+  else SIMDJSON_IF_CONSTEXPR(std::is_floating_point<number_type>::value) {
+    constexpr size_t max_number_size = 24;
+    if (capacity_check(max_number_size)) {
+      // We could specialize for float.
+      char *end = simdjson::internal::to_chars(buffer.get() + position, nullptr,
+                                               double(v));
+      position = end - buffer.get();
+    }
+  }
+}
+
+simdjson_inline void
+string_builder::escape_and_append(std::string_view input) noexcept {
+  // escaping might turn a control character into \x00xx so 6 characters.
+  if (capacity_check(6 * input.size())) {
+    position += write_string_escaped(input, buffer.get() + position);
+  }
+}
+
+simdjson_inline void
+string_builder::escape_and_append_with_quotes(std::string_view input) noexcept {
+  // escaping might turn a control character into \x00xx so 6 characters.
+  if (capacity_check(2 + 6 * input.size())) {
+    buffer.get()[position++] = '"';
+    position += write_string_escaped(input, buffer.get() + position);
+    buffer.get()[position++] = '"';
+  }
+}
+
+simdjson_inline void
+string_builder::escape_and_append_with_quotes(char input) noexcept {
+  // escaping might turn a control character into \x00xx so 6 characters.
+  if (capacity_check(2 + 6 * 1)) {
+    buffer.get()[position++] = '"';
+    std::string_view cinput(&input, 1);
+    position += write_string_escaped(cinput, buffer.get() + position);
+    buffer.get()[position++] = '"';
+  }
+}
+
+simdjson_inline void string_builder::escape_and_append_with_quotes(const char* input)  noexcept {
+  std::string_view cinput(input);
+  escape_and_append_with_quotes(cinput);
+}
+
+simdjson_inline void string_builder::append_raw(const char *c) noexcept {
+  size_t len = std::strlen(c);
+  append_raw(c, len);
+}
+
+simdjson_inline void
+string_builder::append_raw(std::string_view input) noexcept {
+  if (capacity_check(input.size())) {
+    std::memcpy(buffer.get() + position, input.data(), input.size());
+    position += input.size();
+  }
+}
+
+simdjson_inline void string_builder::append_raw(const char *str,
+                                                size_t len) noexcept {
+  if (capacity_check(len)) {
+    std::memcpy(buffer.get() + position, str, len);
+    position += len;
+  }
+}
+
+#if SIMDJSON_EXCEPTIONS
+simdjson_inline string_builder::operator std::string() const noexcept(false) {
+  return std::string(std::string_view());
+}
+
+simdjson_inline string_builder::operator std::string_view() const
+    noexcept(false) simdjson_lifetime_bound {
+  return view();
+}
+#endif
+
+simdjson_inline simdjson_result<std::string_view>
+string_builder::view() const noexcept {
+  if (!is_valid) {
+    return simdjson::OUT_OF_CAPACITY;
+  }
+  return std::string_view(buffer.get(), position);
+}
+
+simdjson_inline simdjson_result<const char *> string_builder::c_str() noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position] = '\0';
+    return buffer.get();
+  }
+  return simdjson::OUT_OF_CAPACITY;
+}
+
+simdjson_inline bool string_builder::validate_unicode() const noexcept {
+  return simdjson::validate_utf8(buffer.get(), position);
+}
+
+simdjson_inline void string_builder::start_object()  noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position++] = '{';
+  }
+}
+
+
+simdjson_inline void string_builder::end_object()  noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position++] = '}';
+  }
+}
+
+
+simdjson_inline void string_builder::start_array()  noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position++] = '[';
+  }
+}
+
+
+simdjson_inline void string_builder::end_array()  noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position++] = ']';
+  }
+}
+
+
+simdjson_inline void string_builder::append_comma()  noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position++] = ',';
+  }
+}
+
+
+simdjson_inline void string_builder::append_colon()  noexcept {
+  if (capacity_check(1)) {
+    buffer.get()[position++] = ':';
+  }
+}
+
+template<typename key_type, typename value_type>
+simdjson_inline void string_builder::append_key_value(key_type key, value_type value) noexcept {
+  static_assert(
+    std::is_arithmetic<value_type>::value ||
+    std::is_same<value_type, char>::value ||
+    std::is_same<value_type, const char*>::value ||
+    std::is_convertible<value_type, std::string_view>::value ||
+    std::is_same<value_type, std::nullptr_t>::value,
+    "Unsupported value type");
+  static_assert(
+    std::is_same<key_type, const char*>::value ||
+    std::is_convertible<key_type, std::string_view>::value,
+    "Unsupported key type");
+  escape_and_append_with_quotes(key);
+  append_colon();
+  SIMDJSON_IF_CONSTEXPR(std::is_same<value_type, std::nullptr_t>::value) {
+    append_null();
+  } else SIMDJSON_IF_CONSTEXPR(std::is_same<value_type, char>::value) {
+    escape_and_append_with_quotes(value);
+  } else SIMDJSON_IF_CONSTEXPR(std::is_convertible<value_type, std::string_view>::value) {
+    escape_and_append_with_quotes(value);
+  } else SIMDJSON_IF_CONSTEXPR(std::is_same<value_type, const char*>::value) {
+    escape_and_append_with_quotes(value);
+  } else {
+    append(value);
+  }
+}
+
+} // namespace builder
+} // namespace lasx
+} // namespace simdjson
+
+#endif // SIMDJSON_GENERIC_STRING_BUILDER_INL_H
+/* end file simdjson/generic/ondemand/json_string_builder-inl.h for lasx */
+/* including simdjson/generic/ondemand/json_builder.h for lasx: #include "simdjson/generic/ondemand/json_builder.h" */
+/* begin file simdjson/generic/ondemand/json_builder.h for lasx */
+/**
+ * This file is part of the builder API. It is temporarily in the ondemand directory
+ * but we will move it to a builder directory later.
+ */
+#ifndef SIMDJSON_GENERIC_BUILDER_H
+
+/* amalgamation skipped (editor-only): #ifndef SIMDJSON_CONDITIONAL_INCLUDE */
+/* amalgamation skipped (editor-only): #define SIMDJSON_GENERIC_STRING_BUILDER_H */
+/* amalgamation skipped (editor-only): #include "simdjson/generic/builder/json_string_builder.h" */
+/* amalgamation skipped (editor-only): #include "simdjson/concepts.h" */
+/* amalgamation skipped (editor-only): #endif // SIMDJSON_CONDITIONAL_INCLUDE */
+#if SIMDJSON_STATIC_REFLECTION
+
+#include <charconv>
+#include <cstring>
+#include <experimental/meta>
+#include <memory>
+#include <optional>
+#include <string_view>
+#include <type_traits>
+#include <utility>
+// #include <static_reflection> // for std::define_static_string - header not available yet
+
+namespace simdjson {
+namespace lasx {
+namespace builder {
+
+// Concept that checks if a type is a container but not a string (because
+// strings handling must be handled differently)
+template <typename T>
+concept container_but_not_string =
+    requires(T a) {
+      { a.size() } -> std::convertible_to<std::size_t>;
+      {
+        a[std::declval<std::size_t>()]
+      }; // check if elements are accessible for the subscript operator
+    } && !std::is_same_v<T, std::string> &&
+    !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char *>;
+
+template <class T>
+  requires(container_but_not_string<T>)
+constexpr void atom(string_builder &b, const T &t) {
+  if (t.size() == 0) {
+    b.append_raw("[]");
+    return;
+  }
+  b.append('[');
+  atom(b, t[0]);
+  for (size_t i = 1; i < t.size(); ++i) {
+    b.append(',');
+    atom(b, t[i]);
+  }
+  b.append(']');
+}
+
+template <class T>
+  requires(std::is_same_v<T, std::string> ||
+           std::is_same_v<T, std::string_view> ||
+           std::is_same_v<T, const char *> ||
+           std::is_same_v<T, char>)
+constexpr void atom(string_builder &b, const T &t) {
+  b.escape_and_append_with_quotes(t);
+}
+
+template <concepts::string_view_keyed_map T>
+constexpr void atom(string_builder &b, const T &m) {
+  if (m.empty()) {
+    b.append_raw("{}");
+    return;
+  }
+  b.append('{');
+  bool first = true;
+  for (const auto& [key, value] : m) {
+    if (!first) {
+      b.append(',');
+    }
+    first = false;
+    // Keys must be convertible to string_view per the concept
+    b.escape_and_append_with_quotes(key);
+    b.append(':');
+    atom(b, value);
+  }
+  b.append('}');
+}
+
+
+template<typename number_type,
+         typename = typename std::enable_if<std::is_arithmetic<number_type>::value && !std::is_same_v<number_type, char>>::type>
+constexpr void atom(string_builder &b, const number_type t) {
+  b.append(t);
+}
+#if SIMDJSON_CONSTEVAL
+consteval std::string consteval_to_quoted_escaped(std::string_view input);
+#endif
+
+template <class T>
+  requires(std::is_class_v<T> && !container_but_not_string<T> &&
+           !concepts::string_view_keyed_map<T> &&
+           !concepts::optional_type<T> &&
+           !concepts::smart_pointer<T> &&
+           !concepts::appendable_containers<T> &&
+           !std::is_same_v<T, std::string> &&
+           !std::is_same_v<T, std::string_view> &&
+           !std::is_same_v<T, const char*> &&
+           !std::is_same_v<T, char>)
+constexpr void atom(string_builder &b, const T &t) {
+  int i = 0;
+  b.append('{');
+  [:expand(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked())):] >> [&]<auto dm>() {
+    if (i != 0)
+      b.append(',');
+    constexpr auto key = std::define_static_string(consteval_to_quoted_escaped(std::meta::identifier_of(dm)));
+    b.append_raw(key);
+    b.append(':');
+    atom(b, t.[:dm:]);
+    i++;
+  };
+  b.append('}');
+}
+
+// Support for optional types (std::optional, etc.)
+template <concepts::optional_type T>
+constexpr void atom(string_builder &b, const T &opt) {
+  if (opt) {
+    atom(b, opt.value());
+  } else {
+    b.append_raw("null");
+  }
+}
+
+// Support for smart pointers (std::unique_ptr, std::shared_ptr, etc.)
+template <concepts::smart_pointer T>
+constexpr void atom(string_builder &b, const T &ptr) {
+  if (ptr) {
+    atom(b, *ptr);
+  } else {
+    b.append_raw("null");
+  }
+}
+
+// Support for enums - serialize as string representation using expand approach from P2996R12
+template <typename T>
+  requires(std::is_enum_v<T>)
+void atom(string_builder &b, const T &e) {
+#if SIMDJSON_STATIC_REFLECTION
+  std::string_view result = "<unnamed>";
+  [:expand(std::meta::enumerators_of(^^T)):] >> [&]<auto enum_val>{
+    if (e == [:enum_val:]) {
+      result = std::meta::identifier_of(enum_val);
+    }
+  };
+
+  if (result != "<unnamed>") {
+    b.append_raw("\"");
+    b.append_raw(result);
+    b.append_raw("\"");
+  } else {
+    // Fallback to integer if enum value not found
+    atom(b, static_cast<std::underlying_type_t<T>>(e));
+  }
+#else
+  // Fallback: serialize as integer if reflection not available
+  atom(b, static_cast<std::underlying_type_t<T>>(e));
+#endif
+}
+
+// Support for appendable containers that don't have operator[] (sets, etc.)
+template <concepts::appendable_containers T>
+  requires(!container_but_not_string<T> && !concepts::string_view_keyed_map<T> &&
+           !concepts::optional_type<T> && !concepts::smart_pointer<T> &&
+           !std::is_same_v<T, std::string> &&
+           !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char*>)
+constexpr void atom(string_builder &b, const T &container) {
+  if (container.empty()) {
+    b.append_raw("[]");
+    return;
+  }
+  b.append('[');
+  bool first = true;
+  for (const auto& item : container) {
+    if (!first) {
+      b.append(',');
+    }
+    first = false;
+    atom(b, item);
+  }
+  b.append(']');
+}
+
+// append functions that delegate to atom functions for primitive types
+template <class T>
+  requires(std::is_arithmetic_v<T> && !std::is_same_v<T, char>)
+void append(string_builder &b, const T &t) {
+  atom(b, t);
+}
+
+template <class T>
+  requires(std::is_same_v<T, std::string> ||
+           std::is_same_v<T, std::string_view> ||
+           std::is_same_v<T, const char *> ||
+           std::is_same_v<T, char>)
+void append(string_builder &b, const T &t) {
+  atom(b, t);
+}
+
+template <concepts::optional_type T>
+void append(string_builder &b, const T &t) {
+  atom(b, t);
+}
+
+template <concepts::smart_pointer T>
+void append(string_builder &b, const T &t) {
+  atom(b, t);
+}
+
+template <concepts::appendable_containers T>
+  requires(!container_but_not_string<T> && !concepts::string_view_keyed_map<T> &&
+           !concepts::optional_type<T> && !concepts::smart_pointer<T> &&
+           !std::is_same_v<T, std::string> &&
+           !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char*>)
+void append(string_builder &b, const T &t) {
+  atom(b, t);
+}
+
+template <concepts::string_view_keyed_map T>
+void append(string_builder &b, const T &t) {
+  atom(b, t);
+}
+
+// works for struct
+template <class Z>
+  requires(std::is_class_v<Z> && !container_but_not_string<Z> &&
+           !concepts::string_view_keyed_map<Z> &&
+           !concepts::optional_type<Z> &&
+           !concepts::smart_pointer<Z> &&
+           !concepts::appendable_containers<Z> &&
+           !std::is_same_v<Z, std::string> &&
+           !std::is_same_v<Z, std::string_view> &&
+           !std::is_same_v<Z, const char*> &&
+           !std::is_same_v<Z, char>)
+void append(string_builder &b, const Z &z) {
+  int i = 0;
+  b.append('{');
+  [:expand(std::meta::nonstatic_data_members_of(^^Z, std::meta::access_context::unchecked())):] >> [&]<auto dm>() {
+    if (i != 0)
+      b.append(',');
+    constexpr auto key = std::define_static_string(consteval_to_quoted_escaped(std::meta::identifier_of(dm)));
+    b.append_raw(key);
+    b.append(':');
+    atom(b, z.[:dm:]);
+    i++;
+  };
+  b.append('}');
+}
+
+// works for container
+template <class Z>
+  requires(container_but_not_string<Z>)
+void append(string_builder &b, const Z &z) {
+  if (z.size() == 0) {
+    b.append_raw("[]");
+    return;
+  }
+  b.append('[');
+  atom(b, z[0]);
+  for (size_t i = 1; i < z.size(); ++i) {
+    b.append(',');
+    atom(b, z[i]);
+  }
+  b.append(']');
+}
+
+template <class Z>
+simdjson_result<std::string> to_json_string(const Z &z, size_t initial_capacity = 1024) {
+  string_builder b(initial_capacity);
+  append(b, z);
+  std::string_view s;
+  if(auto e = b.view().get(s); e) { return e; }
+  return std::string(s);
+}
+
+template <class Z>
+simdjson_error to_json(const Z &z, std::string &s) {
+  string_builder b;
+  append(b, z);
+  std::string_view view;
+  if(auto e = b.view().get(view); e) { return e; }
+  s.assign(view);
+  return SUCCESS;
+}
+
+template <class Z>
+string_builder& operator<<(string_builder& b, const Z& z) {
+  append(b, z);
+  return b;
+}
+} // namespace builder
+} // namespace lasx
+} // namespace simdjson
+#endif // SIMDJSON_STATIC_REFLECTION
+
+#endif
+/* end file simdjson/generic/ondemand/json_builder.h for lasx */
 
 /* end file simdjson/generic/ondemand/amalgamated.h for lasx */
 /* including simdjson/lasx/end.h: #include "simdjson/lasx/end.h" */
@@ -123526,9 +137482,370 @@ namespace simdjson {
    * @copydoc simdjson::builtin::ondemand
    */
   namespace ondemand = builtin::ondemand;
+  /**
+   * @copydoc simdjson::builtin::builder
+   */
+  namespace builder = builtin::builder;
+
+#if SIMDJSON_STATIC_REFLECTION
+  /**
+   * Create a JSON string from any user-defined type using static reflection.
+   * Only available when SIMDJSON_STATIC_REFLECTION is enabled.
+   */
+  template<typename T>
+    requires(!std::same_as<T, builtin::ondemand::document> &&
+             !std::same_as<T, builtin::ondemand::value> &&
+             !std::same_as<T, builtin::ondemand::object> &&
+             !std::same_as<T, builtin::ondemand::array>)
+  inline std::string to_json_string(const T& obj) {
+    builder::string_builder str_builder;
+    append(str_builder, obj);
+    std::string_view view;
+    if (str_builder.view().get(view) == SUCCESS) {
+      return std::string(view);
+    }
+    return "";
+  }
+#endif
+
 } // namespace simdjson
 
 #endif // SIMDJSON_ONDEMAND_H
 /* end file simdjson/ondemand.h */
+/* including simdjson/convert.h: #include "simdjson/convert.h" */
+/* begin file simdjson/convert.h */
+#ifndef SIMDJSON_CONVERT_H
+#define SIMDJSON_CONVERT_H
+#if __cpp_concepts
+
+/* skipped duplicate #include "simdjson/ondemand.h" */
+#include <optional>
+#ifdef __cpp_lib_ranges
+#include <ranges>
+#endif
+
+namespace simdjson {
+
+struct [[nodiscard]] auto_iterator_end {};
+
+/**
+ * A Wrapper for simdjson_result<ondemand::array_iterator> in order to make it
+ * compatible with ranges (to satisfy std::ranges::input_range).
+ */
+struct [[nodiscard]] auto_iterator {
+  using iterator_category = std::forward_iterator_tag;
+  using type = simdjson_result<ondemand::array_iterator>;
+  using value_type = simdjson_result<ondemand::value>; // type::value_type
+  using reference = value_type &;
+  using const_reference = const value_type &;
+  using difference_type = std::ptrdiff_t;
+
+  struct auto_iterator_storage {
+    type m_iter{};
+    mutable value_type m_value{};
+  };
+
+private:
+  auto_iterator_storage *m_storage = nullptr;
+
+public:
+  constexpr auto_iterator() noexcept = default;
+  explicit auto_iterator(auto_iterator_storage &storage) noexcept
+      : m_storage{&storage} {};
+  auto_iterator(auto_iterator const &) = default;
+  auto_iterator(auto_iterator &&) = default;
+  auto_iterator &operator=(auto_iterator const &) = default;
+  auto_iterator &operator=(auto_iterator &&) noexcept = default;
+  ~auto_iterator() = default;
+
+  reference operator*() const noexcept { return m_storage->m_value; }
+  reference operator*() noexcept { return m_storage->m_value; }
+
+  auto_iterator &operator++() noexcept {
+    ++m_storage->m_iter;
+    m_storage->m_value =
+        m_storage->m_iter.at_end() || m_storage->m_iter.error() != SUCCESS
+            ? value_type{}
+            : *m_storage->m_iter;
+    return *this;
+  }
+  auto_iterator operator++(int) noexcept {
+    auto_iterator const tmp = *this;
+    operator++();
+    return tmp;
+  }
+
+  [[nodiscard]] bool operator==(auto_iterator const &other) const noexcept {
+    return m_storage == other.m_storage &&
+           m_storage->m_iter == other.m_storage->m_iter;
+  }
+
+  [[nodiscard]] bool operator==(auto_iterator_end) const noexcept {
+    return m_storage != nullptr && m_storage->m_iter.at_end();
+  }
+};
+
+template <typename ParserType = ondemand::parser>
+struct [[nodiscard]] auto_parser
+#if __cpp_lib_ranges
+    : std::ranges::view_interface<auto_parser<ParserType>>
+#endif
+{
+  using value_type = simdjson_result<ondemand::value>;
+  using size_type = size_t;
+  using difference_type = std::ptrdiff_t;
+  using pointer = value_type *;
+  using const_pointer = const value_type *;
+  using reference = value_type &;
+  using const_reference = const value_type &;
+  using iterator = auto_iterator;
+  using const_iterator = auto_iterator; // auto_iterator is already const
+
+private:
+  ParserType m_parser;
+  ondemand::document m_doc;
+  error_code m_error{SUCCESS};
+
+  // Caching the iterator here:
+  iterator::auto_iterator_storage iter_storage{};
+
+  template <typename T>
+  static constexpr bool is_nothrow_gettable = requires(ondemand::document doc) {
+    { doc.get<T>() } noexcept;
+  };
+
+public:
+  // non-pointer constructors:
+  explicit auto_parser(ParserType &&parser, ondemand::document &&doc) noexcept
+    requires(!std::is_pointer_v<ParserType>)
+      : m_parser{std::move(parser)}, m_doc{std::move(doc)} {}
+
+#ifdef __GNUC__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Weffc++"
+#endif
+
+  explicit auto_parser(ParserType &&parser,
+                       padded_string_view const str) noexcept
+    requires(!std::is_pointer_v<ParserType>)
+      : m_parser{std::move(parser)}, m_doc{}, m_error{SUCCESS} {
+    // Initialize m_doc after m_parser to avoid potential issues
+    auto doc_result = m_parser.iterate(str);
+    m_error = doc_result.error();
+    if (m_error == SUCCESS) {
+      m_doc = std::move(doc_result.value_unsafe());
+    }
+  }
+
+#ifdef __GNUC__
+#pragma GCC diagnostic pop
+#endif
+
+  explicit auto_parser(padded_string_view const str) noexcept
+    requires(!std::is_pointer_v<ParserType>)
+      : auto_parser{ParserType{}, str} {}
+
+  // pointer constructors:
+  explicit auto_parser(std::remove_pointer_t<ParserType> &parser,
+                       ondemand::document &&doc) noexcept
+    requires(std::is_pointer_v<ParserType>)
+      : m_parser{&parser}, m_doc{std::move(doc)} {}
+
+#ifdef __GNUC__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Weffc++"
+#endif
+
+  explicit auto_parser(std::remove_pointer_t<ParserType> &parser,
+                       padded_string_view const str) noexcept
+    requires(std::is_pointer_v<ParserType>)
+      : m_parser{&parser}, m_doc{}, m_error{SUCCESS} {
+    // Initialize m_doc after m_parser to avoid potential issues
+    auto doc_result = parser.iterate(str);
+    m_error = doc_result.error();
+    if (m_error == SUCCESS) {
+      m_doc = std::move(doc_result.value_unsafe());
+    }
+  }
+
+#ifdef __GNUC__
+#pragma GCC diagnostic pop
+#endif
+
+  explicit auto_parser(ParserType parser, ondemand::document &&doc) noexcept
+    requires(std::is_pointer_v<ParserType>)
+      : auto_parser{*parser, std::move(doc)} {}
+
+  auto_parser(auto_parser const &) = delete;
+  auto_parser &operator=(auto_parser const &) = delete;
+  auto_parser(auto_parser &&) noexcept = default;
+  auto_parser &operator=(auto_parser &&) noexcept = default;
+  ~auto_parser() = default;
+
+  /// Get the parser
+  [[nodiscard]] std::remove_pointer_t<ParserType> &parser() noexcept {
+    if constexpr (std::is_pointer_v<ParserType>) {
+      return *m_parser;
+    } else {
+      return m_parser;
+    }
+  }
+
+  template <typename T>
+  [[nodiscard]] simdjson_inline simdjson_result<T>
+  result() noexcept(is_nothrow_gettable<T>) {
+    if (m_error != SUCCESS) {
+      return m_error;
+    }
+    // For array and object types, we need to be at the start of the document
+    return m_doc.get<T>();
+  }
+
+  [[nodiscard]] simdjson_inline simdjson_result<ondemand::array>
+  array() noexcept {
+    return result<ondemand::array>();
+  }
+
+  [[nodiscard]] simdjson_inline simdjson_result<ondemand::object>
+  object() noexcept {
+    return result<ondemand::object>();
+  }
+
+  [[nodiscard]] simdjson_inline simdjson_result<ondemand::number>
+  number() noexcept {
+    return result<ondemand::number>();
+  }
+
+  template <typename T>
+  [[nodiscard]] simdjson_inline explicit(false)
+  operator simdjson_result<T>() noexcept(is_nothrow_gettable<T>) {
+    return result<T>();
+  }
+
+  template <typename T>
+  [[nodiscard]] simdjson_inline explicit(false) operator T() noexcept(false) {
+    if (m_error != SUCCESS) {
+      throw simdjson_error(m_error);
+    }
+    return m_doc.get<T>();
+  }
+
+  // We can't have "operator std::optional<T>" because it would create an
+  // ambiguity for the compiler.
+  // We also cannot have "operator T*" without manual memory management.
+  // We also cannot have "operator T&" without manual memory management either.
+
+  template <typename T>
+  [[nodiscard]] simdjson_inline std::optional<T>
+  optional() noexcept(is_nothrow_gettable<T>) {
+    if (m_error != SUCCESS) {
+      return std::nullopt;
+    }
+    // For std::optional<T>
+    auto res = m_doc.get<T>();
+    if (res.error()) [[unlikely]] {
+      return std::nullopt;
+    }
+    return {res.value()};
+  }
+
+  simdjson_inline auto_iterator begin() noexcept {
+    if (m_error != SUCCESS) {
+      // Create an iterator with the error
+      iter_storage.m_iter = iterator::type(m_error);
+      iter_storage.m_value = value_type{};
+      return auto_iterator{iter_storage};
+    }
+    if (iter_storage.m_iter.error() != SUCCESS &&
+        !iter_storage.m_iter.at_end()) {
+      // Try to get the document as an array
+      auto array_result = m_doc.get_array();
+      if (array_result.error() == SUCCESS) {
+        iter_storage = {.m_iter = iterator::type{array_result.value_unsafe().begin()},
+                        .m_value = iterator::value_type{
+                            iter_storage.m_iter.at_end() ||
+                                    iter_storage.m_iter.error() != SUCCESS
+                                ? value_type{}
+                                : *iter_storage.m_iter}};
+      } else {
+        // If it's not an array, create an error iterator
+        iter_storage.m_iter = iterator::type(array_result.error());
+        iter_storage.m_value = value_type{};
+      }
+    }
+    return auto_iterator{iter_storage};
+  }
+  simdjson_inline auto_iterator_end end() noexcept { return {}; }
+};
+
+#ifdef __cpp_lib_ranges
+
+// For C++20, we implement our own pipe operator since range_adaptor_closure is C++23
+static constexpr struct [[nodiscard]] no_errors_adaptor {
+
+  [[nodiscard]] bool
+  operator()(simdjson_result<ondemand::value> const &val) const noexcept {
+    return val.error() == SUCCESS;
+  }
+
+  template <std::ranges::range Range>
+  auto operator()(Range &&rng) const noexcept {
+    return std::forward<Range>(rng) | std::views::filter(*this);
+  }
+} no_errors;
+
+template <typename T = void>
+struct [[nodiscard]] to_adaptor {
+
+  /// Convert to T
+  [[nodiscard]] T
+  operator()(simdjson_result<ondemand::value> &val) const noexcept {
+    return val.get<T>();
+  }
+
+  /// Make it an adaptor
+  template <std::ranges::range Range>
+  auto operator()(Range &&rng) const noexcept {
+    return std::forward<Range>(rng) | no_errors | std::views::transform(*this);
+  }
+
+  /**
+   * Parse input string into any object if possible.
+   */
+  auto operator()(padded_string_view const str) const noexcept {
+    return auto_parser{str};
+  }
+
+  /**
+   * Parse the input using the specified parser into any object if possible.
+   */
+  auto operator()(ondemand::parser &parser,
+                            padded_string_view const str) const noexcept {
+    return auto_parser<ondemand::parser *>{parser, str};
+  }
+};
+
+template <typename T> static constexpr to_adaptor<T> to{};
+
+static constexpr to_adaptor<> from{};
+
+// For C++20 ranges without range_adaptor_closure, we need to define pipe operators
+template <std::ranges::range Range>
+inline auto operator|(Range&& range, const no_errors_adaptor& adaptor) {
+  return adaptor(std::forward<Range>(range));
+}
+
+template <std::ranges::range Range, typename T>
+inline auto operator|(Range&& range, const to_adaptor<T>& adaptor) {
+  return adaptor(std::forward<Range>(range));
+}
+
+#endif // __cpp_lib_ranges
+
+} // namespace simdjson
+
+#endif // __cpp_concepts
+#endif // SIMDJSON_CONVERT_H
+/* end file simdjson/convert.h */
 #endif // SIMDJSON_H
 /* end file simdjson.h */
