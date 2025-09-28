@@ -1395,10 +1395,13 @@ Car c = doc.get<Car>();
 
 We try to automate the parsing of any given structure or class
 by looking at its non-static public members. At compile-time,
-the library looks at a simple structre like `Car` and
+the library looks at a simple structure like `Car` and
 maps it to parsing code. We call the default constructor,
 and then assign values to the public members.
 
+
+If a key is missing in the JSON document, an error is generated (`NO_SUCH_FIELD`),
+except if the attribute is of a type like `std::optional` (`simdjson::concepts::optional_type`).
 
 #### Special cases
 
@@ -1450,7 +1453,7 @@ struct complicated_weather_data {
 };
 ```
 
-The code might as simple as the following.
+The code might be as simple as the following.
 
 ```cpp
 auto padded = R"({"time":["2023-03-15T12:00:00Z"],"temperature":[42]})"_padded;
@@ -1475,6 +1478,12 @@ type without a document instance like so:
 
 ```cpp
 Car car = simdjson::from(json);
+```
+
+You can also use the `simdjson::from` syntax without exceptions, like so:
+```cpp
+Car car;
+simdjson::error_code err = simdjson::from(json_car).get(car);
 ```
 
 You can also use the `simdjson::from` syntax to iterate over an array.

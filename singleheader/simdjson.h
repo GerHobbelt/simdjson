@@ -1,4 +1,4 @@
-/* auto-generated on 2025-09-09 18:44:21 -0400. version 4.0.0 Do not edit! */
+/* auto-generated on 2025-09-20 22:23:09 -0600. version 4.0.6 Do not edit! */
 /* including simdjson.h:  */
 /* begin file simdjson.h */
 #ifndef SIMDJSON_H
@@ -2508,7 +2508,7 @@ namespace std {
 #define SIMDJSON_SIMDJSON_VERSION_H
 
 /** The version of simdjson being used (major.minor.revision) */
-#define SIMDJSON_VERSION "4.0.0"
+#define SIMDJSON_VERSION "4.0.6"
 
 namespace simdjson {
 enum {
@@ -2523,7 +2523,7 @@ enum {
   /**
    * The revision (major.minor.REVISION) of simdjson being used.
    */
-  SIMDJSON_VERSION_REVISION = 0
+  SIMDJSON_VERSION_REVISION = 6
 };
 } // namespace simdjson
 
@@ -3072,11 +3072,32 @@ concept optional_type = requires(std::remove_cvref_t<T> obj) {
     } -> std::convertible_to<typename std::remove_cvref_t<T>::value_type>;
   };
   { static_cast<bool>(obj) } -> std::same_as<bool>; // convertible to bool
+  { obj.reset() } noexcept -> std::same_as<void>;
 };
 
 
 
+
+
 } // namespace concepts
+
+
+/**
+ * We use tag_invoke as our customization point mechanism.
+ */
+template <typename Tag, typename... Args>
+concept tag_invocable = requires(Tag tag, Args... args) {
+  tag_invoke(std::forward<Tag>(tag), std::forward<Args>(args)...);
+};
+
+template <typename Tag, typename... Args>
+concept nothrow_tag_invocable =
+    tag_invocable<Tag, Args...> && requires(Tag tag, Args... args) {
+      {
+        tag_invoke(std::forward<Tag>(tag), std::forward<Args>(args)...)
+      } noexcept;
+    };
+
 } // namespace simdjson
 #endif // SIMDJSON_SUPPORTS_CONCEPTS
 #endif // SIMDJSON_CONCEPTS_H
@@ -33373,54 +33394,7 @@ class value_iterator;
 /* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/array.h" */
 /* amalgamation skipped (editor-only): #endif // SIMDJSON_CONDITIONAL_INCLUDE */
 
-#include <concepts>
 namespace simdjson {
-
-namespace tag_invoke_fn_ns {
-void tag_invoke();
-
-struct tag_invoke_fn {
-  template <typename Tag, typename... Args>
-    requires requires(Tag tag, Args &&...args) {
-      tag_invoke(std::forward<Tag>(tag), std::forward<Args>(args)...);
-    }
-  constexpr auto operator()(Tag tag, Args &&...args) const
-      noexcept(noexcept(tag_invoke(std::forward<Tag>(tag),
-                                   std::forward<Args>(args)...)))
-          -> decltype(tag_invoke(std::forward<Tag>(tag),
-                                 std::forward<Args>(args)...)) {
-    return tag_invoke(std::forward<Tag>(tag), std::forward<Args>(args)...);
-  }
-};
-} // namespace tag_invoke_fn_ns
-
-inline namespace tag_invoke_ns {
-inline constexpr tag_invoke_fn_ns::tag_invoke_fn tag_invoke = {};
-} // namespace tag_invoke_ns
-
-template <typename Tag, typename... Args>
-concept tag_invocable = requires(Tag tag, Args... args) {
-  tag_invoke(std::forward<Tag>(tag), std::forward<Args>(args)...);
-};
-
-template <typename Tag, typename... Args>
-concept nothrow_tag_invocable =
-    tag_invocable<Tag, Args...> && requires(Tag tag, Args... args) {
-      {
-        tag_invoke(std::forward<Tag>(tag), std::forward<Args>(args)...)
-      } noexcept;
-    };
-
-template <typename Tag, typename... Args>
-using tag_invoke_result =
-    std::invoke_result<decltype(tag_invoke), Tag, Args...>;
-
-template <typename Tag, typename... Args>
-using tag_invoke_result_t =
-    std::invoke_result_t<decltype(tag_invoke), Tag, Args...>;
-
-template <auto &Tag> using tag_t = std::decay_t<decltype(Tag)>;
-
 
 struct deserialize_tag;
 
@@ -34086,7 +34060,9 @@ public:
       using value_type = typename std::remove_cvref_t<T>::value_type;
 
       // Check if the value is null
-      if (is_null()) {
+      bool is_null_value;
+      SIMDJSON_TRY( is_null().get(is_null_value) );
+      if (is_null_value) {
         out.reset(); // Set to nullopt
         return SUCCESS;
       }
@@ -38694,15 +38670,12 @@ inline std::ostream& operator<<(std::ostream& out, simdjson::simdjson_result<sim
 #endif
 
 namespace simdjson {
-template <typename T>
-constexpr bool require_custom_serialization = false;
 
 //////////////////////////////
 // Number deserialization
 //////////////////////////////
 
 template <std::unsigned_integral T>
-  requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept {
   using limits = std::numeric_limits<T>;
 
@@ -38716,7 +38689,6 @@ error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept {
 }
 
 template <std::floating_point T>
-  requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept {
   double x;
   SIMDJSON_TRY(val.get_double().get(x));
@@ -38725,7 +38697,6 @@ error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept {
 }
 
 template <std::signed_integral T>
-  requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept {
   using limits = std::numeric_limits<T>;
 
@@ -38755,7 +38726,6 @@ error_code tag_invoke(deserialize_tag, auto &val, char &out) noexcept {
 
 // any string-like type (can be constructed from std::string_view)
 template <concepts::constructible_from_string_view T, typename ValT>
-  requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(std::is_nothrow_constructible_v<T, std::string_view>) {
   std::string_view str;
   SIMDJSON_TRY(val.get_string().get(str));
@@ -38772,7 +38742,6 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(std::is_nothr
  * doc.get<std::vector<int>>().
  */
 template <concepts::appendable_containers T, typename ValT>
-  requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(false) {
   using value_type = typename std::remove_cvref_t<T>::value_type;
   static_assert(
@@ -38818,7 +38787,6 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(false) {
  * string-keyed types.
  */
  template <concepts::string_view_keyed_map T, typename ValT>
- requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(false) {
   using value_type = typename std::remove_cvref_t<T>::mapped_type;
   static_assert(
@@ -38900,7 +38868,6 @@ error_code tag_invoke(deserialize_tag, arm64::ondemand::document_reference &doc,
  * @return status of the conversion
  */
 template <concepts::smart_pointer T, typename ValT>
-  requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(nothrow_deserializable<typename std::remove_cvref_t<T>::element_type, ValT>) {
   using element_type = typename std::remove_cvref_t<T>::element_type;
 
@@ -38926,12 +38893,13 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(nothrow_deser
  * This CPO (Customization Point Object) will help deserialize into optional types.
  */
 template <concepts::optional_type T>
-  requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept(nothrow_deserializable<typename std::remove_cvref_t<T>::value_type, decltype(val)>) {
   using value_type = typename std::remove_cvref_t<T>::value_type;
 
   // Check if the value is null
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset(); // Set to nullopt
     return SUCCESS;
   }
@@ -38950,7 +38918,7 @@ error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept(nothrow_deser
 template <typename T>
 constexpr bool user_defined_type = (std::is_class_v<T>
 && !std::is_same_v<T, std::string> && !std::is_same_v<T, std::string_view> && !concepts::optional_type<T> &&
-!concepts::appendable_containers<T> && !require_custom_serialization<T>);
+!concepts::appendable_containers<T>);
 
 
 template <typename T, typename ValT>
@@ -38962,18 +38930,26 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept {
   } else {
     SIMDJSON_TRY(val.get_object().get(obj));
   }
-  error_code e = simdjson::SUCCESS;
   template for (constexpr auto mem : std::define_static_array(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked()))) {
-        if constexpr (!std::meta::is_const(mem) && std::meta::is_public(mem)) {
+    if constexpr (!std::meta::is_const(mem) && std::meta::is_public(mem)) {
       constexpr std::string_view key = std::define_static_string(std::meta::identifier_of(mem));
-      // Note: removed static assert as optional types are now handled generically
-      // as long we are succesful or the field is not found, we continue
-      if(e == simdjson::SUCCESS || e == simdjson::NO_SUCH_FIELD) {
-        e = obj[key].get(out.[:mem:]);
+      if constexpr (concepts::optional_type<decltype(out.[:mem:])>) {
+        // for optional members, it's ok if the key is missing
+        auto error = obj[key].get(out.[:mem:]);
+        if (error && error != NO_SUCH_FIELD) {
+          if(error == NO_SUCH_FIELD) {
+            out.[:mem:].reset();
+            continue;
+          }
+          return error;
+        }
+      } else {
+        // for non-optional members, the key must be present
+        SIMDJSON_TRY(obj[key].get(out.[:mem:]));
       }
     }
   };
-  return e;
+  return simdjson::SUCCESS;
 }
 
 // Support for enum deserialization - deserialize from string representation using expand approach from P2996R12
@@ -39039,7 +39015,9 @@ error_code tag_invoke(deserialize_tag, simdjson_value &val, std::shared_ptr<T> &
 // Unique pointers
 ////////////////////////////////////////
 error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<bool> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -39052,7 +39030,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<bool> &out) no
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<int64_t> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -39065,7 +39045,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<int64_t> &out)
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<uint64_t> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -39078,7 +39060,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<uint64_t> &out
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<double> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -39091,7 +39075,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<double> &out) 
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<std::string_view> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -39108,7 +39094,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<std::string_vi
 // Shared pointers
 ////////////////////////////////////////
 error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<bool> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -39121,7 +39109,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<bool> &out) no
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<int64_t> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -39134,7 +39124,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<int64_t> &out)
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<uint64_t> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -39147,7 +39139,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<uint64_t> &out
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<double> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -39160,7 +39154,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<double> &out) 
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<std::string_view> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -39182,7 +39178,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<std::string_vi
 ////////////////////////////////////////
 error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<std::string> &out) noexcept {
   // Check if the value is null
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset(); // Set to nullptr
     return SUCCESS;
   }
@@ -39198,7 +39196,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<std::string> &
 
 error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<std::string> &out) noexcept {
   // Check if the value is null
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset(); // Set to nullptr
     return SUCCESS;
   }
@@ -39214,7 +39214,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<std::string> &
 
 error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<int> &out) noexcept {
   // Check if the value is null
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset(); // Set to nullptr
     return SUCCESS;
   }
@@ -44790,9 +44792,62 @@ simdjson_inline simdjson_result<arm64::ondemand::value_iterator>::simdjson_resul
 /* amalgamation skipped (editor-only): #endif // SIMDJSON_CONDITIONAL_INCLUDE */
 
 namespace simdjson {
+
+
+#if SIMDJSON_SUPPORTS_CONCEPTS
+
 namespace arm64 {
 namespace builder {
+  class string_builder;
+}}
 
+template <typename T, typename = void>
+struct has_custom_serialization : std::false_type {};
+
+inline constexpr struct serialize_tag {
+  template <typename T>
+    requires custom_deserializable<T>
+  constexpr void operator()(arm64::builder::string_builder& b, T& obj) const{
+    return tag_invoke(*this, b, obj);
+  }
+
+
+} serialize{};
+template <typename T>
+struct has_custom_serialization<T, std::void_t<
+    decltype(tag_invoke(serialize, std::declval<arm64::builder::string_builder&>(), std::declval<T&>()))
+>> : std::true_type {};
+
+template <typename T>
+constexpr bool require_custom_serialization = has_custom_serialization<T>::value;
+#else
+struct has_custom_serialization : std::false_type {};
+#endif // SIMDJSON_SUPPORTS_CONCEPTS
+
+namespace arm64 {
+namespace builder {
+#if SIMDJSON_SUPPORTS_CONCEPTS
+// Helper to create string constants
+namespace internal {
+template <std::size_t N>
+struct fixed_string {
+    constexpr fixed_string(const char (&str)[N])  {
+        for (std::size_t i = 0; i < N; ++i) {
+            data[i] = str[i];
+        }
+    }
+    char data[N];
+    constexpr std::string_view view() const { return {data, N - 1}; }
+};
+template <std::size_t N>
+fixed_string(const char (&)[N]) -> fixed_string<N>;
+
+template <fixed_string str>
+struct string_constant {
+    static constexpr std::string_view value = str.view();
+};
+} // namespace internal
+#endif // SIMDJSON_SUPPORTS_CONCEPTS
 /**
  * A builder for JSON strings representing documents. This is a low-level
  * builder that is not meant to be used directly by end-users. Though it
@@ -44804,7 +44859,9 @@ namespace builder {
  */
 class string_builder {
 public:
-  simdjson_inline string_builder(size_t initial_capacity = 1024);
+  simdjson_inline string_builder(size_t initial_capacity = DEFAULT_INITIAL_CAPACITY);
+
+  static constexpr size_t DEFAULT_INITIAL_CAPACITY = 1024;
 
   /**
    * Append number (includes Booleans). Booleans are mapped to the strings
@@ -44813,7 +44870,7 @@ public:
    * represents the number.
    */
   template<typename number_type,
-         typename = typename std::enable_if<std::is_arithmetic<number_type>::value>::type>
+    typename = typename std::enable_if<std::is_arithmetic<number_type>::value>::type>
   simdjson_inline void append(number_type v) noexcept;
 
   /**
@@ -44842,7 +44899,10 @@ public:
    * There is no UTF-8 validation.
    */
   simdjson_inline void escape_and_append_with_quotes(std::string_view input)  noexcept;
-
+#if SIMDJSON_SUPPORTS_CONCEPTS
+  template<internal::fixed_string key>
+  simdjson_inline void escape_and_append_with_quotes()  noexcept;
+#endif
   /**
    * Append the character surrounded by double quotes, after escaping it.
    * There is no UTF-8 validation.
@@ -44896,12 +44956,20 @@ public:
    * The key is escaped and surrounded by double quotes.
    * The value is escaped if it is a string.
    */
-   template<typename key_type, typename value_type>
+  template<typename key_type, typename value_type>
   simdjson_inline void append_key_value(key_type key, value_type value) noexcept;
 #if SIMDJSON_SUPPORTS_CONCEPTS
+  template<internal::fixed_string key, typename value_type>
+  simdjson_inline void append_key_value(value_type value) noexcept;
+
   // Support for optional types (std::optional, etc.)
   template <concepts::optional_type T>
+  requires(!require_custom_serialization<T>)
   simdjson_inline void append(const T &opt);
+
+  template <typename T>
+  requires(require_custom_serialization<T>)
+  simdjson_inline void append(const T &val);
 
   // Support for string-like types
   template <typename T>
@@ -45012,7 +45080,7 @@ private:
 #if !SIMDJSON_STATIC_REFLECTION
 // fallback implementation until we have static reflection
 template <class Z>
-simdjson_result<std::string> to_json(const Z &z, size_t initial_capacity = 1024) {
+simdjson_warn_unused simdjson_result<std::string> to_json(const Z &z, size_t initial_capacity = simdjson::arm64::builder::string_builder::DEFAULT_INITIAL_CAPACITY) {
   simdjson::arm64::builder::string_builder b(initial_capacity);
   b.append(z);
   std::string_view s;
@@ -45020,8 +45088,20 @@ simdjson_result<std::string> to_json(const Z &z, size_t initial_capacity = 1024)
   if(e) { return e; }
   return std::string(s);
 }
+template <class Z>
+simdjson_warn_unused simdjson_error to_json(const Z &z, std::string &s, size_t initial_capacity = simdjson::arm64::builder::string_builder::DEFAULT_INITIAL_CAPACITY) {
+  simdjson::arm64::builder::string_builder b(initial_capacity);
+  b.append(z);
+  std::string_view sv;
+  auto e = b.view().get(sv);
+  if(e) { return e; }
+  s.assign(sv.data(), sv.size());
+  return simdjson::SUCCESS;
+}
 #endif
 
+#if SIMDJSON_SUPPORTS_CONCEPTS
+#endif // SIMDJSON_SUPPORTS_CONCEPTS
 
 } // namespace simdjson
 
@@ -45315,10 +45395,12 @@ simdjson_inline void string_builder::clear() noexcept {
 
 namespace internal {
 
-// We could specialize further for 32-bit integers.
-simdjson_really_inline int int_log2(uint32_t x) { return (63 - leading_zeroes(x | 1)); }
 
-simdjson_really_inline int fast_digit_count(uint32_t x) {
+template <typename number_type, typename = typename std::enable_if<
+                                    std::is_unsigned<number_type>::value>::type>
+simdjson_really_inline int int_log2(number_type x) { return 63 - leading_zeroes(uint64_t(x) | 1); }
+
+simdjson_really_inline int fast_digit_count_32(uint32_t x) {
   static uint64_t table[] = {
       4294967296,  8589934582,  8589934582,  8589934582,  12884901788,
       12884901788, 12884901788, 17179868184, 17179868184, 17179868184,
@@ -45330,9 +45412,8 @@ simdjson_really_inline int fast_digit_count(uint32_t x) {
   return uint32_t((x + table[int_log2(x)]) >> 32);
 }
 
-simdjson_really_inline int int_log2(uint64_t x) { return 63 - leading_zeroes(x | 1); }
 
-simdjson_really_inline int fast_digit_count(uint64_t x) {
+simdjson_really_inline int fast_digit_count_64(uint64_t x) {
   static uint64_t table[] = {9,
                              99,
                              999,
@@ -45363,7 +45444,11 @@ simdjson_really_inline size_t digit_count(number_type v) noexcept {
   static_assert(sizeof(number_type) == 8 || sizeof(number_type) == 4 ||
                     sizeof(number_type) == 2 || sizeof(number_type) == 1,
                 "We only support 8-bit, 16-bit, 32-bit and 64-bit numbers");
-  return fast_digit_count(v);
+  SIMDJSON_IF_CONSTEXPR(sizeof(number_type) <= 4) {
+    return fast_digit_count_32(static_cast<uint32_t>(v));
+  } else {
+    return fast_digit_count_64(static_cast<uint64_t>(v));
+  }
 }
 static const char decimal_table[200] = {
   0x30, 0x30, 0x30, 0x31, 0x30, 0x32, 0x30, 0x33, 0x30, 0x34, 0x30, 0x35,
@@ -45385,6 +45470,7 @@ static const char decimal_table[200] = {
   0x39, 0x36, 0x39, 0x37, 0x39, 0x38, 0x39, 0x39,
 };
 } // namespace internal
+
 
 template <typename number_type, typename>
 simdjson_inline void string_builder::append(number_type v) noexcept {
@@ -45501,6 +45587,12 @@ simdjson_inline void string_builder::escape_and_append_with_quotes(const char* i
   std::string_view cinput(input);
   escape_and_append_with_quotes(cinput);
 }
+#if SIMDJSON_SUPPORTS_CONCEPTS
+template<internal::fixed_string key>
+simdjson_inline void string_builder::escape_and_append_with_quotes()  noexcept {
+  escape_and_append_with_quotes(internal::string_constant<key>::value);
+}
+#endif
 
 simdjson_inline void string_builder::append_raw(const char *c) noexcept {
   size_t len = std::strlen(c);
@@ -45525,6 +45617,7 @@ simdjson_inline void string_builder::append_raw(const char *str,
 #if SIMDJSON_SUPPORTS_CONCEPTS
 // Support for optional types (std::optional, etc.)
 template <concepts::optional_type T>
+ requires(!require_custom_serialization<T>)
 simdjson_inline void string_builder::append(const T &opt) {
   if (opt) {
     append(*opt);
@@ -45532,9 +45625,17 @@ simdjson_inline void string_builder::append(const T &opt) {
     append_null();
   }
 }
+
+
+template <typename T>
+requires(require_custom_serialization<T>)
+simdjson_inline void string_builder::append(const T &val) {
+  serialize(*this, val);
+}
+
 template <typename T>
 requires(std::is_convertible<T, std::string_view>::value ||
-std::is_same<T, const char*>::value )
+std::is_same<T, const char*>::value)
 simdjson_inline void string_builder::append(const T &value) {
   escape_and_append_with_quotes(value);
 }
@@ -45680,6 +45781,25 @@ simdjson_inline void string_builder::append_key_value(key_type key, value_type v
   }
 }
 
+#if SIMDJSON_SUPPORTS_CONCEPTS
+template<internal::fixed_string key, typename value_type>
+simdjson_inline void string_builder::append_key_value(value_type value) noexcept {
+  escape_and_append_with_quotes<key>();
+  append_colon();
+  SIMDJSON_IF_CONSTEXPR(std::is_same<value_type, std::nullptr_t>::value) {
+    append_null();
+  } else SIMDJSON_IF_CONSTEXPR(std::is_same<value_type, char>::value) {
+    escape_and_append_with_quotes(value);
+  } else SIMDJSON_IF_CONSTEXPR(std::is_convertible<value_type, std::string_view>::value) {
+    escape_and_append_with_quotes(value);
+  } else SIMDJSON_IF_CONSTEXPR(std::is_same<value_type, const char*>::value) {
+    escape_and_append_with_quotes(value);
+  } else {
+    append(value);
+  }
+}
+#endif
+
 } // namespace builder
 } // namespace arm64
 } // namespace simdjson
@@ -45703,7 +45823,7 @@ simdjson_inline void string_builder::append_key_value(key_type key, value_type v
 
 #include <charconv>
 #include <cstring>
-#include <experimental/meta>
+#include <meta>
 #include <memory>
 #include <optional>
 #include <string_view>
@@ -45728,7 +45848,7 @@ concept container_but_not_string =
     !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char *>;
 
 template <class T>
-  requires(container_but_not_string<T>)
+  requires(container_but_not_string<T> && !require_custom_serialization<T>)
 constexpr void atom(string_builder &b, const T &t) {
   if (t.size() == 0) {
     b.append_raw("[]");
@@ -45753,6 +45873,7 @@ constexpr void atom(string_builder &b, const T &t) {
 }
 
 template <concepts::string_view_keyed_map T>
+  requires(!require_custom_serialization<T>)
 constexpr void atom(string_builder &b, const T &m) {
   if (m.empty()) {
     b.append_raw("{}");
@@ -45789,7 +45910,7 @@ template <class T>
            !std::is_same_v<T, std::string> &&
            !std::is_same_v<T, std::string_view> &&
            !std::is_same_v<T, const char*> &&
-           !std::is_same_v<T, char>)
+           !std::is_same_v<T, char> && !require_custom_serialization<T>)
 constexpr void atom(string_builder &b, const T &t) {
   int i = 0;
   b.append('{');
@@ -45807,6 +45928,7 @@ constexpr void atom(string_builder &b, const T &t) {
 
 // Support for optional types (std::optional, etc.)
 template <concepts::optional_type T>
+  requires(!require_custom_serialization<T>)
 constexpr void atom(string_builder &b, const T &opt) {
   if (opt) {
     atom(b, opt.value());
@@ -45817,6 +45939,7 @@ constexpr void atom(string_builder &b, const T &opt) {
 
 // Support for smart pointers (std::unique_ptr, std::shared_ptr, etc.)
 template <concepts::smart_pointer T>
+  requires(!require_custom_serialization<T>)
 constexpr void atom(string_builder &b, const T &ptr) {
   if (ptr) {
     atom(b, *ptr);
@@ -45827,7 +45950,7 @@ constexpr void atom(string_builder &b, const T &ptr) {
 
 // Support for enums - serialize as string representation using expand approach from P2996R12
 template <typename T>
-  requires(std::is_enum_v<T>)
+  requires(std::is_enum_v<T> && !require_custom_serialization<T>)
 void atom(string_builder &b, const T &e) {
 #if SIMDJSON_STATIC_REFLECTION
   constexpr auto enumerators = std::define_static_array(std::meta::enumerators_of(^^T));
@@ -45851,7 +45974,7 @@ template <concepts::appendable_containers T>
   requires(!container_but_not_string<T> && !concepts::string_view_keyed_map<T> &&
            !concepts::optional_type<T> && !concepts::smart_pointer<T> &&
            !std::is_same_v<T, std::string> &&
-           !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char*>)
+           !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char*> && !require_custom_serialization<T>)
 constexpr void atom(string_builder &b, const T &container) {
   if (container.empty()) {
     b.append_raw("[]");
@@ -45886,11 +46009,13 @@ void append(string_builder &b, const T &t) {
 }
 
 template <concepts::optional_type T>
+  requires(!require_custom_serialization<T>)
 void append(string_builder &b, const T &t) {
   atom(b, t);
 }
 
 template <concepts::smart_pointer T>
+  requires(!require_custom_serialization<T>)
 void append(string_builder &b, const T &t) {
   atom(b, t);
 }
@@ -45899,12 +46024,13 @@ template <concepts::appendable_containers T>
   requires(!container_but_not_string<T> && !concepts::string_view_keyed_map<T> &&
            !concepts::optional_type<T> && !concepts::smart_pointer<T> &&
            !std::is_same_v<T, std::string> &&
-           !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char*>)
+           !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char*> && !require_custom_serialization<T>)
 void append(string_builder &b, const T &t) {
   atom(b, t);
 }
 
 template <concepts::string_view_keyed_map T>
+  requires(!require_custom_serialization<T>)
 void append(string_builder &b, const T &t) {
   atom(b, t);
 }
@@ -45919,7 +46045,7 @@ template <class Z>
            !std::is_same_v<Z, std::string> &&
            !std::is_same_v<Z, std::string_view> &&
            !std::is_same_v<Z, const char*> &&
-           !std::is_same_v<Z, char>)
+           !std::is_same_v<Z, char> && !require_custom_serialization<Z>)
 void append(string_builder &b, const Z &z) {
   int i = 0;
   b.append('{');
@@ -45937,7 +46063,7 @@ void append(string_builder &b, const Z &z) {
 
 // works for container
 template <class Z>
-  requires(container_but_not_string<Z>)
+  requires(container_but_not_string<Z> && !require_custom_serialization<Z>)
 void append(string_builder &b, const Z &z) {
   if (z.size() == 0) {
     b.append_raw("[]");
@@ -45953,7 +46079,14 @@ void append(string_builder &b, const Z &z) {
 }
 
 template <class Z>
-simdjson_result<std::string> to_json_string(const Z &z, size_t initial_capacity = 1024) {
+  requires (require_custom_serialization<Z>)
+void append(string_builder &b, const Z &z) {
+  b.append(z);
+}
+
+
+template <class Z>
+simdjson_warn_unused simdjson_result<std::string> to_json_string(const Z &z, size_t initial_capacity = string_builder::DEFAULT_INITIAL_CAPACITY) {
   string_builder b(initial_capacity);
   append(b, z);
   std::string_view s;
@@ -45962,8 +46095,8 @@ simdjson_result<std::string> to_json_string(const Z &z, size_t initial_capacity 
 }
 
 template <class Z>
-simdjson_error to_json(const Z &z, std::string &s) {
-  string_builder b;
+simdjson_warn_unused simdjson_error to_json(const Z &z, std::string &s, size_t initial_capacity = string_builder::DEFAULT_INITIAL_CAPACITY) {
+  string_builder b(initial_capacity);
   append(b, z);
   std::string_view view;
   if(auto e = b.view().get(view); e) { return e; }
@@ -45980,8 +46113,12 @@ string_builder& operator<<(string_builder& b, const Z& z) {
 } // namespace arm64
 // Alias the function template to 'to' in the global namespace
 template <class Z>
-simdjson_result<std::string> to_json(const Z &z, size_t initial_capacity = 1024) {
+simdjson_warn_unused simdjson_result<std::string> to_json(const Z &z, size_t initial_capacity = arm64::builder::string_builder::DEFAULT_INITIAL_CAPACITY) {
   return arm64::builder::to_json_string(z, initial_capacity);
+}
+template <class Z>
+simdjson_warn_unused simdjson_error to_json(const Z &z, std::string &s, size_t initial_capacity = arm64::builder::string_builder::DEFAULT_INITIAL_CAPACITY) {
+  return arm64::builder::to_json(z, s, initial_capacity);
 }
 } // namespace simdjson
 
@@ -46302,54 +46439,7 @@ class value_iterator;
 /* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/array.h" */
 /* amalgamation skipped (editor-only): #endif // SIMDJSON_CONDITIONAL_INCLUDE */
 
-#include <concepts>
 namespace simdjson {
-
-namespace tag_invoke_fn_ns {
-void tag_invoke();
-
-struct tag_invoke_fn {
-  template <typename Tag, typename... Args>
-    requires requires(Tag tag, Args &&...args) {
-      tag_invoke(std::forward<Tag>(tag), std::forward<Args>(args)...);
-    }
-  constexpr auto operator()(Tag tag, Args &&...args) const
-      noexcept(noexcept(tag_invoke(std::forward<Tag>(tag),
-                                   std::forward<Args>(args)...)))
-          -> decltype(tag_invoke(std::forward<Tag>(tag),
-                                 std::forward<Args>(args)...)) {
-    return tag_invoke(std::forward<Tag>(tag), std::forward<Args>(args)...);
-  }
-};
-} // namespace tag_invoke_fn_ns
-
-inline namespace tag_invoke_ns {
-inline constexpr tag_invoke_fn_ns::tag_invoke_fn tag_invoke = {};
-} // namespace tag_invoke_ns
-
-template <typename Tag, typename... Args>
-concept tag_invocable = requires(Tag tag, Args... args) {
-  tag_invoke(std::forward<Tag>(tag), std::forward<Args>(args)...);
-};
-
-template <typename Tag, typename... Args>
-concept nothrow_tag_invocable =
-    tag_invocable<Tag, Args...> && requires(Tag tag, Args... args) {
-      {
-        tag_invoke(std::forward<Tag>(tag), std::forward<Args>(args)...)
-      } noexcept;
-    };
-
-template <typename Tag, typename... Args>
-using tag_invoke_result =
-    std::invoke_result<decltype(tag_invoke), Tag, Args...>;
-
-template <typename Tag, typename... Args>
-using tag_invoke_result_t =
-    std::invoke_result_t<decltype(tag_invoke), Tag, Args...>;
-
-template <auto &Tag> using tag_t = std::decay_t<decltype(Tag)>;
-
 
 struct deserialize_tag;
 
@@ -47015,7 +47105,9 @@ public:
       using value_type = typename std::remove_cvref_t<T>::value_type;
 
       // Check if the value is null
-      if (is_null()) {
+      bool is_null_value;
+      SIMDJSON_TRY( is_null().get(is_null_value) );
+      if (is_null_value) {
         out.reset(); // Set to nullopt
         return SUCCESS;
       }
@@ -51623,15 +51715,12 @@ inline std::ostream& operator<<(std::ostream& out, simdjson::simdjson_result<sim
 #endif
 
 namespace simdjson {
-template <typename T>
-constexpr bool require_custom_serialization = false;
 
 //////////////////////////////
 // Number deserialization
 //////////////////////////////
 
 template <std::unsigned_integral T>
-  requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept {
   using limits = std::numeric_limits<T>;
 
@@ -51645,7 +51734,6 @@ error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept {
 }
 
 template <std::floating_point T>
-  requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept {
   double x;
   SIMDJSON_TRY(val.get_double().get(x));
@@ -51654,7 +51742,6 @@ error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept {
 }
 
 template <std::signed_integral T>
-  requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept {
   using limits = std::numeric_limits<T>;
 
@@ -51684,7 +51771,6 @@ error_code tag_invoke(deserialize_tag, auto &val, char &out) noexcept {
 
 // any string-like type (can be constructed from std::string_view)
 template <concepts::constructible_from_string_view T, typename ValT>
-  requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(std::is_nothrow_constructible_v<T, std::string_view>) {
   std::string_view str;
   SIMDJSON_TRY(val.get_string().get(str));
@@ -51701,7 +51787,6 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(std::is_nothr
  * doc.get<std::vector<int>>().
  */
 template <concepts::appendable_containers T, typename ValT>
-  requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(false) {
   using value_type = typename std::remove_cvref_t<T>::value_type;
   static_assert(
@@ -51747,7 +51832,6 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(false) {
  * string-keyed types.
  */
  template <concepts::string_view_keyed_map T, typename ValT>
- requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(false) {
   using value_type = typename std::remove_cvref_t<T>::mapped_type;
   static_assert(
@@ -51829,7 +51913,6 @@ error_code tag_invoke(deserialize_tag, fallback::ondemand::document_reference &d
  * @return status of the conversion
  */
 template <concepts::smart_pointer T, typename ValT>
-  requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(nothrow_deserializable<typename std::remove_cvref_t<T>::element_type, ValT>) {
   using element_type = typename std::remove_cvref_t<T>::element_type;
 
@@ -51855,12 +51938,13 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(nothrow_deser
  * This CPO (Customization Point Object) will help deserialize into optional types.
  */
 template <concepts::optional_type T>
-  requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept(nothrow_deserializable<typename std::remove_cvref_t<T>::value_type, decltype(val)>) {
   using value_type = typename std::remove_cvref_t<T>::value_type;
 
   // Check if the value is null
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset(); // Set to nullopt
     return SUCCESS;
   }
@@ -51879,7 +51963,7 @@ error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept(nothrow_deser
 template <typename T>
 constexpr bool user_defined_type = (std::is_class_v<T>
 && !std::is_same_v<T, std::string> && !std::is_same_v<T, std::string_view> && !concepts::optional_type<T> &&
-!concepts::appendable_containers<T> && !require_custom_serialization<T>);
+!concepts::appendable_containers<T>);
 
 
 template <typename T, typename ValT>
@@ -51891,18 +51975,26 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept {
   } else {
     SIMDJSON_TRY(val.get_object().get(obj));
   }
-  error_code e = simdjson::SUCCESS;
   template for (constexpr auto mem : std::define_static_array(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked()))) {
-        if constexpr (!std::meta::is_const(mem) && std::meta::is_public(mem)) {
+    if constexpr (!std::meta::is_const(mem) && std::meta::is_public(mem)) {
       constexpr std::string_view key = std::define_static_string(std::meta::identifier_of(mem));
-      // Note: removed static assert as optional types are now handled generically
-      // as long we are succesful or the field is not found, we continue
-      if(e == simdjson::SUCCESS || e == simdjson::NO_SUCH_FIELD) {
-        e = obj[key].get(out.[:mem:]);
+      if constexpr (concepts::optional_type<decltype(out.[:mem:])>) {
+        // for optional members, it's ok if the key is missing
+        auto error = obj[key].get(out.[:mem:]);
+        if (error && error != NO_SUCH_FIELD) {
+          if(error == NO_SUCH_FIELD) {
+            out.[:mem:].reset();
+            continue;
+          }
+          return error;
+        }
+      } else {
+        // for non-optional members, the key must be present
+        SIMDJSON_TRY(obj[key].get(out.[:mem:]));
       }
     }
   };
-  return e;
+  return simdjson::SUCCESS;
 }
 
 // Support for enum deserialization - deserialize from string representation using expand approach from P2996R12
@@ -51968,7 +52060,9 @@ error_code tag_invoke(deserialize_tag, simdjson_value &val, std::shared_ptr<T> &
 // Unique pointers
 ////////////////////////////////////////
 error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<bool> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -51981,7 +52075,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<bool> &out) no
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<int64_t> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -51994,7 +52090,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<int64_t> &out)
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<uint64_t> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -52007,7 +52105,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<uint64_t> &out
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<double> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -52020,7 +52120,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<double> &out) 
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<std::string_view> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -52037,7 +52139,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<std::string_vi
 // Shared pointers
 ////////////////////////////////////////
 error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<bool> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -52050,7 +52154,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<bool> &out) no
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<int64_t> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -52063,7 +52169,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<int64_t> &out)
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<uint64_t> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -52076,7 +52184,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<uint64_t> &out
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<double> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -52089,7 +52199,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<double> &out) 
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<std::string_view> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -52111,7 +52223,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<std::string_vi
 ////////////////////////////////////////
 error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<std::string> &out) noexcept {
   // Check if the value is null
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset(); // Set to nullptr
     return SUCCESS;
   }
@@ -52127,7 +52241,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<std::string> &
 
 error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<std::string> &out) noexcept {
   // Check if the value is null
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset(); // Set to nullptr
     return SUCCESS;
   }
@@ -52143,7 +52259,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<std::string> &
 
 error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<int> &out) noexcept {
   // Check if the value is null
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset(); // Set to nullptr
     return SUCCESS;
   }
@@ -57719,9 +57837,62 @@ simdjson_inline simdjson_result<fallback::ondemand::value_iterator>::simdjson_re
 /* amalgamation skipped (editor-only): #endif // SIMDJSON_CONDITIONAL_INCLUDE */
 
 namespace simdjson {
+
+
+#if SIMDJSON_SUPPORTS_CONCEPTS
+
 namespace fallback {
 namespace builder {
+  class string_builder;
+}}
 
+template <typename T, typename = void>
+struct has_custom_serialization : std::false_type {};
+
+inline constexpr struct serialize_tag {
+  template <typename T>
+    requires custom_deserializable<T>
+  constexpr void operator()(fallback::builder::string_builder& b, T& obj) const{
+    return tag_invoke(*this, b, obj);
+  }
+
+
+} serialize{};
+template <typename T>
+struct has_custom_serialization<T, std::void_t<
+    decltype(tag_invoke(serialize, std::declval<fallback::builder::string_builder&>(), std::declval<T&>()))
+>> : std::true_type {};
+
+template <typename T>
+constexpr bool require_custom_serialization = has_custom_serialization<T>::value;
+#else
+struct has_custom_serialization : std::false_type {};
+#endif // SIMDJSON_SUPPORTS_CONCEPTS
+
+namespace fallback {
+namespace builder {
+#if SIMDJSON_SUPPORTS_CONCEPTS
+// Helper to create string constants
+namespace internal {
+template <std::size_t N>
+struct fixed_string {
+    constexpr fixed_string(const char (&str)[N])  {
+        for (std::size_t i = 0; i < N; ++i) {
+            data[i] = str[i];
+        }
+    }
+    char data[N];
+    constexpr std::string_view view() const { return {data, N - 1}; }
+};
+template <std::size_t N>
+fixed_string(const char (&)[N]) -> fixed_string<N>;
+
+template <fixed_string str>
+struct string_constant {
+    static constexpr std::string_view value = str.view();
+};
+} // namespace internal
+#endif // SIMDJSON_SUPPORTS_CONCEPTS
 /**
  * A builder for JSON strings representing documents. This is a low-level
  * builder that is not meant to be used directly by end-users. Though it
@@ -57733,7 +57904,9 @@ namespace builder {
  */
 class string_builder {
 public:
-  simdjson_inline string_builder(size_t initial_capacity = 1024);
+  simdjson_inline string_builder(size_t initial_capacity = DEFAULT_INITIAL_CAPACITY);
+
+  static constexpr size_t DEFAULT_INITIAL_CAPACITY = 1024;
 
   /**
    * Append number (includes Booleans). Booleans are mapped to the strings
@@ -57742,7 +57915,7 @@ public:
    * represents the number.
    */
   template<typename number_type,
-         typename = typename std::enable_if<std::is_arithmetic<number_type>::value>::type>
+    typename = typename std::enable_if<std::is_arithmetic<number_type>::value>::type>
   simdjson_inline void append(number_type v) noexcept;
 
   /**
@@ -57771,7 +57944,10 @@ public:
    * There is no UTF-8 validation.
    */
   simdjson_inline void escape_and_append_with_quotes(std::string_view input)  noexcept;
-
+#if SIMDJSON_SUPPORTS_CONCEPTS
+  template<internal::fixed_string key>
+  simdjson_inline void escape_and_append_with_quotes()  noexcept;
+#endif
   /**
    * Append the character surrounded by double quotes, after escaping it.
    * There is no UTF-8 validation.
@@ -57825,12 +58001,20 @@ public:
    * The key is escaped and surrounded by double quotes.
    * The value is escaped if it is a string.
    */
-   template<typename key_type, typename value_type>
+  template<typename key_type, typename value_type>
   simdjson_inline void append_key_value(key_type key, value_type value) noexcept;
 #if SIMDJSON_SUPPORTS_CONCEPTS
+  template<internal::fixed_string key, typename value_type>
+  simdjson_inline void append_key_value(value_type value) noexcept;
+
   // Support for optional types (std::optional, etc.)
   template <concepts::optional_type T>
+  requires(!require_custom_serialization<T>)
   simdjson_inline void append(const T &opt);
+
+  template <typename T>
+  requires(require_custom_serialization<T>)
+  simdjson_inline void append(const T &val);
 
   // Support for string-like types
   template <typename T>
@@ -57941,7 +58125,7 @@ private:
 #if !SIMDJSON_STATIC_REFLECTION
 // fallback implementation until we have static reflection
 template <class Z>
-simdjson_result<std::string> to_json(const Z &z, size_t initial_capacity = 1024) {
+simdjson_warn_unused simdjson_result<std::string> to_json(const Z &z, size_t initial_capacity = simdjson::fallback::builder::string_builder::DEFAULT_INITIAL_CAPACITY) {
   simdjson::fallback::builder::string_builder b(initial_capacity);
   b.append(z);
   std::string_view s;
@@ -57949,8 +58133,20 @@ simdjson_result<std::string> to_json(const Z &z, size_t initial_capacity = 1024)
   if(e) { return e; }
   return std::string(s);
 }
+template <class Z>
+simdjson_warn_unused simdjson_error to_json(const Z &z, std::string &s, size_t initial_capacity = simdjson::fallback::builder::string_builder::DEFAULT_INITIAL_CAPACITY) {
+  simdjson::fallback::builder::string_builder b(initial_capacity);
+  b.append(z);
+  std::string_view sv;
+  auto e = b.view().get(sv);
+  if(e) { return e; }
+  s.assign(sv.data(), sv.size());
+  return simdjson::SUCCESS;
+}
 #endif
 
+#if SIMDJSON_SUPPORTS_CONCEPTS
+#endif // SIMDJSON_SUPPORTS_CONCEPTS
 
 } // namespace simdjson
 
@@ -58244,10 +58440,12 @@ simdjson_inline void string_builder::clear() noexcept {
 
 namespace internal {
 
-// We could specialize further for 32-bit integers.
-simdjson_really_inline int int_log2(uint32_t x) { return (63 - leading_zeroes(x | 1)); }
 
-simdjson_really_inline int fast_digit_count(uint32_t x) {
+template <typename number_type, typename = typename std::enable_if<
+                                    std::is_unsigned<number_type>::value>::type>
+simdjson_really_inline int int_log2(number_type x) { return 63 - leading_zeroes(uint64_t(x) | 1); }
+
+simdjson_really_inline int fast_digit_count_32(uint32_t x) {
   static uint64_t table[] = {
       4294967296,  8589934582,  8589934582,  8589934582,  12884901788,
       12884901788, 12884901788, 17179868184, 17179868184, 17179868184,
@@ -58259,9 +58457,8 @@ simdjson_really_inline int fast_digit_count(uint32_t x) {
   return uint32_t((x + table[int_log2(x)]) >> 32);
 }
 
-simdjson_really_inline int int_log2(uint64_t x) { return 63 - leading_zeroes(x | 1); }
 
-simdjson_really_inline int fast_digit_count(uint64_t x) {
+simdjson_really_inline int fast_digit_count_64(uint64_t x) {
   static uint64_t table[] = {9,
                              99,
                              999,
@@ -58292,7 +58489,11 @@ simdjson_really_inline size_t digit_count(number_type v) noexcept {
   static_assert(sizeof(number_type) == 8 || sizeof(number_type) == 4 ||
                     sizeof(number_type) == 2 || sizeof(number_type) == 1,
                 "We only support 8-bit, 16-bit, 32-bit and 64-bit numbers");
-  return fast_digit_count(v);
+  SIMDJSON_IF_CONSTEXPR(sizeof(number_type) <= 4) {
+    return fast_digit_count_32(static_cast<uint32_t>(v));
+  } else {
+    return fast_digit_count_64(static_cast<uint64_t>(v));
+  }
 }
 static const char decimal_table[200] = {
   0x30, 0x30, 0x30, 0x31, 0x30, 0x32, 0x30, 0x33, 0x30, 0x34, 0x30, 0x35,
@@ -58314,6 +58515,7 @@ static const char decimal_table[200] = {
   0x39, 0x36, 0x39, 0x37, 0x39, 0x38, 0x39, 0x39,
 };
 } // namespace internal
+
 
 template <typename number_type, typename>
 simdjson_inline void string_builder::append(number_type v) noexcept {
@@ -58430,6 +58632,12 @@ simdjson_inline void string_builder::escape_and_append_with_quotes(const char* i
   std::string_view cinput(input);
   escape_and_append_with_quotes(cinput);
 }
+#if SIMDJSON_SUPPORTS_CONCEPTS
+template<internal::fixed_string key>
+simdjson_inline void string_builder::escape_and_append_with_quotes()  noexcept {
+  escape_and_append_with_quotes(internal::string_constant<key>::value);
+}
+#endif
 
 simdjson_inline void string_builder::append_raw(const char *c) noexcept {
   size_t len = std::strlen(c);
@@ -58454,6 +58662,7 @@ simdjson_inline void string_builder::append_raw(const char *str,
 #if SIMDJSON_SUPPORTS_CONCEPTS
 // Support for optional types (std::optional, etc.)
 template <concepts::optional_type T>
+ requires(!require_custom_serialization<T>)
 simdjson_inline void string_builder::append(const T &opt) {
   if (opt) {
     append(*opt);
@@ -58461,9 +58670,17 @@ simdjson_inline void string_builder::append(const T &opt) {
     append_null();
   }
 }
+
+
+template <typename T>
+requires(require_custom_serialization<T>)
+simdjson_inline void string_builder::append(const T &val) {
+  serialize(*this, val);
+}
+
 template <typename T>
 requires(std::is_convertible<T, std::string_view>::value ||
-std::is_same<T, const char*>::value )
+std::is_same<T, const char*>::value)
 simdjson_inline void string_builder::append(const T &value) {
   escape_and_append_with_quotes(value);
 }
@@ -58609,6 +58826,25 @@ simdjson_inline void string_builder::append_key_value(key_type key, value_type v
   }
 }
 
+#if SIMDJSON_SUPPORTS_CONCEPTS
+template<internal::fixed_string key, typename value_type>
+simdjson_inline void string_builder::append_key_value(value_type value) noexcept {
+  escape_and_append_with_quotes<key>();
+  append_colon();
+  SIMDJSON_IF_CONSTEXPR(std::is_same<value_type, std::nullptr_t>::value) {
+    append_null();
+  } else SIMDJSON_IF_CONSTEXPR(std::is_same<value_type, char>::value) {
+    escape_and_append_with_quotes(value);
+  } else SIMDJSON_IF_CONSTEXPR(std::is_convertible<value_type, std::string_view>::value) {
+    escape_and_append_with_quotes(value);
+  } else SIMDJSON_IF_CONSTEXPR(std::is_same<value_type, const char*>::value) {
+    escape_and_append_with_quotes(value);
+  } else {
+    append(value);
+  }
+}
+#endif
+
 } // namespace builder
 } // namespace fallback
 } // namespace simdjson
@@ -58632,7 +58868,7 @@ simdjson_inline void string_builder::append_key_value(key_type key, value_type v
 
 #include <charconv>
 #include <cstring>
-#include <experimental/meta>
+#include <meta>
 #include <memory>
 #include <optional>
 #include <string_view>
@@ -58657,7 +58893,7 @@ concept container_but_not_string =
     !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char *>;
 
 template <class T>
-  requires(container_but_not_string<T>)
+  requires(container_but_not_string<T> && !require_custom_serialization<T>)
 constexpr void atom(string_builder &b, const T &t) {
   if (t.size() == 0) {
     b.append_raw("[]");
@@ -58682,6 +58918,7 @@ constexpr void atom(string_builder &b, const T &t) {
 }
 
 template <concepts::string_view_keyed_map T>
+  requires(!require_custom_serialization<T>)
 constexpr void atom(string_builder &b, const T &m) {
   if (m.empty()) {
     b.append_raw("{}");
@@ -58718,7 +58955,7 @@ template <class T>
            !std::is_same_v<T, std::string> &&
            !std::is_same_v<T, std::string_view> &&
            !std::is_same_v<T, const char*> &&
-           !std::is_same_v<T, char>)
+           !std::is_same_v<T, char> && !require_custom_serialization<T>)
 constexpr void atom(string_builder &b, const T &t) {
   int i = 0;
   b.append('{');
@@ -58736,6 +58973,7 @@ constexpr void atom(string_builder &b, const T &t) {
 
 // Support for optional types (std::optional, etc.)
 template <concepts::optional_type T>
+  requires(!require_custom_serialization<T>)
 constexpr void atom(string_builder &b, const T &opt) {
   if (opt) {
     atom(b, opt.value());
@@ -58746,6 +58984,7 @@ constexpr void atom(string_builder &b, const T &opt) {
 
 // Support for smart pointers (std::unique_ptr, std::shared_ptr, etc.)
 template <concepts::smart_pointer T>
+  requires(!require_custom_serialization<T>)
 constexpr void atom(string_builder &b, const T &ptr) {
   if (ptr) {
     atom(b, *ptr);
@@ -58756,7 +58995,7 @@ constexpr void atom(string_builder &b, const T &ptr) {
 
 // Support for enums - serialize as string representation using expand approach from P2996R12
 template <typename T>
-  requires(std::is_enum_v<T>)
+  requires(std::is_enum_v<T> && !require_custom_serialization<T>)
 void atom(string_builder &b, const T &e) {
 #if SIMDJSON_STATIC_REFLECTION
   constexpr auto enumerators = std::define_static_array(std::meta::enumerators_of(^^T));
@@ -58780,7 +59019,7 @@ template <concepts::appendable_containers T>
   requires(!container_but_not_string<T> && !concepts::string_view_keyed_map<T> &&
            !concepts::optional_type<T> && !concepts::smart_pointer<T> &&
            !std::is_same_v<T, std::string> &&
-           !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char*>)
+           !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char*> && !require_custom_serialization<T>)
 constexpr void atom(string_builder &b, const T &container) {
   if (container.empty()) {
     b.append_raw("[]");
@@ -58815,11 +59054,13 @@ void append(string_builder &b, const T &t) {
 }
 
 template <concepts::optional_type T>
+  requires(!require_custom_serialization<T>)
 void append(string_builder &b, const T &t) {
   atom(b, t);
 }
 
 template <concepts::smart_pointer T>
+  requires(!require_custom_serialization<T>)
 void append(string_builder &b, const T &t) {
   atom(b, t);
 }
@@ -58828,12 +59069,13 @@ template <concepts::appendable_containers T>
   requires(!container_but_not_string<T> && !concepts::string_view_keyed_map<T> &&
            !concepts::optional_type<T> && !concepts::smart_pointer<T> &&
            !std::is_same_v<T, std::string> &&
-           !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char*>)
+           !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char*> && !require_custom_serialization<T>)
 void append(string_builder &b, const T &t) {
   atom(b, t);
 }
 
 template <concepts::string_view_keyed_map T>
+  requires(!require_custom_serialization<T>)
 void append(string_builder &b, const T &t) {
   atom(b, t);
 }
@@ -58848,7 +59090,7 @@ template <class Z>
            !std::is_same_v<Z, std::string> &&
            !std::is_same_v<Z, std::string_view> &&
            !std::is_same_v<Z, const char*> &&
-           !std::is_same_v<Z, char>)
+           !std::is_same_v<Z, char> && !require_custom_serialization<Z>)
 void append(string_builder &b, const Z &z) {
   int i = 0;
   b.append('{');
@@ -58866,7 +59108,7 @@ void append(string_builder &b, const Z &z) {
 
 // works for container
 template <class Z>
-  requires(container_but_not_string<Z>)
+  requires(container_but_not_string<Z> && !require_custom_serialization<Z>)
 void append(string_builder &b, const Z &z) {
   if (z.size() == 0) {
     b.append_raw("[]");
@@ -58882,7 +59124,14 @@ void append(string_builder &b, const Z &z) {
 }
 
 template <class Z>
-simdjson_result<std::string> to_json_string(const Z &z, size_t initial_capacity = 1024) {
+  requires (require_custom_serialization<Z>)
+void append(string_builder &b, const Z &z) {
+  b.append(z);
+}
+
+
+template <class Z>
+simdjson_warn_unused simdjson_result<std::string> to_json_string(const Z &z, size_t initial_capacity = string_builder::DEFAULT_INITIAL_CAPACITY) {
   string_builder b(initial_capacity);
   append(b, z);
   std::string_view s;
@@ -58891,8 +59140,8 @@ simdjson_result<std::string> to_json_string(const Z &z, size_t initial_capacity 
 }
 
 template <class Z>
-simdjson_error to_json(const Z &z, std::string &s) {
-  string_builder b;
+simdjson_warn_unused simdjson_error to_json(const Z &z, std::string &s, size_t initial_capacity = string_builder::DEFAULT_INITIAL_CAPACITY) {
+  string_builder b(initial_capacity);
   append(b, z);
   std::string_view view;
   if(auto e = b.view().get(view); e) { return e; }
@@ -58909,8 +59158,12 @@ string_builder& operator<<(string_builder& b, const Z& z) {
 } // namespace fallback
 // Alias the function template to 'to' in the global namespace
 template <class Z>
-simdjson_result<std::string> to_json(const Z &z, size_t initial_capacity = 1024) {
+simdjson_warn_unused simdjson_result<std::string> to_json(const Z &z, size_t initial_capacity = fallback::builder::string_builder::DEFAULT_INITIAL_CAPACITY) {
   return fallback::builder::to_json_string(z, initial_capacity);
+}
+template <class Z>
+simdjson_warn_unused simdjson_error to_json(const Z &z, std::string &s, size_t initial_capacity = fallback::builder::string_builder::DEFAULT_INITIAL_CAPACITY) {
+  return fallback::builder::to_json(z, s, initial_capacity);
 }
 } // namespace simdjson
 
@@ -59730,54 +59983,7 @@ class value_iterator;
 /* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/array.h" */
 /* amalgamation skipped (editor-only): #endif // SIMDJSON_CONDITIONAL_INCLUDE */
 
-#include <concepts>
 namespace simdjson {
-
-namespace tag_invoke_fn_ns {
-void tag_invoke();
-
-struct tag_invoke_fn {
-  template <typename Tag, typename... Args>
-    requires requires(Tag tag, Args &&...args) {
-      tag_invoke(std::forward<Tag>(tag), std::forward<Args>(args)...);
-    }
-  constexpr auto operator()(Tag tag, Args &&...args) const
-      noexcept(noexcept(tag_invoke(std::forward<Tag>(tag),
-                                   std::forward<Args>(args)...)))
-          -> decltype(tag_invoke(std::forward<Tag>(tag),
-                                 std::forward<Args>(args)...)) {
-    return tag_invoke(std::forward<Tag>(tag), std::forward<Args>(args)...);
-  }
-};
-} // namespace tag_invoke_fn_ns
-
-inline namespace tag_invoke_ns {
-inline constexpr tag_invoke_fn_ns::tag_invoke_fn tag_invoke = {};
-} // namespace tag_invoke_ns
-
-template <typename Tag, typename... Args>
-concept tag_invocable = requires(Tag tag, Args... args) {
-  tag_invoke(std::forward<Tag>(tag), std::forward<Args>(args)...);
-};
-
-template <typename Tag, typename... Args>
-concept nothrow_tag_invocable =
-    tag_invocable<Tag, Args...> && requires(Tag tag, Args... args) {
-      {
-        tag_invoke(std::forward<Tag>(tag), std::forward<Args>(args)...)
-      } noexcept;
-    };
-
-template <typename Tag, typename... Args>
-using tag_invoke_result =
-    std::invoke_result<decltype(tag_invoke), Tag, Args...>;
-
-template <typename Tag, typename... Args>
-using tag_invoke_result_t =
-    std::invoke_result_t<decltype(tag_invoke), Tag, Args...>;
-
-template <auto &Tag> using tag_t = std::decay_t<decltype(Tag)>;
-
 
 struct deserialize_tag;
 
@@ -60443,7 +60649,9 @@ public:
       using value_type = typename std::remove_cvref_t<T>::value_type;
 
       // Check if the value is null
-      if (is_null()) {
+      bool is_null_value;
+      SIMDJSON_TRY( is_null().get(is_null_value) );
+      if (is_null_value) {
         out.reset(); // Set to nullopt
         return SUCCESS;
       }
@@ -65051,15 +65259,12 @@ inline std::ostream& operator<<(std::ostream& out, simdjson::simdjson_result<sim
 #endif
 
 namespace simdjson {
-template <typename T>
-constexpr bool require_custom_serialization = false;
 
 //////////////////////////////
 // Number deserialization
 //////////////////////////////
 
 template <std::unsigned_integral T>
-  requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept {
   using limits = std::numeric_limits<T>;
 
@@ -65073,7 +65278,6 @@ error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept {
 }
 
 template <std::floating_point T>
-  requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept {
   double x;
   SIMDJSON_TRY(val.get_double().get(x));
@@ -65082,7 +65286,6 @@ error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept {
 }
 
 template <std::signed_integral T>
-  requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept {
   using limits = std::numeric_limits<T>;
 
@@ -65112,7 +65315,6 @@ error_code tag_invoke(deserialize_tag, auto &val, char &out) noexcept {
 
 // any string-like type (can be constructed from std::string_view)
 template <concepts::constructible_from_string_view T, typename ValT>
-  requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(std::is_nothrow_constructible_v<T, std::string_view>) {
   std::string_view str;
   SIMDJSON_TRY(val.get_string().get(str));
@@ -65129,7 +65331,6 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(std::is_nothr
  * doc.get<std::vector<int>>().
  */
 template <concepts::appendable_containers T, typename ValT>
-  requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(false) {
   using value_type = typename std::remove_cvref_t<T>::value_type;
   static_assert(
@@ -65175,7 +65376,6 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(false) {
  * string-keyed types.
  */
  template <concepts::string_view_keyed_map T, typename ValT>
- requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(false) {
   using value_type = typename std::remove_cvref_t<T>::mapped_type;
   static_assert(
@@ -65257,7 +65457,6 @@ error_code tag_invoke(deserialize_tag, haswell::ondemand::document_reference &do
  * @return status of the conversion
  */
 template <concepts::smart_pointer T, typename ValT>
-  requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(nothrow_deserializable<typename std::remove_cvref_t<T>::element_type, ValT>) {
   using element_type = typename std::remove_cvref_t<T>::element_type;
 
@@ -65283,12 +65482,13 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(nothrow_deser
  * This CPO (Customization Point Object) will help deserialize into optional types.
  */
 template <concepts::optional_type T>
-  requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept(nothrow_deserializable<typename std::remove_cvref_t<T>::value_type, decltype(val)>) {
   using value_type = typename std::remove_cvref_t<T>::value_type;
 
   // Check if the value is null
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset(); // Set to nullopt
     return SUCCESS;
   }
@@ -65307,7 +65507,7 @@ error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept(nothrow_deser
 template <typename T>
 constexpr bool user_defined_type = (std::is_class_v<T>
 && !std::is_same_v<T, std::string> && !std::is_same_v<T, std::string_view> && !concepts::optional_type<T> &&
-!concepts::appendable_containers<T> && !require_custom_serialization<T>);
+!concepts::appendable_containers<T>);
 
 
 template <typename T, typename ValT>
@@ -65319,18 +65519,26 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept {
   } else {
     SIMDJSON_TRY(val.get_object().get(obj));
   }
-  error_code e = simdjson::SUCCESS;
   template for (constexpr auto mem : std::define_static_array(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked()))) {
-        if constexpr (!std::meta::is_const(mem) && std::meta::is_public(mem)) {
+    if constexpr (!std::meta::is_const(mem) && std::meta::is_public(mem)) {
       constexpr std::string_view key = std::define_static_string(std::meta::identifier_of(mem));
-      // Note: removed static assert as optional types are now handled generically
-      // as long we are succesful or the field is not found, we continue
-      if(e == simdjson::SUCCESS || e == simdjson::NO_SUCH_FIELD) {
-        e = obj[key].get(out.[:mem:]);
+      if constexpr (concepts::optional_type<decltype(out.[:mem:])>) {
+        // for optional members, it's ok if the key is missing
+        auto error = obj[key].get(out.[:mem:]);
+        if (error && error != NO_SUCH_FIELD) {
+          if(error == NO_SUCH_FIELD) {
+            out.[:mem:].reset();
+            continue;
+          }
+          return error;
+        }
+      } else {
+        // for non-optional members, the key must be present
+        SIMDJSON_TRY(obj[key].get(out.[:mem:]));
       }
     }
   };
-  return e;
+  return simdjson::SUCCESS;
 }
 
 // Support for enum deserialization - deserialize from string representation using expand approach from P2996R12
@@ -65396,7 +65604,9 @@ error_code tag_invoke(deserialize_tag, simdjson_value &val, std::shared_ptr<T> &
 // Unique pointers
 ////////////////////////////////////////
 error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<bool> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -65409,7 +65619,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<bool> &out) no
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<int64_t> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -65422,7 +65634,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<int64_t> &out)
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<uint64_t> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -65435,7 +65649,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<uint64_t> &out
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<double> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -65448,7 +65664,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<double> &out) 
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<std::string_view> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -65465,7 +65683,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<std::string_vi
 // Shared pointers
 ////////////////////////////////////////
 error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<bool> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -65478,7 +65698,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<bool> &out) no
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<int64_t> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -65491,7 +65713,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<int64_t> &out)
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<uint64_t> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -65504,7 +65728,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<uint64_t> &out
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<double> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -65517,7 +65743,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<double> &out) 
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<std::string_view> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -65539,7 +65767,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<std::string_vi
 ////////////////////////////////////////
 error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<std::string> &out) noexcept {
   // Check if the value is null
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset(); // Set to nullptr
     return SUCCESS;
   }
@@ -65555,7 +65785,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<std::string> &
 
 error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<std::string> &out) noexcept {
   // Check if the value is null
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset(); // Set to nullptr
     return SUCCESS;
   }
@@ -65571,7 +65803,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<std::string> &
 
 error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<int> &out) noexcept {
   // Check if the value is null
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset(); // Set to nullptr
     return SUCCESS;
   }
@@ -71147,9 +71381,62 @@ simdjson_inline simdjson_result<haswell::ondemand::value_iterator>::simdjson_res
 /* amalgamation skipped (editor-only): #endif // SIMDJSON_CONDITIONAL_INCLUDE */
 
 namespace simdjson {
+
+
+#if SIMDJSON_SUPPORTS_CONCEPTS
+
 namespace haswell {
 namespace builder {
+  class string_builder;
+}}
 
+template <typename T, typename = void>
+struct has_custom_serialization : std::false_type {};
+
+inline constexpr struct serialize_tag {
+  template <typename T>
+    requires custom_deserializable<T>
+  constexpr void operator()(haswell::builder::string_builder& b, T& obj) const{
+    return tag_invoke(*this, b, obj);
+  }
+
+
+} serialize{};
+template <typename T>
+struct has_custom_serialization<T, std::void_t<
+    decltype(tag_invoke(serialize, std::declval<haswell::builder::string_builder&>(), std::declval<T&>()))
+>> : std::true_type {};
+
+template <typename T>
+constexpr bool require_custom_serialization = has_custom_serialization<T>::value;
+#else
+struct has_custom_serialization : std::false_type {};
+#endif // SIMDJSON_SUPPORTS_CONCEPTS
+
+namespace haswell {
+namespace builder {
+#if SIMDJSON_SUPPORTS_CONCEPTS
+// Helper to create string constants
+namespace internal {
+template <std::size_t N>
+struct fixed_string {
+    constexpr fixed_string(const char (&str)[N])  {
+        for (std::size_t i = 0; i < N; ++i) {
+            data[i] = str[i];
+        }
+    }
+    char data[N];
+    constexpr std::string_view view() const { return {data, N - 1}; }
+};
+template <std::size_t N>
+fixed_string(const char (&)[N]) -> fixed_string<N>;
+
+template <fixed_string str>
+struct string_constant {
+    static constexpr std::string_view value = str.view();
+};
+} // namespace internal
+#endif // SIMDJSON_SUPPORTS_CONCEPTS
 /**
  * A builder for JSON strings representing documents. This is a low-level
  * builder that is not meant to be used directly by end-users. Though it
@@ -71161,7 +71448,9 @@ namespace builder {
  */
 class string_builder {
 public:
-  simdjson_inline string_builder(size_t initial_capacity = 1024);
+  simdjson_inline string_builder(size_t initial_capacity = DEFAULT_INITIAL_CAPACITY);
+
+  static constexpr size_t DEFAULT_INITIAL_CAPACITY = 1024;
 
   /**
    * Append number (includes Booleans). Booleans are mapped to the strings
@@ -71170,7 +71459,7 @@ public:
    * represents the number.
    */
   template<typename number_type,
-         typename = typename std::enable_if<std::is_arithmetic<number_type>::value>::type>
+    typename = typename std::enable_if<std::is_arithmetic<number_type>::value>::type>
   simdjson_inline void append(number_type v) noexcept;
 
   /**
@@ -71199,7 +71488,10 @@ public:
    * There is no UTF-8 validation.
    */
   simdjson_inline void escape_and_append_with_quotes(std::string_view input)  noexcept;
-
+#if SIMDJSON_SUPPORTS_CONCEPTS
+  template<internal::fixed_string key>
+  simdjson_inline void escape_and_append_with_quotes()  noexcept;
+#endif
   /**
    * Append the character surrounded by double quotes, after escaping it.
    * There is no UTF-8 validation.
@@ -71253,12 +71545,20 @@ public:
    * The key is escaped and surrounded by double quotes.
    * The value is escaped if it is a string.
    */
-   template<typename key_type, typename value_type>
+  template<typename key_type, typename value_type>
   simdjson_inline void append_key_value(key_type key, value_type value) noexcept;
 #if SIMDJSON_SUPPORTS_CONCEPTS
+  template<internal::fixed_string key, typename value_type>
+  simdjson_inline void append_key_value(value_type value) noexcept;
+
   // Support for optional types (std::optional, etc.)
   template <concepts::optional_type T>
+  requires(!require_custom_serialization<T>)
   simdjson_inline void append(const T &opt);
+
+  template <typename T>
+  requires(require_custom_serialization<T>)
+  simdjson_inline void append(const T &val);
 
   // Support for string-like types
   template <typename T>
@@ -71369,7 +71669,7 @@ private:
 #if !SIMDJSON_STATIC_REFLECTION
 // fallback implementation until we have static reflection
 template <class Z>
-simdjson_result<std::string> to_json(const Z &z, size_t initial_capacity = 1024) {
+simdjson_warn_unused simdjson_result<std::string> to_json(const Z &z, size_t initial_capacity = simdjson::haswell::builder::string_builder::DEFAULT_INITIAL_CAPACITY) {
   simdjson::haswell::builder::string_builder b(initial_capacity);
   b.append(z);
   std::string_view s;
@@ -71377,8 +71677,20 @@ simdjson_result<std::string> to_json(const Z &z, size_t initial_capacity = 1024)
   if(e) { return e; }
   return std::string(s);
 }
+template <class Z>
+simdjson_warn_unused simdjson_error to_json(const Z &z, std::string &s, size_t initial_capacity = simdjson::haswell::builder::string_builder::DEFAULT_INITIAL_CAPACITY) {
+  simdjson::haswell::builder::string_builder b(initial_capacity);
+  b.append(z);
+  std::string_view sv;
+  auto e = b.view().get(sv);
+  if(e) { return e; }
+  s.assign(sv.data(), sv.size());
+  return simdjson::SUCCESS;
+}
 #endif
 
+#if SIMDJSON_SUPPORTS_CONCEPTS
+#endif // SIMDJSON_SUPPORTS_CONCEPTS
 
 } // namespace simdjson
 
@@ -71672,10 +71984,12 @@ simdjson_inline void string_builder::clear() noexcept {
 
 namespace internal {
 
-// We could specialize further for 32-bit integers.
-simdjson_really_inline int int_log2(uint32_t x) { return (63 - leading_zeroes(x | 1)); }
 
-simdjson_really_inline int fast_digit_count(uint32_t x) {
+template <typename number_type, typename = typename std::enable_if<
+                                    std::is_unsigned<number_type>::value>::type>
+simdjson_really_inline int int_log2(number_type x) { return 63 - leading_zeroes(uint64_t(x) | 1); }
+
+simdjson_really_inline int fast_digit_count_32(uint32_t x) {
   static uint64_t table[] = {
       4294967296,  8589934582,  8589934582,  8589934582,  12884901788,
       12884901788, 12884901788, 17179868184, 17179868184, 17179868184,
@@ -71687,9 +72001,8 @@ simdjson_really_inline int fast_digit_count(uint32_t x) {
   return uint32_t((x + table[int_log2(x)]) >> 32);
 }
 
-simdjson_really_inline int int_log2(uint64_t x) { return 63 - leading_zeroes(x | 1); }
 
-simdjson_really_inline int fast_digit_count(uint64_t x) {
+simdjson_really_inline int fast_digit_count_64(uint64_t x) {
   static uint64_t table[] = {9,
                              99,
                              999,
@@ -71720,7 +72033,11 @@ simdjson_really_inline size_t digit_count(number_type v) noexcept {
   static_assert(sizeof(number_type) == 8 || sizeof(number_type) == 4 ||
                     sizeof(number_type) == 2 || sizeof(number_type) == 1,
                 "We only support 8-bit, 16-bit, 32-bit and 64-bit numbers");
-  return fast_digit_count(v);
+  SIMDJSON_IF_CONSTEXPR(sizeof(number_type) <= 4) {
+    return fast_digit_count_32(static_cast<uint32_t>(v));
+  } else {
+    return fast_digit_count_64(static_cast<uint64_t>(v));
+  }
 }
 static const char decimal_table[200] = {
   0x30, 0x30, 0x30, 0x31, 0x30, 0x32, 0x30, 0x33, 0x30, 0x34, 0x30, 0x35,
@@ -71742,6 +72059,7 @@ static const char decimal_table[200] = {
   0x39, 0x36, 0x39, 0x37, 0x39, 0x38, 0x39, 0x39,
 };
 } // namespace internal
+
 
 template <typename number_type, typename>
 simdjson_inline void string_builder::append(number_type v) noexcept {
@@ -71858,6 +72176,12 @@ simdjson_inline void string_builder::escape_and_append_with_quotes(const char* i
   std::string_view cinput(input);
   escape_and_append_with_quotes(cinput);
 }
+#if SIMDJSON_SUPPORTS_CONCEPTS
+template<internal::fixed_string key>
+simdjson_inline void string_builder::escape_and_append_with_quotes()  noexcept {
+  escape_and_append_with_quotes(internal::string_constant<key>::value);
+}
+#endif
 
 simdjson_inline void string_builder::append_raw(const char *c) noexcept {
   size_t len = std::strlen(c);
@@ -71882,6 +72206,7 @@ simdjson_inline void string_builder::append_raw(const char *str,
 #if SIMDJSON_SUPPORTS_CONCEPTS
 // Support for optional types (std::optional, etc.)
 template <concepts::optional_type T>
+ requires(!require_custom_serialization<T>)
 simdjson_inline void string_builder::append(const T &opt) {
   if (opt) {
     append(*opt);
@@ -71889,9 +72214,17 @@ simdjson_inline void string_builder::append(const T &opt) {
     append_null();
   }
 }
+
+
+template <typename T>
+requires(require_custom_serialization<T>)
+simdjson_inline void string_builder::append(const T &val) {
+  serialize(*this, val);
+}
+
 template <typename T>
 requires(std::is_convertible<T, std::string_view>::value ||
-std::is_same<T, const char*>::value )
+std::is_same<T, const char*>::value)
 simdjson_inline void string_builder::append(const T &value) {
   escape_and_append_with_quotes(value);
 }
@@ -72037,6 +72370,25 @@ simdjson_inline void string_builder::append_key_value(key_type key, value_type v
   }
 }
 
+#if SIMDJSON_SUPPORTS_CONCEPTS
+template<internal::fixed_string key, typename value_type>
+simdjson_inline void string_builder::append_key_value(value_type value) noexcept {
+  escape_and_append_with_quotes<key>();
+  append_colon();
+  SIMDJSON_IF_CONSTEXPR(std::is_same<value_type, std::nullptr_t>::value) {
+    append_null();
+  } else SIMDJSON_IF_CONSTEXPR(std::is_same<value_type, char>::value) {
+    escape_and_append_with_quotes(value);
+  } else SIMDJSON_IF_CONSTEXPR(std::is_convertible<value_type, std::string_view>::value) {
+    escape_and_append_with_quotes(value);
+  } else SIMDJSON_IF_CONSTEXPR(std::is_same<value_type, const char*>::value) {
+    escape_and_append_with_quotes(value);
+  } else {
+    append(value);
+  }
+}
+#endif
+
 } // namespace builder
 } // namespace haswell
 } // namespace simdjson
@@ -72060,7 +72412,7 @@ simdjson_inline void string_builder::append_key_value(key_type key, value_type v
 
 #include <charconv>
 #include <cstring>
-#include <experimental/meta>
+#include <meta>
 #include <memory>
 #include <optional>
 #include <string_view>
@@ -72085,7 +72437,7 @@ concept container_but_not_string =
     !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char *>;
 
 template <class T>
-  requires(container_but_not_string<T>)
+  requires(container_but_not_string<T> && !require_custom_serialization<T>)
 constexpr void atom(string_builder &b, const T &t) {
   if (t.size() == 0) {
     b.append_raw("[]");
@@ -72110,6 +72462,7 @@ constexpr void atom(string_builder &b, const T &t) {
 }
 
 template <concepts::string_view_keyed_map T>
+  requires(!require_custom_serialization<T>)
 constexpr void atom(string_builder &b, const T &m) {
   if (m.empty()) {
     b.append_raw("{}");
@@ -72146,7 +72499,7 @@ template <class T>
            !std::is_same_v<T, std::string> &&
            !std::is_same_v<T, std::string_view> &&
            !std::is_same_v<T, const char*> &&
-           !std::is_same_v<T, char>)
+           !std::is_same_v<T, char> && !require_custom_serialization<T>)
 constexpr void atom(string_builder &b, const T &t) {
   int i = 0;
   b.append('{');
@@ -72164,6 +72517,7 @@ constexpr void atom(string_builder &b, const T &t) {
 
 // Support for optional types (std::optional, etc.)
 template <concepts::optional_type T>
+  requires(!require_custom_serialization<T>)
 constexpr void atom(string_builder &b, const T &opt) {
   if (opt) {
     atom(b, opt.value());
@@ -72174,6 +72528,7 @@ constexpr void atom(string_builder &b, const T &opt) {
 
 // Support for smart pointers (std::unique_ptr, std::shared_ptr, etc.)
 template <concepts::smart_pointer T>
+  requires(!require_custom_serialization<T>)
 constexpr void atom(string_builder &b, const T &ptr) {
   if (ptr) {
     atom(b, *ptr);
@@ -72184,7 +72539,7 @@ constexpr void atom(string_builder &b, const T &ptr) {
 
 // Support for enums - serialize as string representation using expand approach from P2996R12
 template <typename T>
-  requires(std::is_enum_v<T>)
+  requires(std::is_enum_v<T> && !require_custom_serialization<T>)
 void atom(string_builder &b, const T &e) {
 #if SIMDJSON_STATIC_REFLECTION
   constexpr auto enumerators = std::define_static_array(std::meta::enumerators_of(^^T));
@@ -72208,7 +72563,7 @@ template <concepts::appendable_containers T>
   requires(!container_but_not_string<T> && !concepts::string_view_keyed_map<T> &&
            !concepts::optional_type<T> && !concepts::smart_pointer<T> &&
            !std::is_same_v<T, std::string> &&
-           !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char*>)
+           !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char*> && !require_custom_serialization<T>)
 constexpr void atom(string_builder &b, const T &container) {
   if (container.empty()) {
     b.append_raw("[]");
@@ -72243,11 +72598,13 @@ void append(string_builder &b, const T &t) {
 }
 
 template <concepts::optional_type T>
+  requires(!require_custom_serialization<T>)
 void append(string_builder &b, const T &t) {
   atom(b, t);
 }
 
 template <concepts::smart_pointer T>
+  requires(!require_custom_serialization<T>)
 void append(string_builder &b, const T &t) {
   atom(b, t);
 }
@@ -72256,12 +72613,13 @@ template <concepts::appendable_containers T>
   requires(!container_but_not_string<T> && !concepts::string_view_keyed_map<T> &&
            !concepts::optional_type<T> && !concepts::smart_pointer<T> &&
            !std::is_same_v<T, std::string> &&
-           !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char*>)
+           !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char*> && !require_custom_serialization<T>)
 void append(string_builder &b, const T &t) {
   atom(b, t);
 }
 
 template <concepts::string_view_keyed_map T>
+  requires(!require_custom_serialization<T>)
 void append(string_builder &b, const T &t) {
   atom(b, t);
 }
@@ -72276,7 +72634,7 @@ template <class Z>
            !std::is_same_v<Z, std::string> &&
            !std::is_same_v<Z, std::string_view> &&
            !std::is_same_v<Z, const char*> &&
-           !std::is_same_v<Z, char>)
+           !std::is_same_v<Z, char> && !require_custom_serialization<Z>)
 void append(string_builder &b, const Z &z) {
   int i = 0;
   b.append('{');
@@ -72294,7 +72652,7 @@ void append(string_builder &b, const Z &z) {
 
 // works for container
 template <class Z>
-  requires(container_but_not_string<Z>)
+  requires(container_but_not_string<Z> && !require_custom_serialization<Z>)
 void append(string_builder &b, const Z &z) {
   if (z.size() == 0) {
     b.append_raw("[]");
@@ -72310,7 +72668,14 @@ void append(string_builder &b, const Z &z) {
 }
 
 template <class Z>
-simdjson_result<std::string> to_json_string(const Z &z, size_t initial_capacity = 1024) {
+  requires (require_custom_serialization<Z>)
+void append(string_builder &b, const Z &z) {
+  b.append(z);
+}
+
+
+template <class Z>
+simdjson_warn_unused simdjson_result<std::string> to_json_string(const Z &z, size_t initial_capacity = string_builder::DEFAULT_INITIAL_CAPACITY) {
   string_builder b(initial_capacity);
   append(b, z);
   std::string_view s;
@@ -72319,8 +72684,8 @@ simdjson_result<std::string> to_json_string(const Z &z, size_t initial_capacity 
 }
 
 template <class Z>
-simdjson_error to_json(const Z &z, std::string &s) {
-  string_builder b;
+simdjson_warn_unused simdjson_error to_json(const Z &z, std::string &s, size_t initial_capacity = string_builder::DEFAULT_INITIAL_CAPACITY) {
+  string_builder b(initial_capacity);
   append(b, z);
   std::string_view view;
   if(auto e = b.view().get(view); e) { return e; }
@@ -72337,8 +72702,12 @@ string_builder& operator<<(string_builder& b, const Z& z) {
 } // namespace haswell
 // Alias the function template to 'to' in the global namespace
 template <class Z>
-simdjson_result<std::string> to_json(const Z &z, size_t initial_capacity = 1024) {
+simdjson_warn_unused simdjson_result<std::string> to_json(const Z &z, size_t initial_capacity = haswell::builder::string_builder::DEFAULT_INITIAL_CAPACITY) {
   return haswell::builder::to_json_string(z, initial_capacity);
+}
+template <class Z>
+simdjson_warn_unused simdjson_error to_json(const Z &z, std::string &s, size_t initial_capacity = haswell::builder::string_builder::DEFAULT_INITIAL_CAPACITY) {
+  return haswell::builder::to_json(z, s, initial_capacity);
 }
 } // namespace simdjson
 
@@ -73158,54 +73527,7 @@ class value_iterator;
 /* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/array.h" */
 /* amalgamation skipped (editor-only): #endif // SIMDJSON_CONDITIONAL_INCLUDE */
 
-#include <concepts>
 namespace simdjson {
-
-namespace tag_invoke_fn_ns {
-void tag_invoke();
-
-struct tag_invoke_fn {
-  template <typename Tag, typename... Args>
-    requires requires(Tag tag, Args &&...args) {
-      tag_invoke(std::forward<Tag>(tag), std::forward<Args>(args)...);
-    }
-  constexpr auto operator()(Tag tag, Args &&...args) const
-      noexcept(noexcept(tag_invoke(std::forward<Tag>(tag),
-                                   std::forward<Args>(args)...)))
-          -> decltype(tag_invoke(std::forward<Tag>(tag),
-                                 std::forward<Args>(args)...)) {
-    return tag_invoke(std::forward<Tag>(tag), std::forward<Args>(args)...);
-  }
-};
-} // namespace tag_invoke_fn_ns
-
-inline namespace tag_invoke_ns {
-inline constexpr tag_invoke_fn_ns::tag_invoke_fn tag_invoke = {};
-} // namespace tag_invoke_ns
-
-template <typename Tag, typename... Args>
-concept tag_invocable = requires(Tag tag, Args... args) {
-  tag_invoke(std::forward<Tag>(tag), std::forward<Args>(args)...);
-};
-
-template <typename Tag, typename... Args>
-concept nothrow_tag_invocable =
-    tag_invocable<Tag, Args...> && requires(Tag tag, Args... args) {
-      {
-        tag_invoke(std::forward<Tag>(tag), std::forward<Args>(args)...)
-      } noexcept;
-    };
-
-template <typename Tag, typename... Args>
-using tag_invoke_result =
-    std::invoke_result<decltype(tag_invoke), Tag, Args...>;
-
-template <typename Tag, typename... Args>
-using tag_invoke_result_t =
-    std::invoke_result_t<decltype(tag_invoke), Tag, Args...>;
-
-template <auto &Tag> using tag_t = std::decay_t<decltype(Tag)>;
-
 
 struct deserialize_tag;
 
@@ -73871,7 +74193,9 @@ public:
       using value_type = typename std::remove_cvref_t<T>::value_type;
 
       // Check if the value is null
-      if (is_null()) {
+      bool is_null_value;
+      SIMDJSON_TRY( is_null().get(is_null_value) );
+      if (is_null_value) {
         out.reset(); // Set to nullopt
         return SUCCESS;
       }
@@ -78479,15 +78803,12 @@ inline std::ostream& operator<<(std::ostream& out, simdjson::simdjson_result<sim
 #endif
 
 namespace simdjson {
-template <typename T>
-constexpr bool require_custom_serialization = false;
 
 //////////////////////////////
 // Number deserialization
 //////////////////////////////
 
 template <std::unsigned_integral T>
-  requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept {
   using limits = std::numeric_limits<T>;
 
@@ -78501,7 +78822,6 @@ error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept {
 }
 
 template <std::floating_point T>
-  requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept {
   double x;
   SIMDJSON_TRY(val.get_double().get(x));
@@ -78510,7 +78830,6 @@ error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept {
 }
 
 template <std::signed_integral T>
-  requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept {
   using limits = std::numeric_limits<T>;
 
@@ -78540,7 +78859,6 @@ error_code tag_invoke(deserialize_tag, auto &val, char &out) noexcept {
 
 // any string-like type (can be constructed from std::string_view)
 template <concepts::constructible_from_string_view T, typename ValT>
-  requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(std::is_nothrow_constructible_v<T, std::string_view>) {
   std::string_view str;
   SIMDJSON_TRY(val.get_string().get(str));
@@ -78557,7 +78875,6 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(std::is_nothr
  * doc.get<std::vector<int>>().
  */
 template <concepts::appendable_containers T, typename ValT>
-  requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(false) {
   using value_type = typename std::remove_cvref_t<T>::value_type;
   static_assert(
@@ -78603,7 +78920,6 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(false) {
  * string-keyed types.
  */
  template <concepts::string_view_keyed_map T, typename ValT>
- requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(false) {
   using value_type = typename std::remove_cvref_t<T>::mapped_type;
   static_assert(
@@ -78685,7 +79001,6 @@ error_code tag_invoke(deserialize_tag, icelake::ondemand::document_reference &do
  * @return status of the conversion
  */
 template <concepts::smart_pointer T, typename ValT>
-  requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(nothrow_deserializable<typename std::remove_cvref_t<T>::element_type, ValT>) {
   using element_type = typename std::remove_cvref_t<T>::element_type;
 
@@ -78711,12 +79026,13 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(nothrow_deser
  * This CPO (Customization Point Object) will help deserialize into optional types.
  */
 template <concepts::optional_type T>
-  requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept(nothrow_deserializable<typename std::remove_cvref_t<T>::value_type, decltype(val)>) {
   using value_type = typename std::remove_cvref_t<T>::value_type;
 
   // Check if the value is null
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset(); // Set to nullopt
     return SUCCESS;
   }
@@ -78735,7 +79051,7 @@ error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept(nothrow_deser
 template <typename T>
 constexpr bool user_defined_type = (std::is_class_v<T>
 && !std::is_same_v<T, std::string> && !std::is_same_v<T, std::string_view> && !concepts::optional_type<T> &&
-!concepts::appendable_containers<T> && !require_custom_serialization<T>);
+!concepts::appendable_containers<T>);
 
 
 template <typename T, typename ValT>
@@ -78747,18 +79063,26 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept {
   } else {
     SIMDJSON_TRY(val.get_object().get(obj));
   }
-  error_code e = simdjson::SUCCESS;
   template for (constexpr auto mem : std::define_static_array(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked()))) {
-        if constexpr (!std::meta::is_const(mem) && std::meta::is_public(mem)) {
+    if constexpr (!std::meta::is_const(mem) && std::meta::is_public(mem)) {
       constexpr std::string_view key = std::define_static_string(std::meta::identifier_of(mem));
-      // Note: removed static assert as optional types are now handled generically
-      // as long we are succesful or the field is not found, we continue
-      if(e == simdjson::SUCCESS || e == simdjson::NO_SUCH_FIELD) {
-        e = obj[key].get(out.[:mem:]);
+      if constexpr (concepts::optional_type<decltype(out.[:mem:])>) {
+        // for optional members, it's ok if the key is missing
+        auto error = obj[key].get(out.[:mem:]);
+        if (error && error != NO_SUCH_FIELD) {
+          if(error == NO_SUCH_FIELD) {
+            out.[:mem:].reset();
+            continue;
+          }
+          return error;
+        }
+      } else {
+        // for non-optional members, the key must be present
+        SIMDJSON_TRY(obj[key].get(out.[:mem:]));
       }
     }
   };
-  return e;
+  return simdjson::SUCCESS;
 }
 
 // Support for enum deserialization - deserialize from string representation using expand approach from P2996R12
@@ -78824,7 +79148,9 @@ error_code tag_invoke(deserialize_tag, simdjson_value &val, std::shared_ptr<T> &
 // Unique pointers
 ////////////////////////////////////////
 error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<bool> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -78837,7 +79163,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<bool> &out) no
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<int64_t> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -78850,7 +79178,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<int64_t> &out)
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<uint64_t> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -78863,7 +79193,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<uint64_t> &out
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<double> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -78876,7 +79208,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<double> &out) 
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<std::string_view> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -78893,7 +79227,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<std::string_vi
 // Shared pointers
 ////////////////////////////////////////
 error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<bool> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -78906,7 +79242,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<bool> &out) no
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<int64_t> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -78919,7 +79257,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<int64_t> &out)
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<uint64_t> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -78932,7 +79272,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<uint64_t> &out
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<double> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -78945,7 +79287,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<double> &out) 
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<std::string_view> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -78967,7 +79311,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<std::string_vi
 ////////////////////////////////////////
 error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<std::string> &out) noexcept {
   // Check if the value is null
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset(); // Set to nullptr
     return SUCCESS;
   }
@@ -78983,7 +79329,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<std::string> &
 
 error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<std::string> &out) noexcept {
   // Check if the value is null
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset(); // Set to nullptr
     return SUCCESS;
   }
@@ -78999,7 +79347,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<std::string> &
 
 error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<int> &out) noexcept {
   // Check if the value is null
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset(); // Set to nullptr
     return SUCCESS;
   }
@@ -84575,9 +84925,62 @@ simdjson_inline simdjson_result<icelake::ondemand::value_iterator>::simdjson_res
 /* amalgamation skipped (editor-only): #endif // SIMDJSON_CONDITIONAL_INCLUDE */
 
 namespace simdjson {
+
+
+#if SIMDJSON_SUPPORTS_CONCEPTS
+
 namespace icelake {
 namespace builder {
+  class string_builder;
+}}
 
+template <typename T, typename = void>
+struct has_custom_serialization : std::false_type {};
+
+inline constexpr struct serialize_tag {
+  template <typename T>
+    requires custom_deserializable<T>
+  constexpr void operator()(icelake::builder::string_builder& b, T& obj) const{
+    return tag_invoke(*this, b, obj);
+  }
+
+
+} serialize{};
+template <typename T>
+struct has_custom_serialization<T, std::void_t<
+    decltype(tag_invoke(serialize, std::declval<icelake::builder::string_builder&>(), std::declval<T&>()))
+>> : std::true_type {};
+
+template <typename T>
+constexpr bool require_custom_serialization = has_custom_serialization<T>::value;
+#else
+struct has_custom_serialization : std::false_type {};
+#endif // SIMDJSON_SUPPORTS_CONCEPTS
+
+namespace icelake {
+namespace builder {
+#if SIMDJSON_SUPPORTS_CONCEPTS
+// Helper to create string constants
+namespace internal {
+template <std::size_t N>
+struct fixed_string {
+    constexpr fixed_string(const char (&str)[N])  {
+        for (std::size_t i = 0; i < N; ++i) {
+            data[i] = str[i];
+        }
+    }
+    char data[N];
+    constexpr std::string_view view() const { return {data, N - 1}; }
+};
+template <std::size_t N>
+fixed_string(const char (&)[N]) -> fixed_string<N>;
+
+template <fixed_string str>
+struct string_constant {
+    static constexpr std::string_view value = str.view();
+};
+} // namespace internal
+#endif // SIMDJSON_SUPPORTS_CONCEPTS
 /**
  * A builder for JSON strings representing documents. This is a low-level
  * builder that is not meant to be used directly by end-users. Though it
@@ -84589,7 +84992,9 @@ namespace builder {
  */
 class string_builder {
 public:
-  simdjson_inline string_builder(size_t initial_capacity = 1024);
+  simdjson_inline string_builder(size_t initial_capacity = DEFAULT_INITIAL_CAPACITY);
+
+  static constexpr size_t DEFAULT_INITIAL_CAPACITY = 1024;
 
   /**
    * Append number (includes Booleans). Booleans are mapped to the strings
@@ -84598,7 +85003,7 @@ public:
    * represents the number.
    */
   template<typename number_type,
-         typename = typename std::enable_if<std::is_arithmetic<number_type>::value>::type>
+    typename = typename std::enable_if<std::is_arithmetic<number_type>::value>::type>
   simdjson_inline void append(number_type v) noexcept;
 
   /**
@@ -84627,7 +85032,10 @@ public:
    * There is no UTF-8 validation.
    */
   simdjson_inline void escape_and_append_with_quotes(std::string_view input)  noexcept;
-
+#if SIMDJSON_SUPPORTS_CONCEPTS
+  template<internal::fixed_string key>
+  simdjson_inline void escape_and_append_with_quotes()  noexcept;
+#endif
   /**
    * Append the character surrounded by double quotes, after escaping it.
    * There is no UTF-8 validation.
@@ -84681,12 +85089,20 @@ public:
    * The key is escaped and surrounded by double quotes.
    * The value is escaped if it is a string.
    */
-   template<typename key_type, typename value_type>
+  template<typename key_type, typename value_type>
   simdjson_inline void append_key_value(key_type key, value_type value) noexcept;
 #if SIMDJSON_SUPPORTS_CONCEPTS
+  template<internal::fixed_string key, typename value_type>
+  simdjson_inline void append_key_value(value_type value) noexcept;
+
   // Support for optional types (std::optional, etc.)
   template <concepts::optional_type T>
+  requires(!require_custom_serialization<T>)
   simdjson_inline void append(const T &opt);
+
+  template <typename T>
+  requires(require_custom_serialization<T>)
+  simdjson_inline void append(const T &val);
 
   // Support for string-like types
   template <typename T>
@@ -84797,7 +85213,7 @@ private:
 #if !SIMDJSON_STATIC_REFLECTION
 // fallback implementation until we have static reflection
 template <class Z>
-simdjson_result<std::string> to_json(const Z &z, size_t initial_capacity = 1024) {
+simdjson_warn_unused simdjson_result<std::string> to_json(const Z &z, size_t initial_capacity = simdjson::icelake::builder::string_builder::DEFAULT_INITIAL_CAPACITY) {
   simdjson::icelake::builder::string_builder b(initial_capacity);
   b.append(z);
   std::string_view s;
@@ -84805,8 +85221,20 @@ simdjson_result<std::string> to_json(const Z &z, size_t initial_capacity = 1024)
   if(e) { return e; }
   return std::string(s);
 }
+template <class Z>
+simdjson_warn_unused simdjson_error to_json(const Z &z, std::string &s, size_t initial_capacity = simdjson::icelake::builder::string_builder::DEFAULT_INITIAL_CAPACITY) {
+  simdjson::icelake::builder::string_builder b(initial_capacity);
+  b.append(z);
+  std::string_view sv;
+  auto e = b.view().get(sv);
+  if(e) { return e; }
+  s.assign(sv.data(), sv.size());
+  return simdjson::SUCCESS;
+}
 #endif
 
+#if SIMDJSON_SUPPORTS_CONCEPTS
+#endif // SIMDJSON_SUPPORTS_CONCEPTS
 
 } // namespace simdjson
 
@@ -85100,10 +85528,12 @@ simdjson_inline void string_builder::clear() noexcept {
 
 namespace internal {
 
-// We could specialize further for 32-bit integers.
-simdjson_really_inline int int_log2(uint32_t x) { return (63 - leading_zeroes(x | 1)); }
 
-simdjson_really_inline int fast_digit_count(uint32_t x) {
+template <typename number_type, typename = typename std::enable_if<
+                                    std::is_unsigned<number_type>::value>::type>
+simdjson_really_inline int int_log2(number_type x) { return 63 - leading_zeroes(uint64_t(x) | 1); }
+
+simdjson_really_inline int fast_digit_count_32(uint32_t x) {
   static uint64_t table[] = {
       4294967296,  8589934582,  8589934582,  8589934582,  12884901788,
       12884901788, 12884901788, 17179868184, 17179868184, 17179868184,
@@ -85115,9 +85545,8 @@ simdjson_really_inline int fast_digit_count(uint32_t x) {
   return uint32_t((x + table[int_log2(x)]) >> 32);
 }
 
-simdjson_really_inline int int_log2(uint64_t x) { return 63 - leading_zeroes(x | 1); }
 
-simdjson_really_inline int fast_digit_count(uint64_t x) {
+simdjson_really_inline int fast_digit_count_64(uint64_t x) {
   static uint64_t table[] = {9,
                              99,
                              999,
@@ -85148,7 +85577,11 @@ simdjson_really_inline size_t digit_count(number_type v) noexcept {
   static_assert(sizeof(number_type) == 8 || sizeof(number_type) == 4 ||
                     sizeof(number_type) == 2 || sizeof(number_type) == 1,
                 "We only support 8-bit, 16-bit, 32-bit and 64-bit numbers");
-  return fast_digit_count(v);
+  SIMDJSON_IF_CONSTEXPR(sizeof(number_type) <= 4) {
+    return fast_digit_count_32(static_cast<uint32_t>(v));
+  } else {
+    return fast_digit_count_64(static_cast<uint64_t>(v));
+  }
 }
 static const char decimal_table[200] = {
   0x30, 0x30, 0x30, 0x31, 0x30, 0x32, 0x30, 0x33, 0x30, 0x34, 0x30, 0x35,
@@ -85170,6 +85603,7 @@ static const char decimal_table[200] = {
   0x39, 0x36, 0x39, 0x37, 0x39, 0x38, 0x39, 0x39,
 };
 } // namespace internal
+
 
 template <typename number_type, typename>
 simdjson_inline void string_builder::append(number_type v) noexcept {
@@ -85286,6 +85720,12 @@ simdjson_inline void string_builder::escape_and_append_with_quotes(const char* i
   std::string_view cinput(input);
   escape_and_append_with_quotes(cinput);
 }
+#if SIMDJSON_SUPPORTS_CONCEPTS
+template<internal::fixed_string key>
+simdjson_inline void string_builder::escape_and_append_with_quotes()  noexcept {
+  escape_and_append_with_quotes(internal::string_constant<key>::value);
+}
+#endif
 
 simdjson_inline void string_builder::append_raw(const char *c) noexcept {
   size_t len = std::strlen(c);
@@ -85310,6 +85750,7 @@ simdjson_inline void string_builder::append_raw(const char *str,
 #if SIMDJSON_SUPPORTS_CONCEPTS
 // Support for optional types (std::optional, etc.)
 template <concepts::optional_type T>
+ requires(!require_custom_serialization<T>)
 simdjson_inline void string_builder::append(const T &opt) {
   if (opt) {
     append(*opt);
@@ -85317,9 +85758,17 @@ simdjson_inline void string_builder::append(const T &opt) {
     append_null();
   }
 }
+
+
+template <typename T>
+requires(require_custom_serialization<T>)
+simdjson_inline void string_builder::append(const T &val) {
+  serialize(*this, val);
+}
+
 template <typename T>
 requires(std::is_convertible<T, std::string_view>::value ||
-std::is_same<T, const char*>::value )
+std::is_same<T, const char*>::value)
 simdjson_inline void string_builder::append(const T &value) {
   escape_and_append_with_quotes(value);
 }
@@ -85465,6 +85914,25 @@ simdjson_inline void string_builder::append_key_value(key_type key, value_type v
   }
 }
 
+#if SIMDJSON_SUPPORTS_CONCEPTS
+template<internal::fixed_string key, typename value_type>
+simdjson_inline void string_builder::append_key_value(value_type value) noexcept {
+  escape_and_append_with_quotes<key>();
+  append_colon();
+  SIMDJSON_IF_CONSTEXPR(std::is_same<value_type, std::nullptr_t>::value) {
+    append_null();
+  } else SIMDJSON_IF_CONSTEXPR(std::is_same<value_type, char>::value) {
+    escape_and_append_with_quotes(value);
+  } else SIMDJSON_IF_CONSTEXPR(std::is_convertible<value_type, std::string_view>::value) {
+    escape_and_append_with_quotes(value);
+  } else SIMDJSON_IF_CONSTEXPR(std::is_same<value_type, const char*>::value) {
+    escape_and_append_with_quotes(value);
+  } else {
+    append(value);
+  }
+}
+#endif
+
 } // namespace builder
 } // namespace icelake
 } // namespace simdjson
@@ -85488,7 +85956,7 @@ simdjson_inline void string_builder::append_key_value(key_type key, value_type v
 
 #include <charconv>
 #include <cstring>
-#include <experimental/meta>
+#include <meta>
 #include <memory>
 #include <optional>
 #include <string_view>
@@ -85513,7 +85981,7 @@ concept container_but_not_string =
     !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char *>;
 
 template <class T>
-  requires(container_but_not_string<T>)
+  requires(container_but_not_string<T> && !require_custom_serialization<T>)
 constexpr void atom(string_builder &b, const T &t) {
   if (t.size() == 0) {
     b.append_raw("[]");
@@ -85538,6 +86006,7 @@ constexpr void atom(string_builder &b, const T &t) {
 }
 
 template <concepts::string_view_keyed_map T>
+  requires(!require_custom_serialization<T>)
 constexpr void atom(string_builder &b, const T &m) {
   if (m.empty()) {
     b.append_raw("{}");
@@ -85574,7 +86043,7 @@ template <class T>
            !std::is_same_v<T, std::string> &&
            !std::is_same_v<T, std::string_view> &&
            !std::is_same_v<T, const char*> &&
-           !std::is_same_v<T, char>)
+           !std::is_same_v<T, char> && !require_custom_serialization<T>)
 constexpr void atom(string_builder &b, const T &t) {
   int i = 0;
   b.append('{');
@@ -85592,6 +86061,7 @@ constexpr void atom(string_builder &b, const T &t) {
 
 // Support for optional types (std::optional, etc.)
 template <concepts::optional_type T>
+  requires(!require_custom_serialization<T>)
 constexpr void atom(string_builder &b, const T &opt) {
   if (opt) {
     atom(b, opt.value());
@@ -85602,6 +86072,7 @@ constexpr void atom(string_builder &b, const T &opt) {
 
 // Support for smart pointers (std::unique_ptr, std::shared_ptr, etc.)
 template <concepts::smart_pointer T>
+  requires(!require_custom_serialization<T>)
 constexpr void atom(string_builder &b, const T &ptr) {
   if (ptr) {
     atom(b, *ptr);
@@ -85612,7 +86083,7 @@ constexpr void atom(string_builder &b, const T &ptr) {
 
 // Support for enums - serialize as string representation using expand approach from P2996R12
 template <typename T>
-  requires(std::is_enum_v<T>)
+  requires(std::is_enum_v<T> && !require_custom_serialization<T>)
 void atom(string_builder &b, const T &e) {
 #if SIMDJSON_STATIC_REFLECTION
   constexpr auto enumerators = std::define_static_array(std::meta::enumerators_of(^^T));
@@ -85636,7 +86107,7 @@ template <concepts::appendable_containers T>
   requires(!container_but_not_string<T> && !concepts::string_view_keyed_map<T> &&
            !concepts::optional_type<T> && !concepts::smart_pointer<T> &&
            !std::is_same_v<T, std::string> &&
-           !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char*>)
+           !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char*> && !require_custom_serialization<T>)
 constexpr void atom(string_builder &b, const T &container) {
   if (container.empty()) {
     b.append_raw("[]");
@@ -85671,11 +86142,13 @@ void append(string_builder &b, const T &t) {
 }
 
 template <concepts::optional_type T>
+  requires(!require_custom_serialization<T>)
 void append(string_builder &b, const T &t) {
   atom(b, t);
 }
 
 template <concepts::smart_pointer T>
+  requires(!require_custom_serialization<T>)
 void append(string_builder &b, const T &t) {
   atom(b, t);
 }
@@ -85684,12 +86157,13 @@ template <concepts::appendable_containers T>
   requires(!container_but_not_string<T> && !concepts::string_view_keyed_map<T> &&
            !concepts::optional_type<T> && !concepts::smart_pointer<T> &&
            !std::is_same_v<T, std::string> &&
-           !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char*>)
+           !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char*> && !require_custom_serialization<T>)
 void append(string_builder &b, const T &t) {
   atom(b, t);
 }
 
 template <concepts::string_view_keyed_map T>
+  requires(!require_custom_serialization<T>)
 void append(string_builder &b, const T &t) {
   atom(b, t);
 }
@@ -85704,7 +86178,7 @@ template <class Z>
            !std::is_same_v<Z, std::string> &&
            !std::is_same_v<Z, std::string_view> &&
            !std::is_same_v<Z, const char*> &&
-           !std::is_same_v<Z, char>)
+           !std::is_same_v<Z, char> && !require_custom_serialization<Z>)
 void append(string_builder &b, const Z &z) {
   int i = 0;
   b.append('{');
@@ -85722,7 +86196,7 @@ void append(string_builder &b, const Z &z) {
 
 // works for container
 template <class Z>
-  requires(container_but_not_string<Z>)
+  requires(container_but_not_string<Z> && !require_custom_serialization<Z>)
 void append(string_builder &b, const Z &z) {
   if (z.size() == 0) {
     b.append_raw("[]");
@@ -85738,7 +86212,14 @@ void append(string_builder &b, const Z &z) {
 }
 
 template <class Z>
-simdjson_result<std::string> to_json_string(const Z &z, size_t initial_capacity = 1024) {
+  requires (require_custom_serialization<Z>)
+void append(string_builder &b, const Z &z) {
+  b.append(z);
+}
+
+
+template <class Z>
+simdjson_warn_unused simdjson_result<std::string> to_json_string(const Z &z, size_t initial_capacity = string_builder::DEFAULT_INITIAL_CAPACITY) {
   string_builder b(initial_capacity);
   append(b, z);
   std::string_view s;
@@ -85747,8 +86228,8 @@ simdjson_result<std::string> to_json_string(const Z &z, size_t initial_capacity 
 }
 
 template <class Z>
-simdjson_error to_json(const Z &z, std::string &s) {
-  string_builder b;
+simdjson_warn_unused simdjson_error to_json(const Z &z, std::string &s, size_t initial_capacity = string_builder::DEFAULT_INITIAL_CAPACITY) {
+  string_builder b(initial_capacity);
   append(b, z);
   std::string_view view;
   if(auto e = b.view().get(view); e) { return e; }
@@ -85765,8 +86246,12 @@ string_builder& operator<<(string_builder& b, const Z& z) {
 } // namespace icelake
 // Alias the function template to 'to' in the global namespace
 template <class Z>
-simdjson_result<std::string> to_json(const Z &z, size_t initial_capacity = 1024) {
+simdjson_warn_unused simdjson_result<std::string> to_json(const Z &z, size_t initial_capacity = icelake::builder::string_builder::DEFAULT_INITIAL_CAPACITY) {
   return icelake::builder::to_json_string(z, initial_capacity);
+}
+template <class Z>
+simdjson_warn_unused simdjson_error to_json(const Z &z, std::string &s, size_t initial_capacity = icelake::builder::string_builder::DEFAULT_INITIAL_CAPACITY) {
+  return icelake::builder::to_json(z, s, initial_capacity);
 }
 } // namespace simdjson
 
@@ -86701,54 +87186,7 @@ class value_iterator;
 /* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/array.h" */
 /* amalgamation skipped (editor-only): #endif // SIMDJSON_CONDITIONAL_INCLUDE */
 
-#include <concepts>
 namespace simdjson {
-
-namespace tag_invoke_fn_ns {
-void tag_invoke();
-
-struct tag_invoke_fn {
-  template <typename Tag, typename... Args>
-    requires requires(Tag tag, Args &&...args) {
-      tag_invoke(std::forward<Tag>(tag), std::forward<Args>(args)...);
-    }
-  constexpr auto operator()(Tag tag, Args &&...args) const
-      noexcept(noexcept(tag_invoke(std::forward<Tag>(tag),
-                                   std::forward<Args>(args)...)))
-          -> decltype(tag_invoke(std::forward<Tag>(tag),
-                                 std::forward<Args>(args)...)) {
-    return tag_invoke(std::forward<Tag>(tag), std::forward<Args>(args)...);
-  }
-};
-} // namespace tag_invoke_fn_ns
-
-inline namespace tag_invoke_ns {
-inline constexpr tag_invoke_fn_ns::tag_invoke_fn tag_invoke = {};
-} // namespace tag_invoke_ns
-
-template <typename Tag, typename... Args>
-concept tag_invocable = requires(Tag tag, Args... args) {
-  tag_invoke(std::forward<Tag>(tag), std::forward<Args>(args)...);
-};
-
-template <typename Tag, typename... Args>
-concept nothrow_tag_invocable =
-    tag_invocable<Tag, Args...> && requires(Tag tag, Args... args) {
-      {
-        tag_invoke(std::forward<Tag>(tag), std::forward<Args>(args)...)
-      } noexcept;
-    };
-
-template <typename Tag, typename... Args>
-using tag_invoke_result =
-    std::invoke_result<decltype(tag_invoke), Tag, Args...>;
-
-template <typename Tag, typename... Args>
-using tag_invoke_result_t =
-    std::invoke_result_t<decltype(tag_invoke), Tag, Args...>;
-
-template <auto &Tag> using tag_t = std::decay_t<decltype(Tag)>;
-
 
 struct deserialize_tag;
 
@@ -87414,7 +87852,9 @@ public:
       using value_type = typename std::remove_cvref_t<T>::value_type;
 
       // Check if the value is null
-      if (is_null()) {
+      bool is_null_value;
+      SIMDJSON_TRY( is_null().get(is_null_value) );
+      if (is_null_value) {
         out.reset(); // Set to nullopt
         return SUCCESS;
       }
@@ -92022,15 +92462,12 @@ inline std::ostream& operator<<(std::ostream& out, simdjson::simdjson_result<sim
 #endif
 
 namespace simdjson {
-template <typename T>
-constexpr bool require_custom_serialization = false;
 
 //////////////////////////////
 // Number deserialization
 //////////////////////////////
 
 template <std::unsigned_integral T>
-  requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept {
   using limits = std::numeric_limits<T>;
 
@@ -92044,7 +92481,6 @@ error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept {
 }
 
 template <std::floating_point T>
-  requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept {
   double x;
   SIMDJSON_TRY(val.get_double().get(x));
@@ -92053,7 +92489,6 @@ error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept {
 }
 
 template <std::signed_integral T>
-  requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept {
   using limits = std::numeric_limits<T>;
 
@@ -92083,7 +92518,6 @@ error_code tag_invoke(deserialize_tag, auto &val, char &out) noexcept {
 
 // any string-like type (can be constructed from std::string_view)
 template <concepts::constructible_from_string_view T, typename ValT>
-  requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(std::is_nothrow_constructible_v<T, std::string_view>) {
   std::string_view str;
   SIMDJSON_TRY(val.get_string().get(str));
@@ -92100,7 +92534,6 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(std::is_nothr
  * doc.get<std::vector<int>>().
  */
 template <concepts::appendable_containers T, typename ValT>
-  requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(false) {
   using value_type = typename std::remove_cvref_t<T>::value_type;
   static_assert(
@@ -92146,7 +92579,6 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(false) {
  * string-keyed types.
  */
  template <concepts::string_view_keyed_map T, typename ValT>
- requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(false) {
   using value_type = typename std::remove_cvref_t<T>::mapped_type;
   static_assert(
@@ -92228,7 +92660,6 @@ error_code tag_invoke(deserialize_tag, ppc64::ondemand::document_reference &doc,
  * @return status of the conversion
  */
 template <concepts::smart_pointer T, typename ValT>
-  requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(nothrow_deserializable<typename std::remove_cvref_t<T>::element_type, ValT>) {
   using element_type = typename std::remove_cvref_t<T>::element_type;
 
@@ -92254,12 +92685,13 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(nothrow_deser
  * This CPO (Customization Point Object) will help deserialize into optional types.
  */
 template <concepts::optional_type T>
-  requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept(nothrow_deserializable<typename std::remove_cvref_t<T>::value_type, decltype(val)>) {
   using value_type = typename std::remove_cvref_t<T>::value_type;
 
   // Check if the value is null
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset(); // Set to nullopt
     return SUCCESS;
   }
@@ -92278,7 +92710,7 @@ error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept(nothrow_deser
 template <typename T>
 constexpr bool user_defined_type = (std::is_class_v<T>
 && !std::is_same_v<T, std::string> && !std::is_same_v<T, std::string_view> && !concepts::optional_type<T> &&
-!concepts::appendable_containers<T> && !require_custom_serialization<T>);
+!concepts::appendable_containers<T>);
 
 
 template <typename T, typename ValT>
@@ -92290,18 +92722,26 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept {
   } else {
     SIMDJSON_TRY(val.get_object().get(obj));
   }
-  error_code e = simdjson::SUCCESS;
   template for (constexpr auto mem : std::define_static_array(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked()))) {
-        if constexpr (!std::meta::is_const(mem) && std::meta::is_public(mem)) {
+    if constexpr (!std::meta::is_const(mem) && std::meta::is_public(mem)) {
       constexpr std::string_view key = std::define_static_string(std::meta::identifier_of(mem));
-      // Note: removed static assert as optional types are now handled generically
-      // as long we are succesful or the field is not found, we continue
-      if(e == simdjson::SUCCESS || e == simdjson::NO_SUCH_FIELD) {
-        e = obj[key].get(out.[:mem:]);
+      if constexpr (concepts::optional_type<decltype(out.[:mem:])>) {
+        // for optional members, it's ok if the key is missing
+        auto error = obj[key].get(out.[:mem:]);
+        if (error && error != NO_SUCH_FIELD) {
+          if(error == NO_SUCH_FIELD) {
+            out.[:mem:].reset();
+            continue;
+          }
+          return error;
+        }
+      } else {
+        // for non-optional members, the key must be present
+        SIMDJSON_TRY(obj[key].get(out.[:mem:]));
       }
     }
   };
-  return e;
+  return simdjson::SUCCESS;
 }
 
 // Support for enum deserialization - deserialize from string representation using expand approach from P2996R12
@@ -92367,7 +92807,9 @@ error_code tag_invoke(deserialize_tag, simdjson_value &val, std::shared_ptr<T> &
 // Unique pointers
 ////////////////////////////////////////
 error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<bool> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -92380,7 +92822,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<bool> &out) no
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<int64_t> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -92393,7 +92837,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<int64_t> &out)
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<uint64_t> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -92406,7 +92852,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<uint64_t> &out
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<double> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -92419,7 +92867,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<double> &out) 
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<std::string_view> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -92436,7 +92886,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<std::string_vi
 // Shared pointers
 ////////////////////////////////////////
 error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<bool> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -92449,7 +92901,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<bool> &out) no
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<int64_t> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -92462,7 +92916,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<int64_t> &out)
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<uint64_t> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -92475,7 +92931,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<uint64_t> &out
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<double> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -92488,7 +92946,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<double> &out) 
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<std::string_view> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -92510,7 +92970,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<std::string_vi
 ////////////////////////////////////////
 error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<std::string> &out) noexcept {
   // Check if the value is null
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset(); // Set to nullptr
     return SUCCESS;
   }
@@ -92526,7 +92988,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<std::string> &
 
 error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<std::string> &out) noexcept {
   // Check if the value is null
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset(); // Set to nullptr
     return SUCCESS;
   }
@@ -92542,7 +93006,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<std::string> &
 
 error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<int> &out) noexcept {
   // Check if the value is null
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset(); // Set to nullptr
     return SUCCESS;
   }
@@ -98118,9 +98584,62 @@ simdjson_inline simdjson_result<ppc64::ondemand::value_iterator>::simdjson_resul
 /* amalgamation skipped (editor-only): #endif // SIMDJSON_CONDITIONAL_INCLUDE */
 
 namespace simdjson {
+
+
+#if SIMDJSON_SUPPORTS_CONCEPTS
+
 namespace ppc64 {
 namespace builder {
+  class string_builder;
+}}
 
+template <typename T, typename = void>
+struct has_custom_serialization : std::false_type {};
+
+inline constexpr struct serialize_tag {
+  template <typename T>
+    requires custom_deserializable<T>
+  constexpr void operator()(ppc64::builder::string_builder& b, T& obj) const{
+    return tag_invoke(*this, b, obj);
+  }
+
+
+} serialize{};
+template <typename T>
+struct has_custom_serialization<T, std::void_t<
+    decltype(tag_invoke(serialize, std::declval<ppc64::builder::string_builder&>(), std::declval<T&>()))
+>> : std::true_type {};
+
+template <typename T>
+constexpr bool require_custom_serialization = has_custom_serialization<T>::value;
+#else
+struct has_custom_serialization : std::false_type {};
+#endif // SIMDJSON_SUPPORTS_CONCEPTS
+
+namespace ppc64 {
+namespace builder {
+#if SIMDJSON_SUPPORTS_CONCEPTS
+// Helper to create string constants
+namespace internal {
+template <std::size_t N>
+struct fixed_string {
+    constexpr fixed_string(const char (&str)[N])  {
+        for (std::size_t i = 0; i < N; ++i) {
+            data[i] = str[i];
+        }
+    }
+    char data[N];
+    constexpr std::string_view view() const { return {data, N - 1}; }
+};
+template <std::size_t N>
+fixed_string(const char (&)[N]) -> fixed_string<N>;
+
+template <fixed_string str>
+struct string_constant {
+    static constexpr std::string_view value = str.view();
+};
+} // namespace internal
+#endif // SIMDJSON_SUPPORTS_CONCEPTS
 /**
  * A builder for JSON strings representing documents. This is a low-level
  * builder that is not meant to be used directly by end-users. Though it
@@ -98132,7 +98651,9 @@ namespace builder {
  */
 class string_builder {
 public:
-  simdjson_inline string_builder(size_t initial_capacity = 1024);
+  simdjson_inline string_builder(size_t initial_capacity = DEFAULT_INITIAL_CAPACITY);
+
+  static constexpr size_t DEFAULT_INITIAL_CAPACITY = 1024;
 
   /**
    * Append number (includes Booleans). Booleans are mapped to the strings
@@ -98141,7 +98662,7 @@ public:
    * represents the number.
    */
   template<typename number_type,
-         typename = typename std::enable_if<std::is_arithmetic<number_type>::value>::type>
+    typename = typename std::enable_if<std::is_arithmetic<number_type>::value>::type>
   simdjson_inline void append(number_type v) noexcept;
 
   /**
@@ -98170,7 +98691,10 @@ public:
    * There is no UTF-8 validation.
    */
   simdjson_inline void escape_and_append_with_quotes(std::string_view input)  noexcept;
-
+#if SIMDJSON_SUPPORTS_CONCEPTS
+  template<internal::fixed_string key>
+  simdjson_inline void escape_and_append_with_quotes()  noexcept;
+#endif
   /**
    * Append the character surrounded by double quotes, after escaping it.
    * There is no UTF-8 validation.
@@ -98224,12 +98748,20 @@ public:
    * The key is escaped and surrounded by double quotes.
    * The value is escaped if it is a string.
    */
-   template<typename key_type, typename value_type>
+  template<typename key_type, typename value_type>
   simdjson_inline void append_key_value(key_type key, value_type value) noexcept;
 #if SIMDJSON_SUPPORTS_CONCEPTS
+  template<internal::fixed_string key, typename value_type>
+  simdjson_inline void append_key_value(value_type value) noexcept;
+
   // Support for optional types (std::optional, etc.)
   template <concepts::optional_type T>
+  requires(!require_custom_serialization<T>)
   simdjson_inline void append(const T &opt);
+
+  template <typename T>
+  requires(require_custom_serialization<T>)
+  simdjson_inline void append(const T &val);
 
   // Support for string-like types
   template <typename T>
@@ -98340,7 +98872,7 @@ private:
 #if !SIMDJSON_STATIC_REFLECTION
 // fallback implementation until we have static reflection
 template <class Z>
-simdjson_result<std::string> to_json(const Z &z, size_t initial_capacity = 1024) {
+simdjson_warn_unused simdjson_result<std::string> to_json(const Z &z, size_t initial_capacity = simdjson::ppc64::builder::string_builder::DEFAULT_INITIAL_CAPACITY) {
   simdjson::ppc64::builder::string_builder b(initial_capacity);
   b.append(z);
   std::string_view s;
@@ -98348,8 +98880,20 @@ simdjson_result<std::string> to_json(const Z &z, size_t initial_capacity = 1024)
   if(e) { return e; }
   return std::string(s);
 }
+template <class Z>
+simdjson_warn_unused simdjson_error to_json(const Z &z, std::string &s, size_t initial_capacity = simdjson::ppc64::builder::string_builder::DEFAULT_INITIAL_CAPACITY) {
+  simdjson::ppc64::builder::string_builder b(initial_capacity);
+  b.append(z);
+  std::string_view sv;
+  auto e = b.view().get(sv);
+  if(e) { return e; }
+  s.assign(sv.data(), sv.size());
+  return simdjson::SUCCESS;
+}
 #endif
 
+#if SIMDJSON_SUPPORTS_CONCEPTS
+#endif // SIMDJSON_SUPPORTS_CONCEPTS
 
 } // namespace simdjson
 
@@ -98643,10 +99187,12 @@ simdjson_inline void string_builder::clear() noexcept {
 
 namespace internal {
 
-// We could specialize further for 32-bit integers.
-simdjson_really_inline int int_log2(uint32_t x) { return (63 - leading_zeroes(x | 1)); }
 
-simdjson_really_inline int fast_digit_count(uint32_t x) {
+template <typename number_type, typename = typename std::enable_if<
+                                    std::is_unsigned<number_type>::value>::type>
+simdjson_really_inline int int_log2(number_type x) { return 63 - leading_zeroes(uint64_t(x) | 1); }
+
+simdjson_really_inline int fast_digit_count_32(uint32_t x) {
   static uint64_t table[] = {
       4294967296,  8589934582,  8589934582,  8589934582,  12884901788,
       12884901788, 12884901788, 17179868184, 17179868184, 17179868184,
@@ -98658,9 +99204,8 @@ simdjson_really_inline int fast_digit_count(uint32_t x) {
   return uint32_t((x + table[int_log2(x)]) >> 32);
 }
 
-simdjson_really_inline int int_log2(uint64_t x) { return 63 - leading_zeroes(x | 1); }
 
-simdjson_really_inline int fast_digit_count(uint64_t x) {
+simdjson_really_inline int fast_digit_count_64(uint64_t x) {
   static uint64_t table[] = {9,
                              99,
                              999,
@@ -98691,7 +99236,11 @@ simdjson_really_inline size_t digit_count(number_type v) noexcept {
   static_assert(sizeof(number_type) == 8 || sizeof(number_type) == 4 ||
                     sizeof(number_type) == 2 || sizeof(number_type) == 1,
                 "We only support 8-bit, 16-bit, 32-bit and 64-bit numbers");
-  return fast_digit_count(v);
+  SIMDJSON_IF_CONSTEXPR(sizeof(number_type) <= 4) {
+    return fast_digit_count_32(static_cast<uint32_t>(v));
+  } else {
+    return fast_digit_count_64(static_cast<uint64_t>(v));
+  }
 }
 static const char decimal_table[200] = {
   0x30, 0x30, 0x30, 0x31, 0x30, 0x32, 0x30, 0x33, 0x30, 0x34, 0x30, 0x35,
@@ -98713,6 +99262,7 @@ static const char decimal_table[200] = {
   0x39, 0x36, 0x39, 0x37, 0x39, 0x38, 0x39, 0x39,
 };
 } // namespace internal
+
 
 template <typename number_type, typename>
 simdjson_inline void string_builder::append(number_type v) noexcept {
@@ -98829,6 +99379,12 @@ simdjson_inline void string_builder::escape_and_append_with_quotes(const char* i
   std::string_view cinput(input);
   escape_and_append_with_quotes(cinput);
 }
+#if SIMDJSON_SUPPORTS_CONCEPTS
+template<internal::fixed_string key>
+simdjson_inline void string_builder::escape_and_append_with_quotes()  noexcept {
+  escape_and_append_with_quotes(internal::string_constant<key>::value);
+}
+#endif
 
 simdjson_inline void string_builder::append_raw(const char *c) noexcept {
   size_t len = std::strlen(c);
@@ -98853,6 +99409,7 @@ simdjson_inline void string_builder::append_raw(const char *str,
 #if SIMDJSON_SUPPORTS_CONCEPTS
 // Support for optional types (std::optional, etc.)
 template <concepts::optional_type T>
+ requires(!require_custom_serialization<T>)
 simdjson_inline void string_builder::append(const T &opt) {
   if (opt) {
     append(*opt);
@@ -98860,9 +99417,17 @@ simdjson_inline void string_builder::append(const T &opt) {
     append_null();
   }
 }
+
+
+template <typename T>
+requires(require_custom_serialization<T>)
+simdjson_inline void string_builder::append(const T &val) {
+  serialize(*this, val);
+}
+
 template <typename T>
 requires(std::is_convertible<T, std::string_view>::value ||
-std::is_same<T, const char*>::value )
+std::is_same<T, const char*>::value)
 simdjson_inline void string_builder::append(const T &value) {
   escape_and_append_with_quotes(value);
 }
@@ -99008,6 +99573,25 @@ simdjson_inline void string_builder::append_key_value(key_type key, value_type v
   }
 }
 
+#if SIMDJSON_SUPPORTS_CONCEPTS
+template<internal::fixed_string key, typename value_type>
+simdjson_inline void string_builder::append_key_value(value_type value) noexcept {
+  escape_and_append_with_quotes<key>();
+  append_colon();
+  SIMDJSON_IF_CONSTEXPR(std::is_same<value_type, std::nullptr_t>::value) {
+    append_null();
+  } else SIMDJSON_IF_CONSTEXPR(std::is_same<value_type, char>::value) {
+    escape_and_append_with_quotes(value);
+  } else SIMDJSON_IF_CONSTEXPR(std::is_convertible<value_type, std::string_view>::value) {
+    escape_and_append_with_quotes(value);
+  } else SIMDJSON_IF_CONSTEXPR(std::is_same<value_type, const char*>::value) {
+    escape_and_append_with_quotes(value);
+  } else {
+    append(value);
+  }
+}
+#endif
+
 } // namespace builder
 } // namespace ppc64
 } // namespace simdjson
@@ -99031,7 +99615,7 @@ simdjson_inline void string_builder::append_key_value(key_type key, value_type v
 
 #include <charconv>
 #include <cstring>
-#include <experimental/meta>
+#include <meta>
 #include <memory>
 #include <optional>
 #include <string_view>
@@ -99056,7 +99640,7 @@ concept container_but_not_string =
     !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char *>;
 
 template <class T>
-  requires(container_but_not_string<T>)
+  requires(container_but_not_string<T> && !require_custom_serialization<T>)
 constexpr void atom(string_builder &b, const T &t) {
   if (t.size() == 0) {
     b.append_raw("[]");
@@ -99081,6 +99665,7 @@ constexpr void atom(string_builder &b, const T &t) {
 }
 
 template <concepts::string_view_keyed_map T>
+  requires(!require_custom_serialization<T>)
 constexpr void atom(string_builder &b, const T &m) {
   if (m.empty()) {
     b.append_raw("{}");
@@ -99117,7 +99702,7 @@ template <class T>
            !std::is_same_v<T, std::string> &&
            !std::is_same_v<T, std::string_view> &&
            !std::is_same_v<T, const char*> &&
-           !std::is_same_v<T, char>)
+           !std::is_same_v<T, char> && !require_custom_serialization<T>)
 constexpr void atom(string_builder &b, const T &t) {
   int i = 0;
   b.append('{');
@@ -99135,6 +99720,7 @@ constexpr void atom(string_builder &b, const T &t) {
 
 // Support for optional types (std::optional, etc.)
 template <concepts::optional_type T>
+  requires(!require_custom_serialization<T>)
 constexpr void atom(string_builder &b, const T &opt) {
   if (opt) {
     atom(b, opt.value());
@@ -99145,6 +99731,7 @@ constexpr void atom(string_builder &b, const T &opt) {
 
 // Support for smart pointers (std::unique_ptr, std::shared_ptr, etc.)
 template <concepts::smart_pointer T>
+  requires(!require_custom_serialization<T>)
 constexpr void atom(string_builder &b, const T &ptr) {
   if (ptr) {
     atom(b, *ptr);
@@ -99155,7 +99742,7 @@ constexpr void atom(string_builder &b, const T &ptr) {
 
 // Support for enums - serialize as string representation using expand approach from P2996R12
 template <typename T>
-  requires(std::is_enum_v<T>)
+  requires(std::is_enum_v<T> && !require_custom_serialization<T>)
 void atom(string_builder &b, const T &e) {
 #if SIMDJSON_STATIC_REFLECTION
   constexpr auto enumerators = std::define_static_array(std::meta::enumerators_of(^^T));
@@ -99179,7 +99766,7 @@ template <concepts::appendable_containers T>
   requires(!container_but_not_string<T> && !concepts::string_view_keyed_map<T> &&
            !concepts::optional_type<T> && !concepts::smart_pointer<T> &&
            !std::is_same_v<T, std::string> &&
-           !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char*>)
+           !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char*> && !require_custom_serialization<T>)
 constexpr void atom(string_builder &b, const T &container) {
   if (container.empty()) {
     b.append_raw("[]");
@@ -99214,11 +99801,13 @@ void append(string_builder &b, const T &t) {
 }
 
 template <concepts::optional_type T>
+  requires(!require_custom_serialization<T>)
 void append(string_builder &b, const T &t) {
   atom(b, t);
 }
 
 template <concepts::smart_pointer T>
+  requires(!require_custom_serialization<T>)
 void append(string_builder &b, const T &t) {
   atom(b, t);
 }
@@ -99227,12 +99816,13 @@ template <concepts::appendable_containers T>
   requires(!container_but_not_string<T> && !concepts::string_view_keyed_map<T> &&
            !concepts::optional_type<T> && !concepts::smart_pointer<T> &&
            !std::is_same_v<T, std::string> &&
-           !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char*>)
+           !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char*> && !require_custom_serialization<T>)
 void append(string_builder &b, const T &t) {
   atom(b, t);
 }
 
 template <concepts::string_view_keyed_map T>
+  requires(!require_custom_serialization<T>)
 void append(string_builder &b, const T &t) {
   atom(b, t);
 }
@@ -99247,7 +99837,7 @@ template <class Z>
            !std::is_same_v<Z, std::string> &&
            !std::is_same_v<Z, std::string_view> &&
            !std::is_same_v<Z, const char*> &&
-           !std::is_same_v<Z, char>)
+           !std::is_same_v<Z, char> && !require_custom_serialization<Z>)
 void append(string_builder &b, const Z &z) {
   int i = 0;
   b.append('{');
@@ -99265,7 +99855,7 @@ void append(string_builder &b, const Z &z) {
 
 // works for container
 template <class Z>
-  requires(container_but_not_string<Z>)
+  requires(container_but_not_string<Z> && !require_custom_serialization<Z>)
 void append(string_builder &b, const Z &z) {
   if (z.size() == 0) {
     b.append_raw("[]");
@@ -99281,7 +99871,14 @@ void append(string_builder &b, const Z &z) {
 }
 
 template <class Z>
-simdjson_result<std::string> to_json_string(const Z &z, size_t initial_capacity = 1024) {
+  requires (require_custom_serialization<Z>)
+void append(string_builder &b, const Z &z) {
+  b.append(z);
+}
+
+
+template <class Z>
+simdjson_warn_unused simdjson_result<std::string> to_json_string(const Z &z, size_t initial_capacity = string_builder::DEFAULT_INITIAL_CAPACITY) {
   string_builder b(initial_capacity);
   append(b, z);
   std::string_view s;
@@ -99290,8 +99887,8 @@ simdjson_result<std::string> to_json_string(const Z &z, size_t initial_capacity 
 }
 
 template <class Z>
-simdjson_error to_json(const Z &z, std::string &s) {
-  string_builder b;
+simdjson_warn_unused simdjson_error to_json(const Z &z, std::string &s, size_t initial_capacity = string_builder::DEFAULT_INITIAL_CAPACITY) {
+  string_builder b(initial_capacity);
   append(b, z);
   std::string_view view;
   if(auto e = b.view().get(view); e) { return e; }
@@ -99308,8 +99905,12 @@ string_builder& operator<<(string_builder& b, const Z& z) {
 } // namespace ppc64
 // Alias the function template to 'to' in the global namespace
 template <class Z>
-simdjson_result<std::string> to_json(const Z &z, size_t initial_capacity = 1024) {
+simdjson_warn_unused simdjson_result<std::string> to_json(const Z &z, size_t initial_capacity = ppc64::builder::string_builder::DEFAULT_INITIAL_CAPACITY) {
   return ppc64::builder::to_json_string(z, initial_capacity);
+}
+template <class Z>
+simdjson_warn_unused simdjson_error to_json(const Z &z, std::string &s, size_t initial_capacity = ppc64::builder::string_builder::DEFAULT_INITIAL_CAPACITY) {
+  return ppc64::builder::to_json(z, s, initial_capacity);
 }
 } // namespace simdjson
 
@@ -100560,54 +101161,7 @@ class value_iterator;
 /* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/array.h" */
 /* amalgamation skipped (editor-only): #endif // SIMDJSON_CONDITIONAL_INCLUDE */
 
-#include <concepts>
 namespace simdjson {
-
-namespace tag_invoke_fn_ns {
-void tag_invoke();
-
-struct tag_invoke_fn {
-  template <typename Tag, typename... Args>
-    requires requires(Tag tag, Args &&...args) {
-      tag_invoke(std::forward<Tag>(tag), std::forward<Args>(args)...);
-    }
-  constexpr auto operator()(Tag tag, Args &&...args) const
-      noexcept(noexcept(tag_invoke(std::forward<Tag>(tag),
-                                   std::forward<Args>(args)...)))
-          -> decltype(tag_invoke(std::forward<Tag>(tag),
-                                 std::forward<Args>(args)...)) {
-    return tag_invoke(std::forward<Tag>(tag), std::forward<Args>(args)...);
-  }
-};
-} // namespace tag_invoke_fn_ns
-
-inline namespace tag_invoke_ns {
-inline constexpr tag_invoke_fn_ns::tag_invoke_fn tag_invoke = {};
-} // namespace tag_invoke_ns
-
-template <typename Tag, typename... Args>
-concept tag_invocable = requires(Tag tag, Args... args) {
-  tag_invoke(std::forward<Tag>(tag), std::forward<Args>(args)...);
-};
-
-template <typename Tag, typename... Args>
-concept nothrow_tag_invocable =
-    tag_invocable<Tag, Args...> && requires(Tag tag, Args... args) {
-      {
-        tag_invoke(std::forward<Tag>(tag), std::forward<Args>(args)...)
-      } noexcept;
-    };
-
-template <typename Tag, typename... Args>
-using tag_invoke_result =
-    std::invoke_result<decltype(tag_invoke), Tag, Args...>;
-
-template <typename Tag, typename... Args>
-using tag_invoke_result_t =
-    std::invoke_result_t<decltype(tag_invoke), Tag, Args...>;
-
-template <auto &Tag> using tag_t = std::decay_t<decltype(Tag)>;
-
 
 struct deserialize_tag;
 
@@ -101273,7 +101827,9 @@ public:
       using value_type = typename std::remove_cvref_t<T>::value_type;
 
       // Check if the value is null
-      if (is_null()) {
+      bool is_null_value;
+      SIMDJSON_TRY( is_null().get(is_null_value) );
+      if (is_null_value) {
         out.reset(); // Set to nullopt
         return SUCCESS;
       }
@@ -105881,15 +106437,12 @@ inline std::ostream& operator<<(std::ostream& out, simdjson::simdjson_result<sim
 #endif
 
 namespace simdjson {
-template <typename T>
-constexpr bool require_custom_serialization = false;
 
 //////////////////////////////
 // Number deserialization
 //////////////////////////////
 
 template <std::unsigned_integral T>
-  requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept {
   using limits = std::numeric_limits<T>;
 
@@ -105903,7 +106456,6 @@ error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept {
 }
 
 template <std::floating_point T>
-  requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept {
   double x;
   SIMDJSON_TRY(val.get_double().get(x));
@@ -105912,7 +106464,6 @@ error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept {
 }
 
 template <std::signed_integral T>
-  requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept {
   using limits = std::numeric_limits<T>;
 
@@ -105942,7 +106493,6 @@ error_code tag_invoke(deserialize_tag, auto &val, char &out) noexcept {
 
 // any string-like type (can be constructed from std::string_view)
 template <concepts::constructible_from_string_view T, typename ValT>
-  requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(std::is_nothrow_constructible_v<T, std::string_view>) {
   std::string_view str;
   SIMDJSON_TRY(val.get_string().get(str));
@@ -105959,7 +106509,6 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(std::is_nothr
  * doc.get<std::vector<int>>().
  */
 template <concepts::appendable_containers T, typename ValT>
-  requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(false) {
   using value_type = typename std::remove_cvref_t<T>::value_type;
   static_assert(
@@ -106005,7 +106554,6 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(false) {
  * string-keyed types.
  */
  template <concepts::string_view_keyed_map T, typename ValT>
- requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(false) {
   using value_type = typename std::remove_cvref_t<T>::mapped_type;
   static_assert(
@@ -106087,7 +106635,6 @@ error_code tag_invoke(deserialize_tag, westmere::ondemand::document_reference &d
  * @return status of the conversion
  */
 template <concepts::smart_pointer T, typename ValT>
-  requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(nothrow_deserializable<typename std::remove_cvref_t<T>::element_type, ValT>) {
   using element_type = typename std::remove_cvref_t<T>::element_type;
 
@@ -106113,12 +106660,13 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(nothrow_deser
  * This CPO (Customization Point Object) will help deserialize into optional types.
  */
 template <concepts::optional_type T>
-  requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept(nothrow_deserializable<typename std::remove_cvref_t<T>::value_type, decltype(val)>) {
   using value_type = typename std::remove_cvref_t<T>::value_type;
 
   // Check if the value is null
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset(); // Set to nullopt
     return SUCCESS;
   }
@@ -106137,7 +106685,7 @@ error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept(nothrow_deser
 template <typename T>
 constexpr bool user_defined_type = (std::is_class_v<T>
 && !std::is_same_v<T, std::string> && !std::is_same_v<T, std::string_view> && !concepts::optional_type<T> &&
-!concepts::appendable_containers<T> && !require_custom_serialization<T>);
+!concepts::appendable_containers<T>);
 
 
 template <typename T, typename ValT>
@@ -106149,18 +106697,26 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept {
   } else {
     SIMDJSON_TRY(val.get_object().get(obj));
   }
-  error_code e = simdjson::SUCCESS;
   template for (constexpr auto mem : std::define_static_array(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked()))) {
-        if constexpr (!std::meta::is_const(mem) && std::meta::is_public(mem)) {
+    if constexpr (!std::meta::is_const(mem) && std::meta::is_public(mem)) {
       constexpr std::string_view key = std::define_static_string(std::meta::identifier_of(mem));
-      // Note: removed static assert as optional types are now handled generically
-      // as long we are succesful or the field is not found, we continue
-      if(e == simdjson::SUCCESS || e == simdjson::NO_SUCH_FIELD) {
-        e = obj[key].get(out.[:mem:]);
+      if constexpr (concepts::optional_type<decltype(out.[:mem:])>) {
+        // for optional members, it's ok if the key is missing
+        auto error = obj[key].get(out.[:mem:]);
+        if (error && error != NO_SUCH_FIELD) {
+          if(error == NO_SUCH_FIELD) {
+            out.[:mem:].reset();
+            continue;
+          }
+          return error;
+        }
+      } else {
+        // for non-optional members, the key must be present
+        SIMDJSON_TRY(obj[key].get(out.[:mem:]));
       }
     }
   };
-  return e;
+  return simdjson::SUCCESS;
 }
 
 // Support for enum deserialization - deserialize from string representation using expand approach from P2996R12
@@ -106226,7 +106782,9 @@ error_code tag_invoke(deserialize_tag, simdjson_value &val, std::shared_ptr<T> &
 // Unique pointers
 ////////////////////////////////////////
 error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<bool> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -106239,7 +106797,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<bool> &out) no
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<int64_t> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -106252,7 +106812,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<int64_t> &out)
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<uint64_t> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -106265,7 +106827,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<uint64_t> &out
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<double> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -106278,7 +106842,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<double> &out) 
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<std::string_view> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -106295,7 +106861,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<std::string_vi
 // Shared pointers
 ////////////////////////////////////////
 error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<bool> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -106308,7 +106876,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<bool> &out) no
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<int64_t> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -106321,7 +106891,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<int64_t> &out)
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<uint64_t> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -106334,7 +106906,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<uint64_t> &out
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<double> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -106347,7 +106921,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<double> &out) 
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<std::string_view> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -106369,7 +106945,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<std::string_vi
 ////////////////////////////////////////
 error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<std::string> &out) noexcept {
   // Check if the value is null
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset(); // Set to nullptr
     return SUCCESS;
   }
@@ -106385,7 +106963,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<std::string> &
 
 error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<std::string> &out) noexcept {
   // Check if the value is null
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset(); // Set to nullptr
     return SUCCESS;
   }
@@ -106401,7 +106981,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<std::string> &
 
 error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<int> &out) noexcept {
   // Check if the value is null
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset(); // Set to nullptr
     return SUCCESS;
   }
@@ -111977,9 +112559,62 @@ simdjson_inline simdjson_result<westmere::ondemand::value_iterator>::simdjson_re
 /* amalgamation skipped (editor-only): #endif // SIMDJSON_CONDITIONAL_INCLUDE */
 
 namespace simdjson {
+
+
+#if SIMDJSON_SUPPORTS_CONCEPTS
+
 namespace westmere {
 namespace builder {
+  class string_builder;
+}}
 
+template <typename T, typename = void>
+struct has_custom_serialization : std::false_type {};
+
+inline constexpr struct serialize_tag {
+  template <typename T>
+    requires custom_deserializable<T>
+  constexpr void operator()(westmere::builder::string_builder& b, T& obj) const{
+    return tag_invoke(*this, b, obj);
+  }
+
+
+} serialize{};
+template <typename T>
+struct has_custom_serialization<T, std::void_t<
+    decltype(tag_invoke(serialize, std::declval<westmere::builder::string_builder&>(), std::declval<T&>()))
+>> : std::true_type {};
+
+template <typename T>
+constexpr bool require_custom_serialization = has_custom_serialization<T>::value;
+#else
+struct has_custom_serialization : std::false_type {};
+#endif // SIMDJSON_SUPPORTS_CONCEPTS
+
+namespace westmere {
+namespace builder {
+#if SIMDJSON_SUPPORTS_CONCEPTS
+// Helper to create string constants
+namespace internal {
+template <std::size_t N>
+struct fixed_string {
+    constexpr fixed_string(const char (&str)[N])  {
+        for (std::size_t i = 0; i < N; ++i) {
+            data[i] = str[i];
+        }
+    }
+    char data[N];
+    constexpr std::string_view view() const { return {data, N - 1}; }
+};
+template <std::size_t N>
+fixed_string(const char (&)[N]) -> fixed_string<N>;
+
+template <fixed_string str>
+struct string_constant {
+    static constexpr std::string_view value = str.view();
+};
+} // namespace internal
+#endif // SIMDJSON_SUPPORTS_CONCEPTS
 /**
  * A builder for JSON strings representing documents. This is a low-level
  * builder that is not meant to be used directly by end-users. Though it
@@ -111991,7 +112626,9 @@ namespace builder {
  */
 class string_builder {
 public:
-  simdjson_inline string_builder(size_t initial_capacity = 1024);
+  simdjson_inline string_builder(size_t initial_capacity = DEFAULT_INITIAL_CAPACITY);
+
+  static constexpr size_t DEFAULT_INITIAL_CAPACITY = 1024;
 
   /**
    * Append number (includes Booleans). Booleans are mapped to the strings
@@ -112000,7 +112637,7 @@ public:
    * represents the number.
    */
   template<typename number_type,
-         typename = typename std::enable_if<std::is_arithmetic<number_type>::value>::type>
+    typename = typename std::enable_if<std::is_arithmetic<number_type>::value>::type>
   simdjson_inline void append(number_type v) noexcept;
 
   /**
@@ -112029,7 +112666,10 @@ public:
    * There is no UTF-8 validation.
    */
   simdjson_inline void escape_and_append_with_quotes(std::string_view input)  noexcept;
-
+#if SIMDJSON_SUPPORTS_CONCEPTS
+  template<internal::fixed_string key>
+  simdjson_inline void escape_and_append_with_quotes()  noexcept;
+#endif
   /**
    * Append the character surrounded by double quotes, after escaping it.
    * There is no UTF-8 validation.
@@ -112083,12 +112723,20 @@ public:
    * The key is escaped and surrounded by double quotes.
    * The value is escaped if it is a string.
    */
-   template<typename key_type, typename value_type>
+  template<typename key_type, typename value_type>
   simdjson_inline void append_key_value(key_type key, value_type value) noexcept;
 #if SIMDJSON_SUPPORTS_CONCEPTS
+  template<internal::fixed_string key, typename value_type>
+  simdjson_inline void append_key_value(value_type value) noexcept;
+
   // Support for optional types (std::optional, etc.)
   template <concepts::optional_type T>
+  requires(!require_custom_serialization<T>)
   simdjson_inline void append(const T &opt);
+
+  template <typename T>
+  requires(require_custom_serialization<T>)
+  simdjson_inline void append(const T &val);
 
   // Support for string-like types
   template <typename T>
@@ -112199,7 +112847,7 @@ private:
 #if !SIMDJSON_STATIC_REFLECTION
 // fallback implementation until we have static reflection
 template <class Z>
-simdjson_result<std::string> to_json(const Z &z, size_t initial_capacity = 1024) {
+simdjson_warn_unused simdjson_result<std::string> to_json(const Z &z, size_t initial_capacity = simdjson::westmere::builder::string_builder::DEFAULT_INITIAL_CAPACITY) {
   simdjson::westmere::builder::string_builder b(initial_capacity);
   b.append(z);
   std::string_view s;
@@ -112207,8 +112855,20 @@ simdjson_result<std::string> to_json(const Z &z, size_t initial_capacity = 1024)
   if(e) { return e; }
   return std::string(s);
 }
+template <class Z>
+simdjson_warn_unused simdjson_error to_json(const Z &z, std::string &s, size_t initial_capacity = simdjson::westmere::builder::string_builder::DEFAULT_INITIAL_CAPACITY) {
+  simdjson::westmere::builder::string_builder b(initial_capacity);
+  b.append(z);
+  std::string_view sv;
+  auto e = b.view().get(sv);
+  if(e) { return e; }
+  s.assign(sv.data(), sv.size());
+  return simdjson::SUCCESS;
+}
 #endif
 
+#if SIMDJSON_SUPPORTS_CONCEPTS
+#endif // SIMDJSON_SUPPORTS_CONCEPTS
 
 } // namespace simdjson
 
@@ -112502,10 +113162,12 @@ simdjson_inline void string_builder::clear() noexcept {
 
 namespace internal {
 
-// We could specialize further for 32-bit integers.
-simdjson_really_inline int int_log2(uint32_t x) { return (63 - leading_zeroes(x | 1)); }
 
-simdjson_really_inline int fast_digit_count(uint32_t x) {
+template <typename number_type, typename = typename std::enable_if<
+                                    std::is_unsigned<number_type>::value>::type>
+simdjson_really_inline int int_log2(number_type x) { return 63 - leading_zeroes(uint64_t(x) | 1); }
+
+simdjson_really_inline int fast_digit_count_32(uint32_t x) {
   static uint64_t table[] = {
       4294967296,  8589934582,  8589934582,  8589934582,  12884901788,
       12884901788, 12884901788, 17179868184, 17179868184, 17179868184,
@@ -112517,9 +113179,8 @@ simdjson_really_inline int fast_digit_count(uint32_t x) {
   return uint32_t((x + table[int_log2(x)]) >> 32);
 }
 
-simdjson_really_inline int int_log2(uint64_t x) { return 63 - leading_zeroes(x | 1); }
 
-simdjson_really_inline int fast_digit_count(uint64_t x) {
+simdjson_really_inline int fast_digit_count_64(uint64_t x) {
   static uint64_t table[] = {9,
                              99,
                              999,
@@ -112550,7 +113211,11 @@ simdjson_really_inline size_t digit_count(number_type v) noexcept {
   static_assert(sizeof(number_type) == 8 || sizeof(number_type) == 4 ||
                     sizeof(number_type) == 2 || sizeof(number_type) == 1,
                 "We only support 8-bit, 16-bit, 32-bit and 64-bit numbers");
-  return fast_digit_count(v);
+  SIMDJSON_IF_CONSTEXPR(sizeof(number_type) <= 4) {
+    return fast_digit_count_32(static_cast<uint32_t>(v));
+  } else {
+    return fast_digit_count_64(static_cast<uint64_t>(v));
+  }
 }
 static const char decimal_table[200] = {
   0x30, 0x30, 0x30, 0x31, 0x30, 0x32, 0x30, 0x33, 0x30, 0x34, 0x30, 0x35,
@@ -112572,6 +113237,7 @@ static const char decimal_table[200] = {
   0x39, 0x36, 0x39, 0x37, 0x39, 0x38, 0x39, 0x39,
 };
 } // namespace internal
+
 
 template <typename number_type, typename>
 simdjson_inline void string_builder::append(number_type v) noexcept {
@@ -112688,6 +113354,12 @@ simdjson_inline void string_builder::escape_and_append_with_quotes(const char* i
   std::string_view cinput(input);
   escape_and_append_with_quotes(cinput);
 }
+#if SIMDJSON_SUPPORTS_CONCEPTS
+template<internal::fixed_string key>
+simdjson_inline void string_builder::escape_and_append_with_quotes()  noexcept {
+  escape_and_append_with_quotes(internal::string_constant<key>::value);
+}
+#endif
 
 simdjson_inline void string_builder::append_raw(const char *c) noexcept {
   size_t len = std::strlen(c);
@@ -112712,6 +113384,7 @@ simdjson_inline void string_builder::append_raw(const char *str,
 #if SIMDJSON_SUPPORTS_CONCEPTS
 // Support for optional types (std::optional, etc.)
 template <concepts::optional_type T>
+ requires(!require_custom_serialization<T>)
 simdjson_inline void string_builder::append(const T &opt) {
   if (opt) {
     append(*opt);
@@ -112719,9 +113392,17 @@ simdjson_inline void string_builder::append(const T &opt) {
     append_null();
   }
 }
+
+
+template <typename T>
+requires(require_custom_serialization<T>)
+simdjson_inline void string_builder::append(const T &val) {
+  serialize(*this, val);
+}
+
 template <typename T>
 requires(std::is_convertible<T, std::string_view>::value ||
-std::is_same<T, const char*>::value )
+std::is_same<T, const char*>::value)
 simdjson_inline void string_builder::append(const T &value) {
   escape_and_append_with_quotes(value);
 }
@@ -112867,6 +113548,25 @@ simdjson_inline void string_builder::append_key_value(key_type key, value_type v
   }
 }
 
+#if SIMDJSON_SUPPORTS_CONCEPTS
+template<internal::fixed_string key, typename value_type>
+simdjson_inline void string_builder::append_key_value(value_type value) noexcept {
+  escape_and_append_with_quotes<key>();
+  append_colon();
+  SIMDJSON_IF_CONSTEXPR(std::is_same<value_type, std::nullptr_t>::value) {
+    append_null();
+  } else SIMDJSON_IF_CONSTEXPR(std::is_same<value_type, char>::value) {
+    escape_and_append_with_quotes(value);
+  } else SIMDJSON_IF_CONSTEXPR(std::is_convertible<value_type, std::string_view>::value) {
+    escape_and_append_with_quotes(value);
+  } else SIMDJSON_IF_CONSTEXPR(std::is_same<value_type, const char*>::value) {
+    escape_and_append_with_quotes(value);
+  } else {
+    append(value);
+  }
+}
+#endif
+
 } // namespace builder
 } // namespace westmere
 } // namespace simdjson
@@ -112890,7 +113590,7 @@ simdjson_inline void string_builder::append_key_value(key_type key, value_type v
 
 #include <charconv>
 #include <cstring>
-#include <experimental/meta>
+#include <meta>
 #include <memory>
 #include <optional>
 #include <string_view>
@@ -112915,7 +113615,7 @@ concept container_but_not_string =
     !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char *>;
 
 template <class T>
-  requires(container_but_not_string<T>)
+  requires(container_but_not_string<T> && !require_custom_serialization<T>)
 constexpr void atom(string_builder &b, const T &t) {
   if (t.size() == 0) {
     b.append_raw("[]");
@@ -112940,6 +113640,7 @@ constexpr void atom(string_builder &b, const T &t) {
 }
 
 template <concepts::string_view_keyed_map T>
+  requires(!require_custom_serialization<T>)
 constexpr void atom(string_builder &b, const T &m) {
   if (m.empty()) {
     b.append_raw("{}");
@@ -112976,7 +113677,7 @@ template <class T>
            !std::is_same_v<T, std::string> &&
            !std::is_same_v<T, std::string_view> &&
            !std::is_same_v<T, const char*> &&
-           !std::is_same_v<T, char>)
+           !std::is_same_v<T, char> && !require_custom_serialization<T>)
 constexpr void atom(string_builder &b, const T &t) {
   int i = 0;
   b.append('{');
@@ -112994,6 +113695,7 @@ constexpr void atom(string_builder &b, const T &t) {
 
 // Support for optional types (std::optional, etc.)
 template <concepts::optional_type T>
+  requires(!require_custom_serialization<T>)
 constexpr void atom(string_builder &b, const T &opt) {
   if (opt) {
     atom(b, opt.value());
@@ -113004,6 +113706,7 @@ constexpr void atom(string_builder &b, const T &opt) {
 
 // Support for smart pointers (std::unique_ptr, std::shared_ptr, etc.)
 template <concepts::smart_pointer T>
+  requires(!require_custom_serialization<T>)
 constexpr void atom(string_builder &b, const T &ptr) {
   if (ptr) {
     atom(b, *ptr);
@@ -113014,7 +113717,7 @@ constexpr void atom(string_builder &b, const T &ptr) {
 
 // Support for enums - serialize as string representation using expand approach from P2996R12
 template <typename T>
-  requires(std::is_enum_v<T>)
+  requires(std::is_enum_v<T> && !require_custom_serialization<T>)
 void atom(string_builder &b, const T &e) {
 #if SIMDJSON_STATIC_REFLECTION
   constexpr auto enumerators = std::define_static_array(std::meta::enumerators_of(^^T));
@@ -113038,7 +113741,7 @@ template <concepts::appendable_containers T>
   requires(!container_but_not_string<T> && !concepts::string_view_keyed_map<T> &&
            !concepts::optional_type<T> && !concepts::smart_pointer<T> &&
            !std::is_same_v<T, std::string> &&
-           !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char*>)
+           !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char*> && !require_custom_serialization<T>)
 constexpr void atom(string_builder &b, const T &container) {
   if (container.empty()) {
     b.append_raw("[]");
@@ -113073,11 +113776,13 @@ void append(string_builder &b, const T &t) {
 }
 
 template <concepts::optional_type T>
+  requires(!require_custom_serialization<T>)
 void append(string_builder &b, const T &t) {
   atom(b, t);
 }
 
 template <concepts::smart_pointer T>
+  requires(!require_custom_serialization<T>)
 void append(string_builder &b, const T &t) {
   atom(b, t);
 }
@@ -113086,12 +113791,13 @@ template <concepts::appendable_containers T>
   requires(!container_but_not_string<T> && !concepts::string_view_keyed_map<T> &&
            !concepts::optional_type<T> && !concepts::smart_pointer<T> &&
            !std::is_same_v<T, std::string> &&
-           !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char*>)
+           !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char*> && !require_custom_serialization<T>)
 void append(string_builder &b, const T &t) {
   atom(b, t);
 }
 
 template <concepts::string_view_keyed_map T>
+  requires(!require_custom_serialization<T>)
 void append(string_builder &b, const T &t) {
   atom(b, t);
 }
@@ -113106,7 +113812,7 @@ template <class Z>
            !std::is_same_v<Z, std::string> &&
            !std::is_same_v<Z, std::string_view> &&
            !std::is_same_v<Z, const char*> &&
-           !std::is_same_v<Z, char>)
+           !std::is_same_v<Z, char> && !require_custom_serialization<Z>)
 void append(string_builder &b, const Z &z) {
   int i = 0;
   b.append('{');
@@ -113124,7 +113830,7 @@ void append(string_builder &b, const Z &z) {
 
 // works for container
 template <class Z>
-  requires(container_but_not_string<Z>)
+  requires(container_but_not_string<Z> && !require_custom_serialization<Z>)
 void append(string_builder &b, const Z &z) {
   if (z.size() == 0) {
     b.append_raw("[]");
@@ -113140,7 +113846,14 @@ void append(string_builder &b, const Z &z) {
 }
 
 template <class Z>
-simdjson_result<std::string> to_json_string(const Z &z, size_t initial_capacity = 1024) {
+  requires (require_custom_serialization<Z>)
+void append(string_builder &b, const Z &z) {
+  b.append(z);
+}
+
+
+template <class Z>
+simdjson_warn_unused simdjson_result<std::string> to_json_string(const Z &z, size_t initial_capacity = string_builder::DEFAULT_INITIAL_CAPACITY) {
   string_builder b(initial_capacity);
   append(b, z);
   std::string_view s;
@@ -113149,8 +113862,8 @@ simdjson_result<std::string> to_json_string(const Z &z, size_t initial_capacity 
 }
 
 template <class Z>
-simdjson_error to_json(const Z &z, std::string &s) {
-  string_builder b;
+simdjson_warn_unused simdjson_error to_json(const Z &z, std::string &s, size_t initial_capacity = string_builder::DEFAULT_INITIAL_CAPACITY) {
+  string_builder b(initial_capacity);
   append(b, z);
   std::string_view view;
   if(auto e = b.view().get(view); e) { return e; }
@@ -113167,8 +113880,12 @@ string_builder& operator<<(string_builder& b, const Z& z) {
 } // namespace westmere
 // Alias the function template to 'to' in the global namespace
 template <class Z>
-simdjson_result<std::string> to_json(const Z &z, size_t initial_capacity = 1024) {
+simdjson_warn_unused simdjson_result<std::string> to_json(const Z &z, size_t initial_capacity = westmere::builder::string_builder::DEFAULT_INITIAL_CAPACITY) {
   return westmere::builder::to_json_string(z, initial_capacity);
+}
+template <class Z>
+simdjson_warn_unused simdjson_error to_json(const Z &z, std::string &s, size_t initial_capacity = westmere::builder::string_builder::DEFAULT_INITIAL_CAPACITY) {
+  return westmere::builder::to_json(z, s, initial_capacity);
 }
 } // namespace simdjson
 
@@ -113896,54 +114613,7 @@ class value_iterator;
 /* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/array.h" */
 /* amalgamation skipped (editor-only): #endif // SIMDJSON_CONDITIONAL_INCLUDE */
 
-#include <concepts>
 namespace simdjson {
-
-namespace tag_invoke_fn_ns {
-void tag_invoke();
-
-struct tag_invoke_fn {
-  template <typename Tag, typename... Args>
-    requires requires(Tag tag, Args &&...args) {
-      tag_invoke(std::forward<Tag>(tag), std::forward<Args>(args)...);
-    }
-  constexpr auto operator()(Tag tag, Args &&...args) const
-      noexcept(noexcept(tag_invoke(std::forward<Tag>(tag),
-                                   std::forward<Args>(args)...)))
-          -> decltype(tag_invoke(std::forward<Tag>(tag),
-                                 std::forward<Args>(args)...)) {
-    return tag_invoke(std::forward<Tag>(tag), std::forward<Args>(args)...);
-  }
-};
-} // namespace tag_invoke_fn_ns
-
-inline namespace tag_invoke_ns {
-inline constexpr tag_invoke_fn_ns::tag_invoke_fn tag_invoke = {};
-} // namespace tag_invoke_ns
-
-template <typename Tag, typename... Args>
-concept tag_invocable = requires(Tag tag, Args... args) {
-  tag_invoke(std::forward<Tag>(tag), std::forward<Args>(args)...);
-};
-
-template <typename Tag, typename... Args>
-concept nothrow_tag_invocable =
-    tag_invocable<Tag, Args...> && requires(Tag tag, Args... args) {
-      {
-        tag_invoke(std::forward<Tag>(tag), std::forward<Args>(args)...)
-      } noexcept;
-    };
-
-template <typename Tag, typename... Args>
-using tag_invoke_result =
-    std::invoke_result<decltype(tag_invoke), Tag, Args...>;
-
-template <typename Tag, typename... Args>
-using tag_invoke_result_t =
-    std::invoke_result_t<decltype(tag_invoke), Tag, Args...>;
-
-template <auto &Tag> using tag_t = std::decay_t<decltype(Tag)>;
-
 
 struct deserialize_tag;
 
@@ -114609,7 +115279,9 @@ public:
       using value_type = typename std::remove_cvref_t<T>::value_type;
 
       // Check if the value is null
-      if (is_null()) {
+      bool is_null_value;
+      SIMDJSON_TRY( is_null().get(is_null_value) );
+      if (is_null_value) {
         out.reset(); // Set to nullopt
         return SUCCESS;
       }
@@ -119217,15 +119889,12 @@ inline std::ostream& operator<<(std::ostream& out, simdjson::simdjson_result<sim
 #endif
 
 namespace simdjson {
-template <typename T>
-constexpr bool require_custom_serialization = false;
 
 //////////////////////////////
 // Number deserialization
 //////////////////////////////
 
 template <std::unsigned_integral T>
-  requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept {
   using limits = std::numeric_limits<T>;
 
@@ -119239,7 +119908,6 @@ error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept {
 }
 
 template <std::floating_point T>
-  requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept {
   double x;
   SIMDJSON_TRY(val.get_double().get(x));
@@ -119248,7 +119916,6 @@ error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept {
 }
 
 template <std::signed_integral T>
-  requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept {
   using limits = std::numeric_limits<T>;
 
@@ -119278,7 +119945,6 @@ error_code tag_invoke(deserialize_tag, auto &val, char &out) noexcept {
 
 // any string-like type (can be constructed from std::string_view)
 template <concepts::constructible_from_string_view T, typename ValT>
-  requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(std::is_nothrow_constructible_v<T, std::string_view>) {
   std::string_view str;
   SIMDJSON_TRY(val.get_string().get(str));
@@ -119295,7 +119961,6 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(std::is_nothr
  * doc.get<std::vector<int>>().
  */
 template <concepts::appendable_containers T, typename ValT>
-  requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(false) {
   using value_type = typename std::remove_cvref_t<T>::value_type;
   static_assert(
@@ -119341,7 +120006,6 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(false) {
  * string-keyed types.
  */
  template <concepts::string_view_keyed_map T, typename ValT>
- requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(false) {
   using value_type = typename std::remove_cvref_t<T>::mapped_type;
   static_assert(
@@ -119423,7 +120087,6 @@ error_code tag_invoke(deserialize_tag, lsx::ondemand::document_reference &doc, T
  * @return status of the conversion
  */
 template <concepts::smart_pointer T, typename ValT>
-  requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(nothrow_deserializable<typename std::remove_cvref_t<T>::element_type, ValT>) {
   using element_type = typename std::remove_cvref_t<T>::element_type;
 
@@ -119449,12 +120112,13 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(nothrow_deser
  * This CPO (Customization Point Object) will help deserialize into optional types.
  */
 template <concepts::optional_type T>
-  requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept(nothrow_deserializable<typename std::remove_cvref_t<T>::value_type, decltype(val)>) {
   using value_type = typename std::remove_cvref_t<T>::value_type;
 
   // Check if the value is null
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset(); // Set to nullopt
     return SUCCESS;
   }
@@ -119473,7 +120137,7 @@ error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept(nothrow_deser
 template <typename T>
 constexpr bool user_defined_type = (std::is_class_v<T>
 && !std::is_same_v<T, std::string> && !std::is_same_v<T, std::string_view> && !concepts::optional_type<T> &&
-!concepts::appendable_containers<T> && !require_custom_serialization<T>);
+!concepts::appendable_containers<T>);
 
 
 template <typename T, typename ValT>
@@ -119485,18 +120149,26 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept {
   } else {
     SIMDJSON_TRY(val.get_object().get(obj));
   }
-  error_code e = simdjson::SUCCESS;
   template for (constexpr auto mem : std::define_static_array(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked()))) {
-        if constexpr (!std::meta::is_const(mem) && std::meta::is_public(mem)) {
+    if constexpr (!std::meta::is_const(mem) && std::meta::is_public(mem)) {
       constexpr std::string_view key = std::define_static_string(std::meta::identifier_of(mem));
-      // Note: removed static assert as optional types are now handled generically
-      // as long we are succesful or the field is not found, we continue
-      if(e == simdjson::SUCCESS || e == simdjson::NO_SUCH_FIELD) {
-        e = obj[key].get(out.[:mem:]);
+      if constexpr (concepts::optional_type<decltype(out.[:mem:])>) {
+        // for optional members, it's ok if the key is missing
+        auto error = obj[key].get(out.[:mem:]);
+        if (error && error != NO_SUCH_FIELD) {
+          if(error == NO_SUCH_FIELD) {
+            out.[:mem:].reset();
+            continue;
+          }
+          return error;
+        }
+      } else {
+        // for non-optional members, the key must be present
+        SIMDJSON_TRY(obj[key].get(out.[:mem:]));
       }
     }
   };
-  return e;
+  return simdjson::SUCCESS;
 }
 
 // Support for enum deserialization - deserialize from string representation using expand approach from P2996R12
@@ -119562,7 +120234,9 @@ error_code tag_invoke(deserialize_tag, simdjson_value &val, std::shared_ptr<T> &
 // Unique pointers
 ////////////////////////////////////////
 error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<bool> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -119575,7 +120249,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<bool> &out) no
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<int64_t> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -119588,7 +120264,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<int64_t> &out)
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<uint64_t> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -119601,7 +120279,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<uint64_t> &out
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<double> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -119614,7 +120294,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<double> &out) 
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<std::string_view> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -119631,7 +120313,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<std::string_vi
 // Shared pointers
 ////////////////////////////////////////
 error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<bool> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -119644,7 +120328,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<bool> &out) no
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<int64_t> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -119657,7 +120343,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<int64_t> &out)
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<uint64_t> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -119670,7 +120358,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<uint64_t> &out
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<double> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -119683,7 +120373,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<double> &out) 
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<std::string_view> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -119705,7 +120397,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<std::string_vi
 ////////////////////////////////////////
 error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<std::string> &out) noexcept {
   // Check if the value is null
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset(); // Set to nullptr
     return SUCCESS;
   }
@@ -119721,7 +120415,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<std::string> &
 
 error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<std::string> &out) noexcept {
   // Check if the value is null
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset(); // Set to nullptr
     return SUCCESS;
   }
@@ -119737,7 +120433,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<std::string> &
 
 error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<int> &out) noexcept {
   // Check if the value is null
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset(); // Set to nullptr
     return SUCCESS;
   }
@@ -125313,9 +126011,62 @@ simdjson_inline simdjson_result<lsx::ondemand::value_iterator>::simdjson_result(
 /* amalgamation skipped (editor-only): #endif // SIMDJSON_CONDITIONAL_INCLUDE */
 
 namespace simdjson {
+
+
+#if SIMDJSON_SUPPORTS_CONCEPTS
+
 namespace lsx {
 namespace builder {
+  class string_builder;
+}}
 
+template <typename T, typename = void>
+struct has_custom_serialization : std::false_type {};
+
+inline constexpr struct serialize_tag {
+  template <typename T>
+    requires custom_deserializable<T>
+  constexpr void operator()(lsx::builder::string_builder& b, T& obj) const{
+    return tag_invoke(*this, b, obj);
+  }
+
+
+} serialize{};
+template <typename T>
+struct has_custom_serialization<T, std::void_t<
+    decltype(tag_invoke(serialize, std::declval<lsx::builder::string_builder&>(), std::declval<T&>()))
+>> : std::true_type {};
+
+template <typename T>
+constexpr bool require_custom_serialization = has_custom_serialization<T>::value;
+#else
+struct has_custom_serialization : std::false_type {};
+#endif // SIMDJSON_SUPPORTS_CONCEPTS
+
+namespace lsx {
+namespace builder {
+#if SIMDJSON_SUPPORTS_CONCEPTS
+// Helper to create string constants
+namespace internal {
+template <std::size_t N>
+struct fixed_string {
+    constexpr fixed_string(const char (&str)[N])  {
+        for (std::size_t i = 0; i < N; ++i) {
+            data[i] = str[i];
+        }
+    }
+    char data[N];
+    constexpr std::string_view view() const { return {data, N - 1}; }
+};
+template <std::size_t N>
+fixed_string(const char (&)[N]) -> fixed_string<N>;
+
+template <fixed_string str>
+struct string_constant {
+    static constexpr std::string_view value = str.view();
+};
+} // namespace internal
+#endif // SIMDJSON_SUPPORTS_CONCEPTS
 /**
  * A builder for JSON strings representing documents. This is a low-level
  * builder that is not meant to be used directly by end-users. Though it
@@ -125327,7 +126078,9 @@ namespace builder {
  */
 class string_builder {
 public:
-  simdjson_inline string_builder(size_t initial_capacity = 1024);
+  simdjson_inline string_builder(size_t initial_capacity = DEFAULT_INITIAL_CAPACITY);
+
+  static constexpr size_t DEFAULT_INITIAL_CAPACITY = 1024;
 
   /**
    * Append number (includes Booleans). Booleans are mapped to the strings
@@ -125336,7 +126089,7 @@ public:
    * represents the number.
    */
   template<typename number_type,
-         typename = typename std::enable_if<std::is_arithmetic<number_type>::value>::type>
+    typename = typename std::enable_if<std::is_arithmetic<number_type>::value>::type>
   simdjson_inline void append(number_type v) noexcept;
 
   /**
@@ -125365,7 +126118,10 @@ public:
    * There is no UTF-8 validation.
    */
   simdjson_inline void escape_and_append_with_quotes(std::string_view input)  noexcept;
-
+#if SIMDJSON_SUPPORTS_CONCEPTS
+  template<internal::fixed_string key>
+  simdjson_inline void escape_and_append_with_quotes()  noexcept;
+#endif
   /**
    * Append the character surrounded by double quotes, after escaping it.
    * There is no UTF-8 validation.
@@ -125419,12 +126175,20 @@ public:
    * The key is escaped and surrounded by double quotes.
    * The value is escaped if it is a string.
    */
-   template<typename key_type, typename value_type>
+  template<typename key_type, typename value_type>
   simdjson_inline void append_key_value(key_type key, value_type value) noexcept;
 #if SIMDJSON_SUPPORTS_CONCEPTS
+  template<internal::fixed_string key, typename value_type>
+  simdjson_inline void append_key_value(value_type value) noexcept;
+
   // Support for optional types (std::optional, etc.)
   template <concepts::optional_type T>
+  requires(!require_custom_serialization<T>)
   simdjson_inline void append(const T &opt);
+
+  template <typename T>
+  requires(require_custom_serialization<T>)
+  simdjson_inline void append(const T &val);
 
   // Support for string-like types
   template <typename T>
@@ -125535,7 +126299,7 @@ private:
 #if !SIMDJSON_STATIC_REFLECTION
 // fallback implementation until we have static reflection
 template <class Z>
-simdjson_result<std::string> to_json(const Z &z, size_t initial_capacity = 1024) {
+simdjson_warn_unused simdjson_result<std::string> to_json(const Z &z, size_t initial_capacity = simdjson::lsx::builder::string_builder::DEFAULT_INITIAL_CAPACITY) {
   simdjson::lsx::builder::string_builder b(initial_capacity);
   b.append(z);
   std::string_view s;
@@ -125543,8 +126307,20 @@ simdjson_result<std::string> to_json(const Z &z, size_t initial_capacity = 1024)
   if(e) { return e; }
   return std::string(s);
 }
+template <class Z>
+simdjson_warn_unused simdjson_error to_json(const Z &z, std::string &s, size_t initial_capacity = simdjson::lsx::builder::string_builder::DEFAULT_INITIAL_CAPACITY) {
+  simdjson::lsx::builder::string_builder b(initial_capacity);
+  b.append(z);
+  std::string_view sv;
+  auto e = b.view().get(sv);
+  if(e) { return e; }
+  s.assign(sv.data(), sv.size());
+  return simdjson::SUCCESS;
+}
 #endif
 
+#if SIMDJSON_SUPPORTS_CONCEPTS
+#endif // SIMDJSON_SUPPORTS_CONCEPTS
 
 } // namespace simdjson
 
@@ -125838,10 +126614,12 @@ simdjson_inline void string_builder::clear() noexcept {
 
 namespace internal {
 
-// We could specialize further for 32-bit integers.
-simdjson_really_inline int int_log2(uint32_t x) { return (63 - leading_zeroes(x | 1)); }
 
-simdjson_really_inline int fast_digit_count(uint32_t x) {
+template <typename number_type, typename = typename std::enable_if<
+                                    std::is_unsigned<number_type>::value>::type>
+simdjson_really_inline int int_log2(number_type x) { return 63 - leading_zeroes(uint64_t(x) | 1); }
+
+simdjson_really_inline int fast_digit_count_32(uint32_t x) {
   static uint64_t table[] = {
       4294967296,  8589934582,  8589934582,  8589934582,  12884901788,
       12884901788, 12884901788, 17179868184, 17179868184, 17179868184,
@@ -125853,9 +126631,8 @@ simdjson_really_inline int fast_digit_count(uint32_t x) {
   return uint32_t((x + table[int_log2(x)]) >> 32);
 }
 
-simdjson_really_inline int int_log2(uint64_t x) { return 63 - leading_zeroes(x | 1); }
 
-simdjson_really_inline int fast_digit_count(uint64_t x) {
+simdjson_really_inline int fast_digit_count_64(uint64_t x) {
   static uint64_t table[] = {9,
                              99,
                              999,
@@ -125886,7 +126663,11 @@ simdjson_really_inline size_t digit_count(number_type v) noexcept {
   static_assert(sizeof(number_type) == 8 || sizeof(number_type) == 4 ||
                     sizeof(number_type) == 2 || sizeof(number_type) == 1,
                 "We only support 8-bit, 16-bit, 32-bit and 64-bit numbers");
-  return fast_digit_count(v);
+  SIMDJSON_IF_CONSTEXPR(sizeof(number_type) <= 4) {
+    return fast_digit_count_32(static_cast<uint32_t>(v));
+  } else {
+    return fast_digit_count_64(static_cast<uint64_t>(v));
+  }
 }
 static const char decimal_table[200] = {
   0x30, 0x30, 0x30, 0x31, 0x30, 0x32, 0x30, 0x33, 0x30, 0x34, 0x30, 0x35,
@@ -125908,6 +126689,7 @@ static const char decimal_table[200] = {
   0x39, 0x36, 0x39, 0x37, 0x39, 0x38, 0x39, 0x39,
 };
 } // namespace internal
+
 
 template <typename number_type, typename>
 simdjson_inline void string_builder::append(number_type v) noexcept {
@@ -126024,6 +126806,12 @@ simdjson_inline void string_builder::escape_and_append_with_quotes(const char* i
   std::string_view cinput(input);
   escape_and_append_with_quotes(cinput);
 }
+#if SIMDJSON_SUPPORTS_CONCEPTS
+template<internal::fixed_string key>
+simdjson_inline void string_builder::escape_and_append_with_quotes()  noexcept {
+  escape_and_append_with_quotes(internal::string_constant<key>::value);
+}
+#endif
 
 simdjson_inline void string_builder::append_raw(const char *c) noexcept {
   size_t len = std::strlen(c);
@@ -126048,6 +126836,7 @@ simdjson_inline void string_builder::append_raw(const char *str,
 #if SIMDJSON_SUPPORTS_CONCEPTS
 // Support for optional types (std::optional, etc.)
 template <concepts::optional_type T>
+ requires(!require_custom_serialization<T>)
 simdjson_inline void string_builder::append(const T &opt) {
   if (opt) {
     append(*opt);
@@ -126055,9 +126844,17 @@ simdjson_inline void string_builder::append(const T &opt) {
     append_null();
   }
 }
+
+
+template <typename T>
+requires(require_custom_serialization<T>)
+simdjson_inline void string_builder::append(const T &val) {
+  serialize(*this, val);
+}
+
 template <typename T>
 requires(std::is_convertible<T, std::string_view>::value ||
-std::is_same<T, const char*>::value )
+std::is_same<T, const char*>::value)
 simdjson_inline void string_builder::append(const T &value) {
   escape_and_append_with_quotes(value);
 }
@@ -126203,6 +127000,25 @@ simdjson_inline void string_builder::append_key_value(key_type key, value_type v
   }
 }
 
+#if SIMDJSON_SUPPORTS_CONCEPTS
+template<internal::fixed_string key, typename value_type>
+simdjson_inline void string_builder::append_key_value(value_type value) noexcept {
+  escape_and_append_with_quotes<key>();
+  append_colon();
+  SIMDJSON_IF_CONSTEXPR(std::is_same<value_type, std::nullptr_t>::value) {
+    append_null();
+  } else SIMDJSON_IF_CONSTEXPR(std::is_same<value_type, char>::value) {
+    escape_and_append_with_quotes(value);
+  } else SIMDJSON_IF_CONSTEXPR(std::is_convertible<value_type, std::string_view>::value) {
+    escape_and_append_with_quotes(value);
+  } else SIMDJSON_IF_CONSTEXPR(std::is_same<value_type, const char*>::value) {
+    escape_and_append_with_quotes(value);
+  } else {
+    append(value);
+  }
+}
+#endif
+
 } // namespace builder
 } // namespace lsx
 } // namespace simdjson
@@ -126226,7 +127042,7 @@ simdjson_inline void string_builder::append_key_value(key_type key, value_type v
 
 #include <charconv>
 #include <cstring>
-#include <experimental/meta>
+#include <meta>
 #include <memory>
 #include <optional>
 #include <string_view>
@@ -126251,7 +127067,7 @@ concept container_but_not_string =
     !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char *>;
 
 template <class T>
-  requires(container_but_not_string<T>)
+  requires(container_but_not_string<T> && !require_custom_serialization<T>)
 constexpr void atom(string_builder &b, const T &t) {
   if (t.size() == 0) {
     b.append_raw("[]");
@@ -126276,6 +127092,7 @@ constexpr void atom(string_builder &b, const T &t) {
 }
 
 template <concepts::string_view_keyed_map T>
+  requires(!require_custom_serialization<T>)
 constexpr void atom(string_builder &b, const T &m) {
   if (m.empty()) {
     b.append_raw("{}");
@@ -126312,7 +127129,7 @@ template <class T>
            !std::is_same_v<T, std::string> &&
            !std::is_same_v<T, std::string_view> &&
            !std::is_same_v<T, const char*> &&
-           !std::is_same_v<T, char>)
+           !std::is_same_v<T, char> && !require_custom_serialization<T>)
 constexpr void atom(string_builder &b, const T &t) {
   int i = 0;
   b.append('{');
@@ -126330,6 +127147,7 @@ constexpr void atom(string_builder &b, const T &t) {
 
 // Support for optional types (std::optional, etc.)
 template <concepts::optional_type T>
+  requires(!require_custom_serialization<T>)
 constexpr void atom(string_builder &b, const T &opt) {
   if (opt) {
     atom(b, opt.value());
@@ -126340,6 +127158,7 @@ constexpr void atom(string_builder &b, const T &opt) {
 
 // Support for smart pointers (std::unique_ptr, std::shared_ptr, etc.)
 template <concepts::smart_pointer T>
+  requires(!require_custom_serialization<T>)
 constexpr void atom(string_builder &b, const T &ptr) {
   if (ptr) {
     atom(b, *ptr);
@@ -126350,7 +127169,7 @@ constexpr void atom(string_builder &b, const T &ptr) {
 
 // Support for enums - serialize as string representation using expand approach from P2996R12
 template <typename T>
-  requires(std::is_enum_v<T>)
+  requires(std::is_enum_v<T> && !require_custom_serialization<T>)
 void atom(string_builder &b, const T &e) {
 #if SIMDJSON_STATIC_REFLECTION
   constexpr auto enumerators = std::define_static_array(std::meta::enumerators_of(^^T));
@@ -126374,7 +127193,7 @@ template <concepts::appendable_containers T>
   requires(!container_but_not_string<T> && !concepts::string_view_keyed_map<T> &&
            !concepts::optional_type<T> && !concepts::smart_pointer<T> &&
            !std::is_same_v<T, std::string> &&
-           !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char*>)
+           !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char*> && !require_custom_serialization<T>)
 constexpr void atom(string_builder &b, const T &container) {
   if (container.empty()) {
     b.append_raw("[]");
@@ -126409,11 +127228,13 @@ void append(string_builder &b, const T &t) {
 }
 
 template <concepts::optional_type T>
+  requires(!require_custom_serialization<T>)
 void append(string_builder &b, const T &t) {
   atom(b, t);
 }
 
 template <concepts::smart_pointer T>
+  requires(!require_custom_serialization<T>)
 void append(string_builder &b, const T &t) {
   atom(b, t);
 }
@@ -126422,12 +127243,13 @@ template <concepts::appendable_containers T>
   requires(!container_but_not_string<T> && !concepts::string_view_keyed_map<T> &&
            !concepts::optional_type<T> && !concepts::smart_pointer<T> &&
            !std::is_same_v<T, std::string> &&
-           !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char*>)
+           !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char*> && !require_custom_serialization<T>)
 void append(string_builder &b, const T &t) {
   atom(b, t);
 }
 
 template <concepts::string_view_keyed_map T>
+  requires(!require_custom_serialization<T>)
 void append(string_builder &b, const T &t) {
   atom(b, t);
 }
@@ -126442,7 +127264,7 @@ template <class Z>
            !std::is_same_v<Z, std::string> &&
            !std::is_same_v<Z, std::string_view> &&
            !std::is_same_v<Z, const char*> &&
-           !std::is_same_v<Z, char>)
+           !std::is_same_v<Z, char> && !require_custom_serialization<Z>)
 void append(string_builder &b, const Z &z) {
   int i = 0;
   b.append('{');
@@ -126460,7 +127282,7 @@ void append(string_builder &b, const Z &z) {
 
 // works for container
 template <class Z>
-  requires(container_but_not_string<Z>)
+  requires(container_but_not_string<Z> && !require_custom_serialization<Z>)
 void append(string_builder &b, const Z &z) {
   if (z.size() == 0) {
     b.append_raw("[]");
@@ -126476,7 +127298,14 @@ void append(string_builder &b, const Z &z) {
 }
 
 template <class Z>
-simdjson_result<std::string> to_json_string(const Z &z, size_t initial_capacity = 1024) {
+  requires (require_custom_serialization<Z>)
+void append(string_builder &b, const Z &z) {
+  b.append(z);
+}
+
+
+template <class Z>
+simdjson_warn_unused simdjson_result<std::string> to_json_string(const Z &z, size_t initial_capacity = string_builder::DEFAULT_INITIAL_CAPACITY) {
   string_builder b(initial_capacity);
   append(b, z);
   std::string_view s;
@@ -126485,8 +127314,8 @@ simdjson_result<std::string> to_json_string(const Z &z, size_t initial_capacity 
 }
 
 template <class Z>
-simdjson_error to_json(const Z &z, std::string &s) {
-  string_builder b;
+simdjson_warn_unused simdjson_error to_json(const Z &z, std::string &s, size_t initial_capacity = string_builder::DEFAULT_INITIAL_CAPACITY) {
+  string_builder b(initial_capacity);
   append(b, z);
   std::string_view view;
   if(auto e = b.view().get(view); e) { return e; }
@@ -126503,8 +127332,12 @@ string_builder& operator<<(string_builder& b, const Z& z) {
 } // namespace lsx
 // Alias the function template to 'to' in the global namespace
 template <class Z>
-simdjson_result<std::string> to_json(const Z &z, size_t initial_capacity = 1024) {
+simdjson_warn_unused simdjson_result<std::string> to_json(const Z &z, size_t initial_capacity = lsx::builder::string_builder::DEFAULT_INITIAL_CAPACITY) {
   return lsx::builder::to_json_string(z, initial_capacity);
+}
+template <class Z>
+simdjson_warn_unused simdjson_error to_json(const Z &z, std::string &s, size_t initial_capacity = lsx::builder::string_builder::DEFAULT_INITIAL_CAPACITY) {
+  return lsx::builder::to_json(z, s, initial_capacity);
 }
 } // namespace simdjson
 
@@ -127245,54 +128078,7 @@ class value_iterator;
 /* amalgamation skipped (editor-only): #include "simdjson/generic/ondemand/array.h" */
 /* amalgamation skipped (editor-only): #endif // SIMDJSON_CONDITIONAL_INCLUDE */
 
-#include <concepts>
 namespace simdjson {
-
-namespace tag_invoke_fn_ns {
-void tag_invoke();
-
-struct tag_invoke_fn {
-  template <typename Tag, typename... Args>
-    requires requires(Tag tag, Args &&...args) {
-      tag_invoke(std::forward<Tag>(tag), std::forward<Args>(args)...);
-    }
-  constexpr auto operator()(Tag tag, Args &&...args) const
-      noexcept(noexcept(tag_invoke(std::forward<Tag>(tag),
-                                   std::forward<Args>(args)...)))
-          -> decltype(tag_invoke(std::forward<Tag>(tag),
-                                 std::forward<Args>(args)...)) {
-    return tag_invoke(std::forward<Tag>(tag), std::forward<Args>(args)...);
-  }
-};
-} // namespace tag_invoke_fn_ns
-
-inline namespace tag_invoke_ns {
-inline constexpr tag_invoke_fn_ns::tag_invoke_fn tag_invoke = {};
-} // namespace tag_invoke_ns
-
-template <typename Tag, typename... Args>
-concept tag_invocable = requires(Tag tag, Args... args) {
-  tag_invoke(std::forward<Tag>(tag), std::forward<Args>(args)...);
-};
-
-template <typename Tag, typename... Args>
-concept nothrow_tag_invocable =
-    tag_invocable<Tag, Args...> && requires(Tag tag, Args... args) {
-      {
-        tag_invoke(std::forward<Tag>(tag), std::forward<Args>(args)...)
-      } noexcept;
-    };
-
-template <typename Tag, typename... Args>
-using tag_invoke_result =
-    std::invoke_result<decltype(tag_invoke), Tag, Args...>;
-
-template <typename Tag, typename... Args>
-using tag_invoke_result_t =
-    std::invoke_result_t<decltype(tag_invoke), Tag, Args...>;
-
-template <auto &Tag> using tag_t = std::decay_t<decltype(Tag)>;
-
 
 struct deserialize_tag;
 
@@ -127958,7 +128744,9 @@ public:
       using value_type = typename std::remove_cvref_t<T>::value_type;
 
       // Check if the value is null
-      if (is_null()) {
+      bool is_null_value;
+      SIMDJSON_TRY( is_null().get(is_null_value) );
+      if (is_null_value) {
         out.reset(); // Set to nullopt
         return SUCCESS;
       }
@@ -132566,15 +133354,12 @@ inline std::ostream& operator<<(std::ostream& out, simdjson::simdjson_result<sim
 #endif
 
 namespace simdjson {
-template <typename T>
-constexpr bool require_custom_serialization = false;
 
 //////////////////////////////
 // Number deserialization
 //////////////////////////////
 
 template <std::unsigned_integral T>
-  requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept {
   using limits = std::numeric_limits<T>;
 
@@ -132588,7 +133373,6 @@ error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept {
 }
 
 template <std::floating_point T>
-  requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept {
   double x;
   SIMDJSON_TRY(val.get_double().get(x));
@@ -132597,7 +133381,6 @@ error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept {
 }
 
 template <std::signed_integral T>
-  requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept {
   using limits = std::numeric_limits<T>;
 
@@ -132627,7 +133410,6 @@ error_code tag_invoke(deserialize_tag, auto &val, char &out) noexcept {
 
 // any string-like type (can be constructed from std::string_view)
 template <concepts::constructible_from_string_view T, typename ValT>
-  requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(std::is_nothrow_constructible_v<T, std::string_view>) {
   std::string_view str;
   SIMDJSON_TRY(val.get_string().get(str));
@@ -132644,7 +133426,6 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(std::is_nothr
  * doc.get<std::vector<int>>().
  */
 template <concepts::appendable_containers T, typename ValT>
-  requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(false) {
   using value_type = typename std::remove_cvref_t<T>::value_type;
   static_assert(
@@ -132690,7 +133471,6 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(false) {
  * string-keyed types.
  */
  template <concepts::string_view_keyed_map T, typename ValT>
- requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(false) {
   using value_type = typename std::remove_cvref_t<T>::mapped_type;
   static_assert(
@@ -132772,7 +133552,6 @@ error_code tag_invoke(deserialize_tag, lasx::ondemand::document_reference &doc, 
  * @return status of the conversion
  */
 template <concepts::smart_pointer T, typename ValT>
-  requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(nothrow_deserializable<typename std::remove_cvref_t<T>::element_type, ValT>) {
   using element_type = typename std::remove_cvref_t<T>::element_type;
 
@@ -132798,12 +133577,13 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept(nothrow_deser
  * This CPO (Customization Point Object) will help deserialize into optional types.
  */
 template <concepts::optional_type T>
-  requires(!require_custom_serialization<T>)
 error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept(nothrow_deserializable<typename std::remove_cvref_t<T>::value_type, decltype(val)>) {
   using value_type = typename std::remove_cvref_t<T>::value_type;
 
   // Check if the value is null
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset(); // Set to nullopt
     return SUCCESS;
   }
@@ -132822,7 +133602,7 @@ error_code tag_invoke(deserialize_tag, auto &val, T &out) noexcept(nothrow_deser
 template <typename T>
 constexpr bool user_defined_type = (std::is_class_v<T>
 && !std::is_same_v<T, std::string> && !std::is_same_v<T, std::string_view> && !concepts::optional_type<T> &&
-!concepts::appendable_containers<T> && !require_custom_serialization<T>);
+!concepts::appendable_containers<T>);
 
 
 template <typename T, typename ValT>
@@ -132834,18 +133614,26 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept {
   } else {
     SIMDJSON_TRY(val.get_object().get(obj));
   }
-  error_code e = simdjson::SUCCESS;
   template for (constexpr auto mem : std::define_static_array(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked()))) {
-        if constexpr (!std::meta::is_const(mem) && std::meta::is_public(mem)) {
+    if constexpr (!std::meta::is_const(mem) && std::meta::is_public(mem)) {
       constexpr std::string_view key = std::define_static_string(std::meta::identifier_of(mem));
-      // Note: removed static assert as optional types are now handled generically
-      // as long we are succesful or the field is not found, we continue
-      if(e == simdjson::SUCCESS || e == simdjson::NO_SUCH_FIELD) {
-        e = obj[key].get(out.[:mem:]);
+      if constexpr (concepts::optional_type<decltype(out.[:mem:])>) {
+        // for optional members, it's ok if the key is missing
+        auto error = obj[key].get(out.[:mem:]);
+        if (error && error != NO_SUCH_FIELD) {
+          if(error == NO_SUCH_FIELD) {
+            out.[:mem:].reset();
+            continue;
+          }
+          return error;
+        }
+      } else {
+        // for non-optional members, the key must be present
+        SIMDJSON_TRY(obj[key].get(out.[:mem:]));
       }
     }
   };
-  return e;
+  return simdjson::SUCCESS;
 }
 
 // Support for enum deserialization - deserialize from string representation using expand approach from P2996R12
@@ -132911,7 +133699,9 @@ error_code tag_invoke(deserialize_tag, simdjson_value &val, std::shared_ptr<T> &
 // Unique pointers
 ////////////////////////////////////////
 error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<bool> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -132924,7 +133714,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<bool> &out) no
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<int64_t> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -132937,7 +133729,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<int64_t> &out)
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<uint64_t> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -132950,7 +133744,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<uint64_t> &out
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<double> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -132963,7 +133759,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<double> &out) 
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<std::string_view> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -132980,7 +133778,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<std::string_vi
 // Shared pointers
 ////////////////////////////////////////
 error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<bool> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -132993,7 +133793,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<bool> &out) no
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<int64_t> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -133006,7 +133808,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<int64_t> &out)
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<uint64_t> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -133019,7 +133823,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<uint64_t> &out
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<double> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -133032,7 +133838,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<double> &out) 
 }
 
 error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<std::string_view> &out) noexcept {
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset();
     return SUCCESS;
   }
@@ -133054,7 +133862,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<std::string_vi
 ////////////////////////////////////////
 error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<std::string> &out) noexcept {
   // Check if the value is null
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset(); // Set to nullptr
     return SUCCESS;
   }
@@ -133070,7 +133880,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<std::string> &
 
 error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<std::string> &out) noexcept {
   // Check if the value is null
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset(); // Set to nullptr
     return SUCCESS;
   }
@@ -133086,7 +133898,9 @@ error_code tag_invoke(deserialize_tag, auto &val, std::shared_ptr<std::string> &
 
 error_code tag_invoke(deserialize_tag, auto &val, std::unique_ptr<int> &out) noexcept {
   // Check if the value is null
-  if (val.is_null()) {
+  bool is_null_value;
+  SIMDJSON_TRY( val.is_null().get(is_null_value) );
+  if (is_null_value) {
     out.reset(); // Set to nullptr
     return SUCCESS;
   }
@@ -138662,9 +139476,62 @@ simdjson_inline simdjson_result<lasx::ondemand::value_iterator>::simdjson_result
 /* amalgamation skipped (editor-only): #endif // SIMDJSON_CONDITIONAL_INCLUDE */
 
 namespace simdjson {
+
+
+#if SIMDJSON_SUPPORTS_CONCEPTS
+
 namespace lasx {
 namespace builder {
+  class string_builder;
+}}
 
+template <typename T, typename = void>
+struct has_custom_serialization : std::false_type {};
+
+inline constexpr struct serialize_tag {
+  template <typename T>
+    requires custom_deserializable<T>
+  constexpr void operator()(lasx::builder::string_builder& b, T& obj) const{
+    return tag_invoke(*this, b, obj);
+  }
+
+
+} serialize{};
+template <typename T>
+struct has_custom_serialization<T, std::void_t<
+    decltype(tag_invoke(serialize, std::declval<lasx::builder::string_builder&>(), std::declval<T&>()))
+>> : std::true_type {};
+
+template <typename T>
+constexpr bool require_custom_serialization = has_custom_serialization<T>::value;
+#else
+struct has_custom_serialization : std::false_type {};
+#endif // SIMDJSON_SUPPORTS_CONCEPTS
+
+namespace lasx {
+namespace builder {
+#if SIMDJSON_SUPPORTS_CONCEPTS
+// Helper to create string constants
+namespace internal {
+template <std::size_t N>
+struct fixed_string {
+    constexpr fixed_string(const char (&str)[N])  {
+        for (std::size_t i = 0; i < N; ++i) {
+            data[i] = str[i];
+        }
+    }
+    char data[N];
+    constexpr std::string_view view() const { return {data, N - 1}; }
+};
+template <std::size_t N>
+fixed_string(const char (&)[N]) -> fixed_string<N>;
+
+template <fixed_string str>
+struct string_constant {
+    static constexpr std::string_view value = str.view();
+};
+} // namespace internal
+#endif // SIMDJSON_SUPPORTS_CONCEPTS
 /**
  * A builder for JSON strings representing documents. This is a low-level
  * builder that is not meant to be used directly by end-users. Though it
@@ -138676,7 +139543,9 @@ namespace builder {
  */
 class string_builder {
 public:
-  simdjson_inline string_builder(size_t initial_capacity = 1024);
+  simdjson_inline string_builder(size_t initial_capacity = DEFAULT_INITIAL_CAPACITY);
+
+  static constexpr size_t DEFAULT_INITIAL_CAPACITY = 1024;
 
   /**
    * Append number (includes Booleans). Booleans are mapped to the strings
@@ -138685,7 +139554,7 @@ public:
    * represents the number.
    */
   template<typename number_type,
-         typename = typename std::enable_if<std::is_arithmetic<number_type>::value>::type>
+    typename = typename std::enable_if<std::is_arithmetic<number_type>::value>::type>
   simdjson_inline void append(number_type v) noexcept;
 
   /**
@@ -138714,7 +139583,10 @@ public:
    * There is no UTF-8 validation.
    */
   simdjson_inline void escape_and_append_with_quotes(std::string_view input)  noexcept;
-
+#if SIMDJSON_SUPPORTS_CONCEPTS
+  template<internal::fixed_string key>
+  simdjson_inline void escape_and_append_with_quotes()  noexcept;
+#endif
   /**
    * Append the character surrounded by double quotes, after escaping it.
    * There is no UTF-8 validation.
@@ -138768,12 +139640,20 @@ public:
    * The key is escaped and surrounded by double quotes.
    * The value is escaped if it is a string.
    */
-   template<typename key_type, typename value_type>
+  template<typename key_type, typename value_type>
   simdjson_inline void append_key_value(key_type key, value_type value) noexcept;
 #if SIMDJSON_SUPPORTS_CONCEPTS
+  template<internal::fixed_string key, typename value_type>
+  simdjson_inline void append_key_value(value_type value) noexcept;
+
   // Support for optional types (std::optional, etc.)
   template <concepts::optional_type T>
+  requires(!require_custom_serialization<T>)
   simdjson_inline void append(const T &opt);
+
+  template <typename T>
+  requires(require_custom_serialization<T>)
+  simdjson_inline void append(const T &val);
 
   // Support for string-like types
   template <typename T>
@@ -138884,7 +139764,7 @@ private:
 #if !SIMDJSON_STATIC_REFLECTION
 // fallback implementation until we have static reflection
 template <class Z>
-simdjson_result<std::string> to_json(const Z &z, size_t initial_capacity = 1024) {
+simdjson_warn_unused simdjson_result<std::string> to_json(const Z &z, size_t initial_capacity = simdjson::lasx::builder::string_builder::DEFAULT_INITIAL_CAPACITY) {
   simdjson::lasx::builder::string_builder b(initial_capacity);
   b.append(z);
   std::string_view s;
@@ -138892,8 +139772,20 @@ simdjson_result<std::string> to_json(const Z &z, size_t initial_capacity = 1024)
   if(e) { return e; }
   return std::string(s);
 }
+template <class Z>
+simdjson_warn_unused simdjson_error to_json(const Z &z, std::string &s, size_t initial_capacity = simdjson::lasx::builder::string_builder::DEFAULT_INITIAL_CAPACITY) {
+  simdjson::lasx::builder::string_builder b(initial_capacity);
+  b.append(z);
+  std::string_view sv;
+  auto e = b.view().get(sv);
+  if(e) { return e; }
+  s.assign(sv.data(), sv.size());
+  return simdjson::SUCCESS;
+}
 #endif
 
+#if SIMDJSON_SUPPORTS_CONCEPTS
+#endif // SIMDJSON_SUPPORTS_CONCEPTS
 
 } // namespace simdjson
 
@@ -139187,10 +140079,12 @@ simdjson_inline void string_builder::clear() noexcept {
 
 namespace internal {
 
-// We could specialize further for 32-bit integers.
-simdjson_really_inline int int_log2(uint32_t x) { return (63 - leading_zeroes(x | 1)); }
 
-simdjson_really_inline int fast_digit_count(uint32_t x) {
+template <typename number_type, typename = typename std::enable_if<
+                                    std::is_unsigned<number_type>::value>::type>
+simdjson_really_inline int int_log2(number_type x) { return 63 - leading_zeroes(uint64_t(x) | 1); }
+
+simdjson_really_inline int fast_digit_count_32(uint32_t x) {
   static uint64_t table[] = {
       4294967296,  8589934582,  8589934582,  8589934582,  12884901788,
       12884901788, 12884901788, 17179868184, 17179868184, 17179868184,
@@ -139202,9 +140096,8 @@ simdjson_really_inline int fast_digit_count(uint32_t x) {
   return uint32_t((x + table[int_log2(x)]) >> 32);
 }
 
-simdjson_really_inline int int_log2(uint64_t x) { return 63 - leading_zeroes(x | 1); }
 
-simdjson_really_inline int fast_digit_count(uint64_t x) {
+simdjson_really_inline int fast_digit_count_64(uint64_t x) {
   static uint64_t table[] = {9,
                              99,
                              999,
@@ -139235,7 +140128,11 @@ simdjson_really_inline size_t digit_count(number_type v) noexcept {
   static_assert(sizeof(number_type) == 8 || sizeof(number_type) == 4 ||
                     sizeof(number_type) == 2 || sizeof(number_type) == 1,
                 "We only support 8-bit, 16-bit, 32-bit and 64-bit numbers");
-  return fast_digit_count(v);
+  SIMDJSON_IF_CONSTEXPR(sizeof(number_type) <= 4) {
+    return fast_digit_count_32(static_cast<uint32_t>(v));
+  } else {
+    return fast_digit_count_64(static_cast<uint64_t>(v));
+  }
 }
 static const char decimal_table[200] = {
   0x30, 0x30, 0x30, 0x31, 0x30, 0x32, 0x30, 0x33, 0x30, 0x34, 0x30, 0x35,
@@ -139257,6 +140154,7 @@ static const char decimal_table[200] = {
   0x39, 0x36, 0x39, 0x37, 0x39, 0x38, 0x39, 0x39,
 };
 } // namespace internal
+
 
 template <typename number_type, typename>
 simdjson_inline void string_builder::append(number_type v) noexcept {
@@ -139373,6 +140271,12 @@ simdjson_inline void string_builder::escape_and_append_with_quotes(const char* i
   std::string_view cinput(input);
   escape_and_append_with_quotes(cinput);
 }
+#if SIMDJSON_SUPPORTS_CONCEPTS
+template<internal::fixed_string key>
+simdjson_inline void string_builder::escape_and_append_with_quotes()  noexcept {
+  escape_and_append_with_quotes(internal::string_constant<key>::value);
+}
+#endif
 
 simdjson_inline void string_builder::append_raw(const char *c) noexcept {
   size_t len = std::strlen(c);
@@ -139397,6 +140301,7 @@ simdjson_inline void string_builder::append_raw(const char *str,
 #if SIMDJSON_SUPPORTS_CONCEPTS
 // Support for optional types (std::optional, etc.)
 template <concepts::optional_type T>
+ requires(!require_custom_serialization<T>)
 simdjson_inline void string_builder::append(const T &opt) {
   if (opt) {
     append(*opt);
@@ -139404,9 +140309,17 @@ simdjson_inline void string_builder::append(const T &opt) {
     append_null();
   }
 }
+
+
+template <typename T>
+requires(require_custom_serialization<T>)
+simdjson_inline void string_builder::append(const T &val) {
+  serialize(*this, val);
+}
+
 template <typename T>
 requires(std::is_convertible<T, std::string_view>::value ||
-std::is_same<T, const char*>::value )
+std::is_same<T, const char*>::value)
 simdjson_inline void string_builder::append(const T &value) {
   escape_and_append_with_quotes(value);
 }
@@ -139552,6 +140465,25 @@ simdjson_inline void string_builder::append_key_value(key_type key, value_type v
   }
 }
 
+#if SIMDJSON_SUPPORTS_CONCEPTS
+template<internal::fixed_string key, typename value_type>
+simdjson_inline void string_builder::append_key_value(value_type value) noexcept {
+  escape_and_append_with_quotes<key>();
+  append_colon();
+  SIMDJSON_IF_CONSTEXPR(std::is_same<value_type, std::nullptr_t>::value) {
+    append_null();
+  } else SIMDJSON_IF_CONSTEXPR(std::is_same<value_type, char>::value) {
+    escape_and_append_with_quotes(value);
+  } else SIMDJSON_IF_CONSTEXPR(std::is_convertible<value_type, std::string_view>::value) {
+    escape_and_append_with_quotes(value);
+  } else SIMDJSON_IF_CONSTEXPR(std::is_same<value_type, const char*>::value) {
+    escape_and_append_with_quotes(value);
+  } else {
+    append(value);
+  }
+}
+#endif
+
 } // namespace builder
 } // namespace lasx
 } // namespace simdjson
@@ -139575,7 +140507,7 @@ simdjson_inline void string_builder::append_key_value(key_type key, value_type v
 
 #include <charconv>
 #include <cstring>
-#include <experimental/meta>
+#include <meta>
 #include <memory>
 #include <optional>
 #include <string_view>
@@ -139600,7 +140532,7 @@ concept container_but_not_string =
     !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char *>;
 
 template <class T>
-  requires(container_but_not_string<T>)
+  requires(container_but_not_string<T> && !require_custom_serialization<T>)
 constexpr void atom(string_builder &b, const T &t) {
   if (t.size() == 0) {
     b.append_raw("[]");
@@ -139625,6 +140557,7 @@ constexpr void atom(string_builder &b, const T &t) {
 }
 
 template <concepts::string_view_keyed_map T>
+  requires(!require_custom_serialization<T>)
 constexpr void atom(string_builder &b, const T &m) {
   if (m.empty()) {
     b.append_raw("{}");
@@ -139661,7 +140594,7 @@ template <class T>
            !std::is_same_v<T, std::string> &&
            !std::is_same_v<T, std::string_view> &&
            !std::is_same_v<T, const char*> &&
-           !std::is_same_v<T, char>)
+           !std::is_same_v<T, char> && !require_custom_serialization<T>)
 constexpr void atom(string_builder &b, const T &t) {
   int i = 0;
   b.append('{');
@@ -139679,6 +140612,7 @@ constexpr void atom(string_builder &b, const T &t) {
 
 // Support for optional types (std::optional, etc.)
 template <concepts::optional_type T>
+  requires(!require_custom_serialization<T>)
 constexpr void atom(string_builder &b, const T &opt) {
   if (opt) {
     atom(b, opt.value());
@@ -139689,6 +140623,7 @@ constexpr void atom(string_builder &b, const T &opt) {
 
 // Support for smart pointers (std::unique_ptr, std::shared_ptr, etc.)
 template <concepts::smart_pointer T>
+  requires(!require_custom_serialization<T>)
 constexpr void atom(string_builder &b, const T &ptr) {
   if (ptr) {
     atom(b, *ptr);
@@ -139699,7 +140634,7 @@ constexpr void atom(string_builder &b, const T &ptr) {
 
 // Support for enums - serialize as string representation using expand approach from P2996R12
 template <typename T>
-  requires(std::is_enum_v<T>)
+  requires(std::is_enum_v<T> && !require_custom_serialization<T>)
 void atom(string_builder &b, const T &e) {
 #if SIMDJSON_STATIC_REFLECTION
   constexpr auto enumerators = std::define_static_array(std::meta::enumerators_of(^^T));
@@ -139723,7 +140658,7 @@ template <concepts::appendable_containers T>
   requires(!container_but_not_string<T> && !concepts::string_view_keyed_map<T> &&
            !concepts::optional_type<T> && !concepts::smart_pointer<T> &&
            !std::is_same_v<T, std::string> &&
-           !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char*>)
+           !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char*> && !require_custom_serialization<T>)
 constexpr void atom(string_builder &b, const T &container) {
   if (container.empty()) {
     b.append_raw("[]");
@@ -139758,11 +140693,13 @@ void append(string_builder &b, const T &t) {
 }
 
 template <concepts::optional_type T>
+  requires(!require_custom_serialization<T>)
 void append(string_builder &b, const T &t) {
   atom(b, t);
 }
 
 template <concepts::smart_pointer T>
+  requires(!require_custom_serialization<T>)
 void append(string_builder &b, const T &t) {
   atom(b, t);
 }
@@ -139771,12 +140708,13 @@ template <concepts::appendable_containers T>
   requires(!container_but_not_string<T> && !concepts::string_view_keyed_map<T> &&
            !concepts::optional_type<T> && !concepts::smart_pointer<T> &&
            !std::is_same_v<T, std::string> &&
-           !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char*>)
+           !std::is_same_v<T, std::string_view> && !std::is_same_v<T, const char*> && !require_custom_serialization<T>)
 void append(string_builder &b, const T &t) {
   atom(b, t);
 }
 
 template <concepts::string_view_keyed_map T>
+  requires(!require_custom_serialization<T>)
 void append(string_builder &b, const T &t) {
   atom(b, t);
 }
@@ -139791,7 +140729,7 @@ template <class Z>
            !std::is_same_v<Z, std::string> &&
            !std::is_same_v<Z, std::string_view> &&
            !std::is_same_v<Z, const char*> &&
-           !std::is_same_v<Z, char>)
+           !std::is_same_v<Z, char> && !require_custom_serialization<Z>)
 void append(string_builder &b, const Z &z) {
   int i = 0;
   b.append('{');
@@ -139809,7 +140747,7 @@ void append(string_builder &b, const Z &z) {
 
 // works for container
 template <class Z>
-  requires(container_but_not_string<Z>)
+  requires(container_but_not_string<Z> && !require_custom_serialization<Z>)
 void append(string_builder &b, const Z &z) {
   if (z.size() == 0) {
     b.append_raw("[]");
@@ -139825,7 +140763,14 @@ void append(string_builder &b, const Z &z) {
 }
 
 template <class Z>
-simdjson_result<std::string> to_json_string(const Z &z, size_t initial_capacity = 1024) {
+  requires (require_custom_serialization<Z>)
+void append(string_builder &b, const Z &z) {
+  b.append(z);
+}
+
+
+template <class Z>
+simdjson_warn_unused simdjson_result<std::string> to_json_string(const Z &z, size_t initial_capacity = string_builder::DEFAULT_INITIAL_CAPACITY) {
   string_builder b(initial_capacity);
   append(b, z);
   std::string_view s;
@@ -139834,8 +140779,8 @@ simdjson_result<std::string> to_json_string(const Z &z, size_t initial_capacity 
 }
 
 template <class Z>
-simdjson_error to_json(const Z &z, std::string &s) {
-  string_builder b;
+simdjson_warn_unused simdjson_error to_json(const Z &z, std::string &s, size_t initial_capacity = string_builder::DEFAULT_INITIAL_CAPACITY) {
+  string_builder b(initial_capacity);
   append(b, z);
   std::string_view view;
   if(auto e = b.view().get(view); e) { return e; }
@@ -139852,8 +140797,12 @@ string_builder& operator<<(string_builder& b, const Z& z) {
 } // namespace lasx
 // Alias the function template to 'to' in the global namespace
 template <class Z>
-simdjson_result<std::string> to_json(const Z &z, size_t initial_capacity = 1024) {
+simdjson_warn_unused simdjson_result<std::string> to_json(const Z &z, size_t initial_capacity = lasx::builder::string_builder::DEFAULT_INITIAL_CAPACITY) {
   return lasx::builder::to_json_string(z, initial_capacity);
+}
+template <class Z>
+simdjson_warn_unused simdjson_error to_json(const Z &z, std::string &s, size_t initial_capacity = lasx::builder::string_builder::DEFAULT_INITIAL_CAPACITY) {
+  return lasx::builder::to_json(z, s, initial_capacity);
 }
 } // namespace simdjson
 
@@ -139978,16 +140927,19 @@ public:
 
 	template <typename T>
 	simdjson_warn_unused simdjson_inline simdjson_result<T> result() noexcept(is_nothrow_gettable<T>);
+	template <typename T>
+	simdjson_warn_unused simdjson_inline error_code get(T &value) && noexcept(is_nothrow_gettable<T>);
+
 
 	simdjson_warn_unused simdjson_inline simdjson_result<ondemand::array> array() noexcept;
 	simdjson_warn_unused simdjson_inline simdjson_result<ondemand::object> object() noexcept;
 	simdjson_warn_unused simdjson_inline simdjson_result<ondemand::number> number() noexcept;
 
-	template <typename T>
-	simdjson_warn_unused simdjson_inline explicit(false) operator simdjson_result<T>() noexcept(is_nothrow_gettable<T>);
 
+#if SIMDJSON_EXCEPTIONS
 	template <typename T>
 	simdjson_warn_unused simdjson_inline explicit(false) operator T() noexcept(false);
+#endif // SIMDJSON_EXCEPTIONS
 
 	template <typename T>
 	simdjson_warn_unused simdjson_inline std::optional<T> optional() noexcept(is_nothrow_gettable<T>);
@@ -140004,7 +140956,14 @@ struct to_adaptor {
 	T operator()(simdjson_result<ondemand::value> &val) const noexcept;
 	auto operator()(padded_string_view const str) const noexcept;
 	auto operator()(ondemand::parser &parser, padded_string_view const str) const noexcept;
+	// The std::string is padded with reserve to ensure there is enough space for padding.
+	// Some sanitizers may not like this, so you can use simdjson::pad instead.
+	// simdjson::from(simdjson::pad(str))
+	auto operator()(std::string str) const noexcept;
+	auto operator()(ondemand::parser &parser, std::string str) const noexcept;
 };
+// deduction guide
+auto_parser(padded_string_view const str) -> auto_parser<ondemand::parser*>;
 } // namespace internal
 } // namespace convert
 
@@ -140105,6 +141064,12 @@ inline simdjson_result<T> auto_parser<parser_type>::result() noexcept(is_nothrow
 }
 
 template <typename parser_type>
+template <typename T>
+simdjson_warn_unused simdjson_inline error_code auto_parser<parser_type>::get(T &value) && noexcept(is_nothrow_gettable<T>) {
+  return result<T>().get(value);
+}
+
+template <typename parser_type>
 inline simdjson_result<ondemand::array> auto_parser<parser_type>::array() noexcept {
   return result<ondemand::array>();
 }
@@ -140119,12 +141084,7 @@ inline simdjson_result<ondemand::number> auto_parser<parser_type>::number() noex
   return result<ondemand::number>();
 }
 
-template <typename parser_type>
-template <typename T>
-inline auto_parser<parser_type>::operator simdjson_result<T>() noexcept(is_nothrow_gettable<T>) {
-  return result<T>();
-}
-
+#if SIMDJSON_EXCEPTIONS
 template <typename parser_type>
 template <typename T>
 inline auto_parser<parser_type>::operator T() noexcept(false) {
@@ -140133,6 +141093,7 @@ inline auto_parser<parser_type>::operator T() noexcept(false) {
   }
   return m_doc.get<T>();
 }
+#endif // SIMDJSON_EXCEPTIONS
 
 template <typename parser_type>
 template <typename T>
@@ -140155,12 +141116,22 @@ inline T to_adaptor<T>::operator()(simdjson_result<ondemand::value> &val) const 
 
 template <typename T>
 inline auto to_adaptor<T>::operator()(padded_string_view const str) const noexcept {
-  return auto_parser{str};
+  return auto_parser<ondemand::parser *>{str};
 }
 
 template <typename T>
 inline auto to_adaptor<T>::operator()(ondemand::parser &parser, padded_string_view const str) const noexcept {
   return auto_parser<ondemand::parser *>{parser, str};
+}
+
+template <typename T>
+inline auto to_adaptor<T>::operator()(std::string str) const noexcept {
+  return auto_parser<ondemand::parser *>{pad_with_reserve(str)};
+}
+
+template <typename T>
+inline auto to_adaptor<T>::operator()(ondemand::parser &parser, std::string str) const noexcept {
+  return auto_parser<ondemand::parser *>{parser, pad_with_reserve(str)};
 }
 } // namespace internal
 } // namespace convert
