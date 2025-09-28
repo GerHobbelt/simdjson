@@ -1,4 +1,4 @@
-/* auto-generated on 2025-08-19 20:53:13 -0400. version 4.0.0 Do not edit! */
+/* auto-generated on 2025-09-09 18:44:21 -0400. version 4.0.0 Do not edit! */
 /* including simdjson.h:  */
 /* begin file simdjson.h */
 #ifndef SIMDJSON_H
@@ -213,6 +213,22 @@ using std::size_t;
 #define SIMDJSON_IS_ARM64 1
 #elif defined(__riscv) && __riscv_xlen == 64
 #define SIMDJSON_IS_RISCV64 1
+  #if __riscv_v_intrinsic >= 11000
+    #define SIMDJSON_HAS_RVV_INTRINSICS 1
+  #endif
+
+  #define SIMDJSON_HAS_ZVBB_INTRINSICS                                          \
+    0 // there is currently no way to detect this
+
+  #if SIMDJSON_HAS_RVV_INTRINSICS && __riscv_vector &&                          \
+      __riscv_v_min_vlen >= 128 && __riscv_v_elen >= 64
+    // RISC-V V extension
+    #define SIMDJSON_IS_RVV 1
+    #if SIMDJSON_HAS_ZVBB_INTRINSICS && __riscv_zvbb >= 1000000
+      // RISC-V Vector Basic Bit-manipulation
+      #define SIMDJSON_IS_ZVBB 1
+    #endif
+  #endif
 #elif defined(__loongarch_lp64)
 #define SIMDJSON_IS_LOONGARCH64 1
 #elif defined(__PPC64__) || defined(_M_PPC64)
@@ -2637,6 +2653,10 @@ namespace internal {
 /**
  * The result of a simdjson operation that could fail.
  *
+ * IMPORTANT: For the ondemand API, we use implementation_simdjson_result_base<T> as a base class
+ * to avoid some compilation issue. Thus, if you modify this class, please ensure that the ondemand
+ * implementation_simdjson_result_base<T> is also modified.
+ *
  * Gives the option of reading error codes, or throwing an exception by casting to the desired result.
  *
  * This is a base class for implementations that want to add functions to the result type for
@@ -2697,7 +2717,26 @@ struct simdjson_result_base : protected std::pair<T, error_code> {
    */
   simdjson_inline error_code error() const noexcept;
 
+  /**
+   * Whether there is a value.
+   */
+  simdjson_inline bool has_value() const noexcept;
 #if SIMDJSON_EXCEPTIONS
+
+  /**
+   * Dereference operator to access the contained value.
+   *
+   * @throw simdjson_error if there was an error.
+   */
+  simdjson_inline T& operator*() &  noexcept(false);
+  simdjson_inline T&& operator*() &&  noexcept(false);
+  /**
+   * Arrow operator to access members of the contained value.
+   *
+   * @throw simdjson_error if there was an error.
+   */
+  simdjson_inline T* operator->() noexcept(false);
+  simdjson_inline const T* operator->() const noexcept(false);
 
   /**
    * Get the result value.
@@ -2782,6 +2821,7 @@ struct simdjson_result_base : protected std::pair<T, error_code> {
  */
 template<typename T>
 struct simdjson_result : public internal::simdjson_result_base<T> {
+
   /**
    * @private Create a new empty result with error = UNINITIALIZED.
    */
@@ -2835,8 +2875,11 @@ struct simdjson_result : public internal::simdjson_result_base<T> {
    */
   simdjson_inline error_code error() const noexcept;
 
-#if SIMDJSON_EXCEPTIONS
 
+
+#if SIMDJSON_EXCEPTIONS
+  using internal::simdjson_result_base<T>::operator*;
+  using internal::simdjson_result_base<T>::operator->;
   /**
    * Get the result value.
    *
@@ -3038,6 +3081,62 @@ concept optional_type = requires(std::remove_cvref_t<T> obj) {
 #endif // SIMDJSON_SUPPORTS_CONCEPTS
 #endif // SIMDJSON_CONCEPTS_H
 /* end file simdjson/concepts.h */
+/* including simdjson/constevalutil.h: #include "simdjson/constevalutil.h" */
+/* begin file simdjson/constevalutil.h */
+#ifndef SIMDJSON_CONSTEVALUTIL_H
+#define SIMDJSON_CONSTEVALUTIL_H
+
+#include <string>
+#include <string_view>
+#include <array>
+
+#if SIMDJSON_CONSTEVAL
+namespace simdjson {
+namespace constevalutil {
+
+constexpr static std::array<uint8_t, 256> json_quotable_character = {
+  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+  1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+constexpr static std::array<std::string_view, 32> control_chars = {
+    "\\u0000", "\\u0001", "\\u0002", "\\u0003", "\\u0004", "\\u0005", "\\u0006",
+    "\\u0007", "\\b", "\\t",     "\\n",     "\\u000b", "\\f",     "\\r",
+    "\\u000e", "\\u000f", "\\u0010", "\\u0011", "\\u0012", "\\u0013", "\\u0014",
+    "\\u0015", "\\u0016", "\\u0017", "\\u0018", "\\u0019", "\\u001a", "\\u001b",
+    "\\u001c", "\\u001d", "\\u001e", "\\u001f"};
+// unoptimized, meant for compile-time execution
+consteval std::string consteval_to_quoted_escaped(std::string_view input) {
+  std::string out = "\"";
+  for (char c : input) {
+    if (json_quotable_character[uint8_t(c)]) {
+      if (c == '"') {
+        out.append("\\\"");
+      } else if (c == '\\') {
+        out.append("\\\\");
+      } else {
+        std::string_view v = control_chars[uint8_t(c)];
+        out.append(v);
+      }
+    } else {
+      out.push_back(c);
+    }
+  }
+  out.push_back('"');
+  return out;
+}
+} // namespace constevalutil
+} // namespace simdjson
+#endif  // SIMDJSON_CONSTEVAL
+#endif // SIMDJSON_CONSTEVALUTIL_H
+/* end file simdjson/constevalutil.h */
 
 /**
  * @brief The top level simdjson namespace, containing everything the library provides.
@@ -3161,7 +3260,37 @@ simdjson_inline error_code simdjson_result_base<T>::error() const noexcept {
   return this->second;
 }
 
+
+template<typename T>
+simdjson_inline bool simdjson_result_base<T>::has_value() const noexcept {
+  return this->error() == SUCCESS;
+}
+
 #if SIMDJSON_EXCEPTIONS
+
+
+template<typename T>
+simdjson_inline T& simdjson_result_base<T>::operator*() &  noexcept(false) {
+  return this->value();
+}
+
+template<typename T>
+simdjson_inline T&& simdjson_result_base<T>::operator*() &&  noexcept(false) {
+  return std::forward<internal::simdjson_result_base<T>>(*this).value();
+}
+
+template<typename T>
+simdjson_inline T* simdjson_result_base<T>::operator->() noexcept(false) {
+  if (this->error()) { throw simdjson_error(this->error()); }
+  return &this->first;
+}
+
+
+template<typename T>
+simdjson_inline const T* simdjson_result_base<T>::operator->() const noexcept(false) {
+  if (this->error()) { throw simdjson_error(this->error()); }
+  return &this->first;
+}
 
 template<typename T>
 simdjson_inline T& simdjson_result_base<T>::value() & noexcept(false) {
@@ -3186,6 +3315,7 @@ simdjson_inline simdjson_result_base<T>::operator T&&() && noexcept(false) {
 }
 
 #endif // SIMDJSON_EXCEPTIONS
+
 
 template<typename T>
 simdjson_inline const T& simdjson_result_base<T>::value_unsafe() const& noexcept {
@@ -12049,6 +12179,11 @@ struct implementation_simdjson_result_base {
    */
   simdjson_inline error_code error() const noexcept;
 
+  /**
+   * Whether there is a value.
+   */
+  simdjson_inline bool has_value() const noexcept;
+
 #if SIMDJSON_EXCEPTIONS
 
   /**
@@ -12056,6 +12191,16 @@ struct implementation_simdjson_result_base {
    *
    * @throw simdjson_error if there was an error.
    */
+  simdjson_inline T& operator*() &  noexcept(false);
+  simdjson_inline T&& operator*() &&  noexcept(false);
+  /**
+   * Arrow operator to access members of the contained value.
+   *
+   * @throw simdjson_error if there was an error.
+   */
+  simdjson_inline T* operator->() noexcept(false);
+  simdjson_inline const T* operator->() const noexcept(false);
+
   simdjson_inline T& value() & noexcept(false);
 
   /**
@@ -13474,7 +13619,36 @@ simdjson_inline error_code implementation_simdjson_result_base<T>::error() const
   return this->second;
 }
 
+
+template<typename T>
+simdjson_inline bool implementation_simdjson_result_base<T>::has_value() const noexcept {
+  return this->error() == SUCCESS;
+}
+
 #if SIMDJSON_EXCEPTIONS
+
+template<typename T>
+simdjson_inline T& implementation_simdjson_result_base<T>::operator*() &  noexcept(false) {
+  return this->value();
+}
+
+template<typename T>
+simdjson_inline T&& implementation_simdjson_result_base<T>::operator*() &&  noexcept(false) {
+  return std::forward<implementation_simdjson_result_base<T>>(*this).value();
+}
+
+template<typename T>
+simdjson_inline T* implementation_simdjson_result_base<T>::operator->() noexcept(false) {
+  if (this->error()) { throw simdjson_error(this->error()); }
+  return &this->first;
+}
+
+
+template<typename T>
+simdjson_inline const T* implementation_simdjson_result_base<T>::operator->() const noexcept(false) {
+  if (this->error()) { throw simdjson_error(this->error()); }
+  return &this->first;
+}
 
 template<typename T>
 simdjson_inline T& implementation_simdjson_result_base<T>::value() & noexcept(false) {
@@ -14191,6 +14365,11 @@ struct implementation_simdjson_result_base {
    */
   simdjson_inline error_code error() const noexcept;
 
+  /**
+   * Whether there is a value.
+   */
+  simdjson_inline bool has_value() const noexcept;
+
 #if SIMDJSON_EXCEPTIONS
 
   /**
@@ -14198,6 +14377,16 @@ struct implementation_simdjson_result_base {
    *
    * @throw simdjson_error if there was an error.
    */
+  simdjson_inline T& operator*() &  noexcept(false);
+  simdjson_inline T&& operator*() &&  noexcept(false);
+  /**
+   * Arrow operator to access members of the contained value.
+   *
+   * @throw simdjson_error if there was an error.
+   */
+  simdjson_inline T* operator->() noexcept(false);
+  simdjson_inline const T* operator->() const noexcept(false);
+
   simdjson_inline T& value() & noexcept(false);
 
   /**
@@ -15616,7 +15805,36 @@ simdjson_inline error_code implementation_simdjson_result_base<T>::error() const
   return this->second;
 }
 
+
+template<typename T>
+simdjson_inline bool implementation_simdjson_result_base<T>::has_value() const noexcept {
+  return this->error() == SUCCESS;
+}
+
 #if SIMDJSON_EXCEPTIONS
+
+template<typename T>
+simdjson_inline T& implementation_simdjson_result_base<T>::operator*() &  noexcept(false) {
+  return this->value();
+}
+
+template<typename T>
+simdjson_inline T&& implementation_simdjson_result_base<T>::operator*() &&  noexcept(false) {
+  return std::forward<implementation_simdjson_result_base<T>>(*this).value();
+}
+
+template<typename T>
+simdjson_inline T* implementation_simdjson_result_base<T>::operator->() noexcept(false) {
+  if (this->error()) { throw simdjson_error(this->error()); }
+  return &this->first;
+}
+
+
+template<typename T>
+simdjson_inline const T* implementation_simdjson_result_base<T>::operator->() const noexcept(false) {
+  if (this->error()) { throw simdjson_error(this->error()); }
+  return &this->first;
+}
 
 template<typename T>
 simdjson_inline T& implementation_simdjson_result_base<T>::value() & noexcept(false) {
@@ -16832,6 +17050,11 @@ struct implementation_simdjson_result_base {
    */
   simdjson_inline error_code error() const noexcept;
 
+  /**
+   * Whether there is a value.
+   */
+  simdjson_inline bool has_value() const noexcept;
+
 #if SIMDJSON_EXCEPTIONS
 
   /**
@@ -16839,6 +17062,16 @@ struct implementation_simdjson_result_base {
    *
    * @throw simdjson_error if there was an error.
    */
+  simdjson_inline T& operator*() &  noexcept(false);
+  simdjson_inline T&& operator*() &&  noexcept(false);
+  /**
+   * Arrow operator to access members of the contained value.
+   *
+   * @throw simdjson_error if there was an error.
+   */
+  simdjson_inline T* operator->() noexcept(false);
+  simdjson_inline const T* operator->() const noexcept(false);
+
   simdjson_inline T& value() & noexcept(false);
 
   /**
@@ -18257,7 +18490,36 @@ simdjson_inline error_code implementation_simdjson_result_base<T>::error() const
   return this->second;
 }
 
+
+template<typename T>
+simdjson_inline bool implementation_simdjson_result_base<T>::has_value() const noexcept {
+  return this->error() == SUCCESS;
+}
+
 #if SIMDJSON_EXCEPTIONS
+
+template<typename T>
+simdjson_inline T& implementation_simdjson_result_base<T>::operator*() &  noexcept(false) {
+  return this->value();
+}
+
+template<typename T>
+simdjson_inline T&& implementation_simdjson_result_base<T>::operator*() &&  noexcept(false) {
+  return std::forward<implementation_simdjson_result_base<T>>(*this).value();
+}
+
+template<typename T>
+simdjson_inline T* implementation_simdjson_result_base<T>::operator->() noexcept(false) {
+  if (this->error()) { throw simdjson_error(this->error()); }
+  return &this->first;
+}
+
+
+template<typename T>
+simdjson_inline const T* implementation_simdjson_result_base<T>::operator->() const noexcept(false) {
+  if (this->error()) { throw simdjson_error(this->error()); }
+  return &this->first;
+}
 
 template<typename T>
 simdjson_inline T& implementation_simdjson_result_base<T>::value() & noexcept(false) {
@@ -19473,6 +19735,11 @@ struct implementation_simdjson_result_base {
    */
   simdjson_inline error_code error() const noexcept;
 
+  /**
+   * Whether there is a value.
+   */
+  simdjson_inline bool has_value() const noexcept;
+
 #if SIMDJSON_EXCEPTIONS
 
   /**
@@ -19480,6 +19747,16 @@ struct implementation_simdjson_result_base {
    *
    * @throw simdjson_error if there was an error.
    */
+  simdjson_inline T& operator*() &  noexcept(false);
+  simdjson_inline T&& operator*() &&  noexcept(false);
+  /**
+   * Arrow operator to access members of the contained value.
+   *
+   * @throw simdjson_error if there was an error.
+   */
+  simdjson_inline T* operator->() noexcept(false);
+  simdjson_inline const T* operator->() const noexcept(false);
+
   simdjson_inline T& value() & noexcept(false);
 
   /**
@@ -20898,7 +21175,36 @@ simdjson_inline error_code implementation_simdjson_result_base<T>::error() const
   return this->second;
 }
 
+
+template<typename T>
+simdjson_inline bool implementation_simdjson_result_base<T>::has_value() const noexcept {
+  return this->error() == SUCCESS;
+}
+
 #if SIMDJSON_EXCEPTIONS
+
+template<typename T>
+simdjson_inline T& implementation_simdjson_result_base<T>::operator*() &  noexcept(false) {
+  return this->value();
+}
+
+template<typename T>
+simdjson_inline T&& implementation_simdjson_result_base<T>::operator*() &&  noexcept(false) {
+  return std::forward<implementation_simdjson_result_base<T>>(*this).value();
+}
+
+template<typename T>
+simdjson_inline T* implementation_simdjson_result_base<T>::operator->() noexcept(false) {
+  if (this->error()) { throw simdjson_error(this->error()); }
+  return &this->first;
+}
+
+
+template<typename T>
+simdjson_inline const T* implementation_simdjson_result_base<T>::operator->() const noexcept(false) {
+  if (this->error()) { throw simdjson_error(this->error()); }
+  return &this->first;
+}
 
 template<typename T>
 simdjson_inline T& implementation_simdjson_result_base<T>::value() & noexcept(false) {
@@ -22229,6 +22535,11 @@ struct implementation_simdjson_result_base {
    */
   simdjson_inline error_code error() const noexcept;
 
+  /**
+   * Whether there is a value.
+   */
+  simdjson_inline bool has_value() const noexcept;
+
 #if SIMDJSON_EXCEPTIONS
 
   /**
@@ -22236,6 +22547,16 @@ struct implementation_simdjson_result_base {
    *
    * @throw simdjson_error if there was an error.
    */
+  simdjson_inline T& operator*() &  noexcept(false);
+  simdjson_inline T&& operator*() &&  noexcept(false);
+  /**
+   * Arrow operator to access members of the contained value.
+   *
+   * @throw simdjson_error if there was an error.
+   */
+  simdjson_inline T* operator->() noexcept(false);
+  simdjson_inline const T* operator->() const noexcept(false);
+
   simdjson_inline T& value() & noexcept(false);
 
   /**
@@ -23654,7 +23975,36 @@ simdjson_inline error_code implementation_simdjson_result_base<T>::error() const
   return this->second;
 }
 
+
+template<typename T>
+simdjson_inline bool implementation_simdjson_result_base<T>::has_value() const noexcept {
+  return this->error() == SUCCESS;
+}
+
 #if SIMDJSON_EXCEPTIONS
+
+template<typename T>
+simdjson_inline T& implementation_simdjson_result_base<T>::operator*() &  noexcept(false) {
+  return this->value();
+}
+
+template<typename T>
+simdjson_inline T&& implementation_simdjson_result_base<T>::operator*() &&  noexcept(false) {
+  return std::forward<implementation_simdjson_result_base<T>>(*this).value();
+}
+
+template<typename T>
+simdjson_inline T* implementation_simdjson_result_base<T>::operator->() noexcept(false) {
+  if (this->error()) { throw simdjson_error(this->error()); }
+  return &this->first;
+}
+
+
+template<typename T>
+simdjson_inline const T* implementation_simdjson_result_base<T>::operator->() const noexcept(false) {
+  if (this->error()) { throw simdjson_error(this->error()); }
+  return &this->first;
+}
 
 template<typename T>
 simdjson_inline T& implementation_simdjson_result_base<T>::value() & noexcept(false) {
@@ -25301,6 +25651,11 @@ struct implementation_simdjson_result_base {
    */
   simdjson_inline error_code error() const noexcept;
 
+  /**
+   * Whether there is a value.
+   */
+  simdjson_inline bool has_value() const noexcept;
+
 #if SIMDJSON_EXCEPTIONS
 
   /**
@@ -25308,6 +25663,16 @@ struct implementation_simdjson_result_base {
    *
    * @throw simdjson_error if there was an error.
    */
+  simdjson_inline T& operator*() &  noexcept(false);
+  simdjson_inline T&& operator*() &&  noexcept(false);
+  /**
+   * Arrow operator to access members of the contained value.
+   *
+   * @throw simdjson_error if there was an error.
+   */
+  simdjson_inline T* operator->() noexcept(false);
+  simdjson_inline const T* operator->() const noexcept(false);
+
   simdjson_inline T& value() & noexcept(false);
 
   /**
@@ -26726,7 +27091,36 @@ simdjson_inline error_code implementation_simdjson_result_base<T>::error() const
   return this->second;
 }
 
+
+template<typename T>
+simdjson_inline bool implementation_simdjson_result_base<T>::has_value() const noexcept {
+  return this->error() == SUCCESS;
+}
+
 #if SIMDJSON_EXCEPTIONS
+
+template<typename T>
+simdjson_inline T& implementation_simdjson_result_base<T>::operator*() &  noexcept(false) {
+  return this->value();
+}
+
+template<typename T>
+simdjson_inline T&& implementation_simdjson_result_base<T>::operator*() &&  noexcept(false) {
+  return std::forward<implementation_simdjson_result_base<T>>(*this).value();
+}
+
+template<typename T>
+simdjson_inline T* implementation_simdjson_result_base<T>::operator->() noexcept(false) {
+  if (this->error()) { throw simdjson_error(this->error()); }
+  return &this->first;
+}
+
+
+template<typename T>
+simdjson_inline const T* implementation_simdjson_result_base<T>::operator->() const noexcept(false) {
+  if (this->error()) { throw simdjson_error(this->error()); }
+  return &this->first;
+}
 
 template<typename T>
 simdjson_inline T& implementation_simdjson_result_base<T>::value() & noexcept(false) {
@@ -27850,6 +28244,11 @@ struct implementation_simdjson_result_base {
    */
   simdjson_inline error_code error() const noexcept;
 
+  /**
+   * Whether there is a value.
+   */
+  simdjson_inline bool has_value() const noexcept;
+
 #if SIMDJSON_EXCEPTIONS
 
   /**
@@ -27857,6 +28256,16 @@ struct implementation_simdjson_result_base {
    *
    * @throw simdjson_error if there was an error.
    */
+  simdjson_inline T& operator*() &  noexcept(false);
+  simdjson_inline T&& operator*() &&  noexcept(false);
+  /**
+   * Arrow operator to access members of the contained value.
+   *
+   * @throw simdjson_error if there was an error.
+   */
+  simdjson_inline T* operator->() noexcept(false);
+  simdjson_inline const T* operator->() const noexcept(false);
+
   simdjson_inline T& value() & noexcept(false);
 
   /**
@@ -29275,7 +29684,36 @@ simdjson_inline error_code implementation_simdjson_result_base<T>::error() const
   return this->second;
 }
 
+
+template<typename T>
+simdjson_inline bool implementation_simdjson_result_base<T>::has_value() const noexcept {
+  return this->error() == SUCCESS;
+}
+
 #if SIMDJSON_EXCEPTIONS
+
+template<typename T>
+simdjson_inline T& implementation_simdjson_result_base<T>::operator*() &  noexcept(false) {
+  return this->value();
+}
+
+template<typename T>
+simdjson_inline T&& implementation_simdjson_result_base<T>::operator*() &&  noexcept(false) {
+  return std::forward<implementation_simdjson_result_base<T>>(*this).value();
+}
+
+template<typename T>
+simdjson_inline T* implementation_simdjson_result_base<T>::operator->() noexcept(false) {
+  if (this->error()) { throw simdjson_error(this->error()); }
+  return &this->first;
+}
+
+
+template<typename T>
+simdjson_inline const T* implementation_simdjson_result_base<T>::operator->() const noexcept(false) {
+  if (this->error()) { throw simdjson_error(this->error()); }
+  return &this->first;
+}
 
 template<typename T>
 simdjson_inline T& implementation_simdjson_result_base<T>::value() & noexcept(false) {
@@ -30412,6 +30850,11 @@ struct implementation_simdjson_result_base {
    */
   simdjson_inline error_code error() const noexcept;
 
+  /**
+   * Whether there is a value.
+   */
+  simdjson_inline bool has_value() const noexcept;
+
 #if SIMDJSON_EXCEPTIONS
 
   /**
@@ -30419,6 +30862,16 @@ struct implementation_simdjson_result_base {
    *
    * @throw simdjson_error if there was an error.
    */
+  simdjson_inline T& operator*() &  noexcept(false);
+  simdjson_inline T&& operator*() &&  noexcept(false);
+  /**
+   * Arrow operator to access members of the contained value.
+   *
+   * @throw simdjson_error if there was an error.
+   */
+  simdjson_inline T* operator->() noexcept(false);
+  simdjson_inline const T* operator->() const noexcept(false);
+
   simdjson_inline T& value() & noexcept(false);
 
   /**
@@ -31837,7 +32290,36 @@ simdjson_inline error_code implementation_simdjson_result_base<T>::error() const
   return this->second;
 }
 
+
+template<typename T>
+simdjson_inline bool implementation_simdjson_result_base<T>::has_value() const noexcept {
+  return this->error() == SUCCESS;
+}
+
 #if SIMDJSON_EXCEPTIONS
+
+template<typename T>
+simdjson_inline T& implementation_simdjson_result_base<T>::operator*() &  noexcept(false) {
+  return this->value();
+}
+
+template<typename T>
+simdjson_inline T&& implementation_simdjson_result_base<T>::operator*() &&  noexcept(false) {
+  return std::forward<implementation_simdjson_result_base<T>>(*this).value();
+}
+
+template<typename T>
+simdjson_inline T* implementation_simdjson_result_base<T>::operator->() noexcept(false) {
+  if (this->error()) { throw simdjson_error(this->error()); }
+  return &this->first;
+}
+
+
+template<typename T>
+simdjson_inline const T* implementation_simdjson_result_base<T>::operator->() const noexcept(false) {
+  if (this->error()) { throw simdjson_error(this->error()); }
+  return &this->first;
+}
 
 template<typename T>
 simdjson_inline T& implementation_simdjson_result_base<T>::value() & noexcept(false) {
@@ -35177,6 +35659,12 @@ public:
   simdjson_inline const char * raw() const noexcept;
 
   /**
+   * Get the character at index i. This is unchecked.
+   * [0] when the string is of length 0 returns the final quote (").
+   */
+  simdjson_inline char operator[](size_t i) const noexcept;
+
+  /**
    * This compares the current instance to the std::string_view target: returns true if
    * they are byte-by-byte equal (no escaping is done) on target.size() characters,
    * and if the raw_json_string instance has a quote character at byte index target.size().
@@ -35315,10 +35803,10 @@ public:
   simdjson_inline ~simdjson_result() noexcept = default; ///< @private
 
   simdjson_inline simdjson_result<const char *> raw() const noexcept;
+  simdjson_inline char operator[](size_t) const noexcept;
   simdjson_inline simdjson_warn_unused simdjson_result<std::string_view> unescape(arm64::ondemand::json_iterator &iter, bool allow_replacement) const noexcept;
   simdjson_inline simdjson_warn_unused simdjson_result<std::string_view> unescape_wobbly(arm64::ondemand::json_iterator &iter) const noexcept;
 };
-
 } // namespace simdjson
 
 #endif // SIMDJSON_GENERIC_ONDEMAND_RAW_JSON_STRING_H
@@ -37080,6 +37568,9 @@ public:
   template<typename T> simdjson_inline error_code get(T &out) & noexcept;
   template<typename T> simdjson_inline error_code get(T &out) && noexcept;
 #if SIMDJSON_EXCEPTIONS
+
+  using arm64::implementation_simdjson_result_base<arm64::ondemand::document>::operator*;
+  using arm64::implementation_simdjson_result_base<arm64::ondemand::document>::operator->;
   template <class T, typename std::enable_if<std::is_same<T, arm64::ondemand::document>::value == false>::type>
   explicit simdjson_inline operator T() noexcept(false);
   simdjson_inline operator arm64::ondemand::array() & noexcept(false);
@@ -38462,32 +38953,6 @@ constexpr bool user_defined_type = (std::is_class_v<T>
 !concepts::appendable_containers<T> && !require_custom_serialization<T>);
 
 
-// workaround from
-// https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2024/p2996r10.html#back-and-forth
-// for missing expansion statements
-namespace __impl {
-  template<auto... vals>
-  struct replicator_type {
-    template<typename F>
-      constexpr void operator>>(F body) const {
-        (body.template operator()<vals>(), ...);
-      }
-  };
-
-  template<auto... vals>
-  replicator_type<vals...> replicator = {};
-}
-
-template<typename R>
-consteval auto expand(R range) {
-  std::vector<std::meta::info> args;
-  for (auto r : range) {
-    args.push_back(reflect_constant(r));
-  }
-  return substitute(^^__impl::replicator, args);
-}
-// end of workaround
-
 template <typename T, typename ValT>
   requires(user_defined_type<T> && std::is_class_v<T>)
 error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept {
@@ -38498,9 +38963,8 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept {
     SIMDJSON_TRY(val.get_object().get(obj));
   }
   error_code e = simdjson::SUCCESS;
-
-  [:expand(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked())):] >> [&]<auto mem>() {
-    if constexpr (!std::meta::is_const(mem) && std::meta::is_public(mem)) {
+  template for (constexpr auto mem : std::define_static_array(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked()))) {
+        if constexpr (!std::meta::is_const(mem) && std::meta::is_public(mem)) {
       constexpr std::string_view key = std::define_static_string(std::meta::identifier_of(mem));
       // Note: removed static assert as optional types are now handled generically
       // as long we are succesful or the field is not found, we continue
@@ -38519,16 +38983,15 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept {
 #if SIMDJSON_STATIC_REFLECTION
   std::string_view str;
   SIMDJSON_TRY(val.get_string().get(str));
-
-  bool found = false;
-  [:expand(std::meta::enumerators_of(^^T)):] >> [&]<auto enum_val>{
-    if (!found && str == std::meta::identifier_of(enum_val)) {
+  constexpr auto enumerators = std::define_static_array(std::meta::enumerators_of(^^T));
+  template for (constexpr auto enum_val : enumerators) {
+    if (str == std::meta::identifier_of(enum_val)) {
       out = [:enum_val:];
-      found = true;
+      return SUCCESS;
     }
   };
 
-  return found ? SUCCESS : INCORRECT_TYPE;
+  return INCORRECT_TYPE;
 #else
   // Fallback: deserialize as integer if reflection not available
   std::underlying_type_t<T> int_val;
@@ -42675,8 +43138,13 @@ namespace ondemand {
 
 simdjson_inline raw_json_string::raw_json_string(const uint8_t * _buf) noexcept : buf{_buf} {}
 
-simdjson_inline const char * raw_json_string::raw() const noexcept { return reinterpret_cast<const char *>(buf); }
+simdjson_inline const char * raw_json_string::raw() const noexcept {
+  return reinterpret_cast<const char *>(buf);
+}
 
+simdjson_inline char raw_json_string::operator[](size_t i) const noexcept {
+  return reinterpret_cast<const char *>(buf)[i];
+}
 
 simdjson_inline bool raw_json_string::is_free_from_unescaped_quote(std::string_view target) noexcept {
   size_t pos{0};
@@ -42852,6 +43320,10 @@ simdjson_inline simdjson_result<arm64::ondemand::raw_json_string>::simdjson_resu
 simdjson_inline simdjson_result<const char *> simdjson_result<arm64::ondemand::raw_json_string>::raw() const noexcept {
   if (error()) { return error(); }
   return first.raw();
+}
+simdjson_inline char simdjson_result<arm64::ondemand::raw_json_string>::operator[](size_t i) const noexcept {
+  if (error()) { return error(); }
+  return first[i];
 }
 simdjson_inline simdjson_warn_unused simdjson_result<std::string_view> simdjson_result<arm64::ondemand::raw_json_string>::unescape(arm64::ondemand::json_iterator &iter, bool allow_replacement) const noexcept {
   if (error()) { return error(); }
@@ -44714,12 +45186,17 @@ find_next_json_quotable_character(const std::string_view view,
 }
 
 SIMDJSON_CONSTEXPR_LAMBDA static std::string_view control_chars[] = {
-    "\\x0000", "\\x0001", "\\x0002", "\\x0003", "\\x0004", "\\x0005", "\\x0006",
-    "\\x0007", "\\x0008", "\\t",     "\\n",     "\\x000b", "\\f",     "\\r",
-    "\\x000e", "\\x000f", "\\x0010", "\\x0011", "\\x0012", "\\x0013", "\\x0014",
-    "\\x0015", "\\x0016", "\\x0017", "\\x0018", "\\x0019", "\\x001a", "\\x001b",
-    "\\x001c", "\\x001d", "\\x001e", "\\x001f"};
+    "\\u0000", "\\u0001", "\\u0002", "\\u0003", "\\u0004", "\\u0005", "\\u0006",
+    "\\u0007", "\\b", "\\t",     "\\n",     "\\u000b", "\\f",     "\\r",
+    "\\u000e", "\\u000f", "\\u0010", "\\u0011", "\\u0012", "\\u0013", "\\u0014",
+    "\\u0015", "\\u0016", "\\u0017", "\\u0018", "\\u0019", "\\u001a", "\\u001b",
+    "\\u001c", "\\u001d", "\\u001e", "\\u001f"};
 
+// All Unicode characters may be placed within the quotation marks, except for the
+// characters that MUST be escaped: quotation mark, reverse solidus, and the control
+// characters (U+0000 through U+001F).
+// There are two-character sequence escape representations of some popular characters:
+// \", \\, \b, \f, \n, \r, \t.
 SIMDJSON_CONSTEXPR_LAMBDA void escape_json_char(char c, char *&out) {
   if (c == '"') {
     memcpy(out, "\\\"", 2);
@@ -44759,29 +45236,6 @@ inline size_t write_string_escaped(const std::string_view input, char *out) {
   }
   return out - initout;
 }
-
-#if SIMDJSON_CONSTEVAL
-// unoptimized, meant for compile-time execution
-consteval std::string consteval_to_quoted_escaped(std::string_view input) {
-  std::string out = "\"";
-  for (char c : input) {
-    if (json_quotable_character[uint8_t(c)]) {
-      if (c == '"') {
-        out.append("\\\"");
-      } else if (c == '\\') {
-        out.append("\\\\");
-      } else {
-        std::string_view v = control_chars[uint8_t(c)];
-        out.append(v);
-      }
-    } else {
-      out.push_back(c);
-    }
-  }
-  out.push_back('"');
-  return out;
-}
-#endif // SIMDJSON_CONSTEVAL
 
 simdjson_inline string_builder::string_builder(size_t initial_capacity)
     : buffer(new(std::nothrow) char[initial_capacity]), position(0),
@@ -45325,9 +45779,6 @@ template<typename number_type,
 constexpr void atom(string_builder &b, const number_type t) {
   b.append(t);
 }
-#if SIMDJSON_CONSTEVAL
-consteval std::string consteval_to_quoted_escaped(std::string_view input);
-#endif
 
 template <class T>
   requires(std::is_class_v<T> && !container_but_not_string<T> &&
@@ -45342,10 +45793,10 @@ template <class T>
 constexpr void atom(string_builder &b, const T &t) {
   int i = 0;
   b.append('{');
-  [:expand(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked())):] >> [&]<auto dm>() {
+  template for (constexpr auto dm : std::define_static_array(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked()))) {
     if (i != 0)
       b.append(',');
-    constexpr auto key = std::define_static_string(consteval_to_quoted_escaped(std::meta::identifier_of(dm)));
+    constexpr auto key = std::define_static_string(constevalutil::consteval_to_quoted_escaped(std::meta::identifier_of(dm)));
     b.append_raw(key);
     b.append(':');
     atom(b, t.[:dm:]);
@@ -45379,21 +45830,16 @@ template <typename T>
   requires(std::is_enum_v<T>)
 void atom(string_builder &b, const T &e) {
 #if SIMDJSON_STATIC_REFLECTION
-  std::string_view result = "<unnamed>";
-  [:expand(std::meta::enumerators_of(^^T)):] >> [&]<auto enum_val>{
+  constexpr auto enumerators = std::define_static_array(std::meta::enumerators_of(^^T));
+  template for (constexpr auto enum_val : enumerators) {
+    constexpr auto enum_str = std::define_static_string(constevalutil::consteval_to_quoted_escaped(std::meta::identifier_of(enum_val)));
     if (e == [:enum_val:]) {
-      result = std::meta::identifier_of(enum_val);
+      b.append_raw(enum_str);
+      return;
     }
   };
-
-  if (result != "<unnamed>") {
-    b.append_raw("\"");
-    b.append_raw(result);
-    b.append_raw("\"");
-  } else {
-    // Fallback to integer if enum value not found
-    atom(b, static_cast<std::underlying_type_t<T>>(e));
-  }
+  // Fallback to integer if enum value not found
+  atom(b, static_cast<std::underlying_type_t<T>>(e));
 #else
   // Fallback: serialize as integer if reflection not available
   atom(b, static_cast<std::underlying_type_t<T>>(e));
@@ -45477,10 +45923,10 @@ template <class Z>
 void append(string_builder &b, const Z &z) {
   int i = 0;
   b.append('{');
-  [:expand(std::meta::nonstatic_data_members_of(^^Z, std::meta::access_context::unchecked())):] >> [&]<auto dm>() {
+  template for (constexpr auto dm : std::define_static_array(std::meta::nonstatic_data_members_of(^^Z, std::meta::access_context::unchecked()))) {
     if (i != 0)
       b.append(',');
-    constexpr auto key = std::define_static_string(consteval_to_quoted_escaped(std::meta::identifier_of(dm)));
+    constexpr auto key = std::define_static_string(constevalutil::consteval_to_quoted_escaped(std::meta::identifier_of(dm)));
     b.append_raw(key);
     b.append(':');
     atom(b, z.[:dm:]);
@@ -48142,6 +48588,12 @@ public:
   simdjson_inline const char * raw() const noexcept;
 
   /**
+   * Get the character at index i. This is unchecked.
+   * [0] when the string is of length 0 returns the final quote (").
+   */
+  simdjson_inline char operator[](size_t i) const noexcept;
+
+  /**
    * This compares the current instance to the std::string_view target: returns true if
    * they are byte-by-byte equal (no escaping is done) on target.size() characters,
    * and if the raw_json_string instance has a quote character at byte index target.size().
@@ -48280,10 +48732,10 @@ public:
   simdjson_inline ~simdjson_result() noexcept = default; ///< @private
 
   simdjson_inline simdjson_result<const char *> raw() const noexcept;
+  simdjson_inline char operator[](size_t) const noexcept;
   simdjson_inline simdjson_warn_unused simdjson_result<std::string_view> unescape(fallback::ondemand::json_iterator &iter, bool allow_replacement) const noexcept;
   simdjson_inline simdjson_warn_unused simdjson_result<std::string_view> unescape_wobbly(fallback::ondemand::json_iterator &iter) const noexcept;
 };
-
 } // namespace simdjson
 
 #endif // SIMDJSON_GENERIC_ONDEMAND_RAW_JSON_STRING_H
@@ -50045,6 +50497,9 @@ public:
   template<typename T> simdjson_inline error_code get(T &out) & noexcept;
   template<typename T> simdjson_inline error_code get(T &out) && noexcept;
 #if SIMDJSON_EXCEPTIONS
+
+  using fallback::implementation_simdjson_result_base<fallback::ondemand::document>::operator*;
+  using fallback::implementation_simdjson_result_base<fallback::ondemand::document>::operator->;
   template <class T, typename std::enable_if<std::is_same<T, fallback::ondemand::document>::value == false>::type>
   explicit simdjson_inline operator T() noexcept(false);
   simdjson_inline operator fallback::ondemand::array() & noexcept(false);
@@ -51427,32 +51882,6 @@ constexpr bool user_defined_type = (std::is_class_v<T>
 !concepts::appendable_containers<T> && !require_custom_serialization<T>);
 
 
-// workaround from
-// https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2024/p2996r10.html#back-and-forth
-// for missing expansion statements
-namespace __impl {
-  template<auto... vals>
-  struct replicator_type {
-    template<typename F>
-      constexpr void operator>>(F body) const {
-        (body.template operator()<vals>(), ...);
-      }
-  };
-
-  template<auto... vals>
-  replicator_type<vals...> replicator = {};
-}
-
-template<typename R>
-consteval auto expand(R range) {
-  std::vector<std::meta::info> args;
-  for (auto r : range) {
-    args.push_back(reflect_constant(r));
-  }
-  return substitute(^^__impl::replicator, args);
-}
-// end of workaround
-
 template <typename T, typename ValT>
   requires(user_defined_type<T> && std::is_class_v<T>)
 error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept {
@@ -51463,9 +51892,8 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept {
     SIMDJSON_TRY(val.get_object().get(obj));
   }
   error_code e = simdjson::SUCCESS;
-
-  [:expand(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked())):] >> [&]<auto mem>() {
-    if constexpr (!std::meta::is_const(mem) && std::meta::is_public(mem)) {
+  template for (constexpr auto mem : std::define_static_array(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked()))) {
+        if constexpr (!std::meta::is_const(mem) && std::meta::is_public(mem)) {
       constexpr std::string_view key = std::define_static_string(std::meta::identifier_of(mem));
       // Note: removed static assert as optional types are now handled generically
       // as long we are succesful or the field is not found, we continue
@@ -51484,16 +51912,15 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept {
 #if SIMDJSON_STATIC_REFLECTION
   std::string_view str;
   SIMDJSON_TRY(val.get_string().get(str));
-
-  bool found = false;
-  [:expand(std::meta::enumerators_of(^^T)):] >> [&]<auto enum_val>{
-    if (!found && str == std::meta::identifier_of(enum_val)) {
+  constexpr auto enumerators = std::define_static_array(std::meta::enumerators_of(^^T));
+  template for (constexpr auto enum_val : enumerators) {
+    if (str == std::meta::identifier_of(enum_val)) {
       out = [:enum_val:];
-      found = true;
+      return SUCCESS;
     }
   };
 
-  return found ? SUCCESS : INCORRECT_TYPE;
+  return INCORRECT_TYPE;
 #else
   // Fallback: deserialize as integer if reflection not available
   std::underlying_type_t<T> int_val;
@@ -55640,8 +56067,13 @@ namespace ondemand {
 
 simdjson_inline raw_json_string::raw_json_string(const uint8_t * _buf) noexcept : buf{_buf} {}
 
-simdjson_inline const char * raw_json_string::raw() const noexcept { return reinterpret_cast<const char *>(buf); }
+simdjson_inline const char * raw_json_string::raw() const noexcept {
+  return reinterpret_cast<const char *>(buf);
+}
 
+simdjson_inline char raw_json_string::operator[](size_t i) const noexcept {
+  return reinterpret_cast<const char *>(buf)[i];
+}
 
 simdjson_inline bool raw_json_string::is_free_from_unescaped_quote(std::string_view target) noexcept {
   size_t pos{0};
@@ -55817,6 +56249,10 @@ simdjson_inline simdjson_result<fallback::ondemand::raw_json_string>::simdjson_r
 simdjson_inline simdjson_result<const char *> simdjson_result<fallback::ondemand::raw_json_string>::raw() const noexcept {
   if (error()) { return error(); }
   return first.raw();
+}
+simdjson_inline char simdjson_result<fallback::ondemand::raw_json_string>::operator[](size_t i) const noexcept {
+  if (error()) { return error(); }
+  return first[i];
 }
 simdjson_inline simdjson_warn_unused simdjson_result<std::string_view> simdjson_result<fallback::ondemand::raw_json_string>::unescape(fallback::ondemand::json_iterator &iter, bool allow_replacement) const noexcept {
   if (error()) { return error(); }
@@ -57679,12 +58115,17 @@ find_next_json_quotable_character(const std::string_view view,
 }
 
 SIMDJSON_CONSTEXPR_LAMBDA static std::string_view control_chars[] = {
-    "\\x0000", "\\x0001", "\\x0002", "\\x0003", "\\x0004", "\\x0005", "\\x0006",
-    "\\x0007", "\\x0008", "\\t",     "\\n",     "\\x000b", "\\f",     "\\r",
-    "\\x000e", "\\x000f", "\\x0010", "\\x0011", "\\x0012", "\\x0013", "\\x0014",
-    "\\x0015", "\\x0016", "\\x0017", "\\x0018", "\\x0019", "\\x001a", "\\x001b",
-    "\\x001c", "\\x001d", "\\x001e", "\\x001f"};
+    "\\u0000", "\\u0001", "\\u0002", "\\u0003", "\\u0004", "\\u0005", "\\u0006",
+    "\\u0007", "\\b", "\\t",     "\\n",     "\\u000b", "\\f",     "\\r",
+    "\\u000e", "\\u000f", "\\u0010", "\\u0011", "\\u0012", "\\u0013", "\\u0014",
+    "\\u0015", "\\u0016", "\\u0017", "\\u0018", "\\u0019", "\\u001a", "\\u001b",
+    "\\u001c", "\\u001d", "\\u001e", "\\u001f"};
 
+// All Unicode characters may be placed within the quotation marks, except for the
+// characters that MUST be escaped: quotation mark, reverse solidus, and the control
+// characters (U+0000 through U+001F).
+// There are two-character sequence escape representations of some popular characters:
+// \", \\, \b, \f, \n, \r, \t.
 SIMDJSON_CONSTEXPR_LAMBDA void escape_json_char(char c, char *&out) {
   if (c == '"') {
     memcpy(out, "\\\"", 2);
@@ -57724,29 +58165,6 @@ inline size_t write_string_escaped(const std::string_view input, char *out) {
   }
   return out - initout;
 }
-
-#if SIMDJSON_CONSTEVAL
-// unoptimized, meant for compile-time execution
-consteval std::string consteval_to_quoted_escaped(std::string_view input) {
-  std::string out = "\"";
-  for (char c : input) {
-    if (json_quotable_character[uint8_t(c)]) {
-      if (c == '"') {
-        out.append("\\\"");
-      } else if (c == '\\') {
-        out.append("\\\\");
-      } else {
-        std::string_view v = control_chars[uint8_t(c)];
-        out.append(v);
-      }
-    } else {
-      out.push_back(c);
-    }
-  }
-  out.push_back('"');
-  return out;
-}
-#endif // SIMDJSON_CONSTEVAL
 
 simdjson_inline string_builder::string_builder(size_t initial_capacity)
     : buffer(new(std::nothrow) char[initial_capacity]), position(0),
@@ -58290,9 +58708,6 @@ template<typename number_type,
 constexpr void atom(string_builder &b, const number_type t) {
   b.append(t);
 }
-#if SIMDJSON_CONSTEVAL
-consteval std::string consteval_to_quoted_escaped(std::string_view input);
-#endif
 
 template <class T>
   requires(std::is_class_v<T> && !container_but_not_string<T> &&
@@ -58307,10 +58722,10 @@ template <class T>
 constexpr void atom(string_builder &b, const T &t) {
   int i = 0;
   b.append('{');
-  [:expand(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked())):] >> [&]<auto dm>() {
+  template for (constexpr auto dm : std::define_static_array(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked()))) {
     if (i != 0)
       b.append(',');
-    constexpr auto key = std::define_static_string(consteval_to_quoted_escaped(std::meta::identifier_of(dm)));
+    constexpr auto key = std::define_static_string(constevalutil::consteval_to_quoted_escaped(std::meta::identifier_of(dm)));
     b.append_raw(key);
     b.append(':');
     atom(b, t.[:dm:]);
@@ -58344,21 +58759,16 @@ template <typename T>
   requires(std::is_enum_v<T>)
 void atom(string_builder &b, const T &e) {
 #if SIMDJSON_STATIC_REFLECTION
-  std::string_view result = "<unnamed>";
-  [:expand(std::meta::enumerators_of(^^T)):] >> [&]<auto enum_val>{
+  constexpr auto enumerators = std::define_static_array(std::meta::enumerators_of(^^T));
+  template for (constexpr auto enum_val : enumerators) {
+    constexpr auto enum_str = std::define_static_string(constevalutil::consteval_to_quoted_escaped(std::meta::identifier_of(enum_val)));
     if (e == [:enum_val:]) {
-      result = std::meta::identifier_of(enum_val);
+      b.append_raw(enum_str);
+      return;
     }
   };
-
-  if (result != "<unnamed>") {
-    b.append_raw("\"");
-    b.append_raw(result);
-    b.append_raw("\"");
-  } else {
-    // Fallback to integer if enum value not found
-    atom(b, static_cast<std::underlying_type_t<T>>(e));
-  }
+  // Fallback to integer if enum value not found
+  atom(b, static_cast<std::underlying_type_t<T>>(e));
 #else
   // Fallback: serialize as integer if reflection not available
   atom(b, static_cast<std::underlying_type_t<T>>(e));
@@ -58442,10 +58852,10 @@ template <class Z>
 void append(string_builder &b, const Z &z) {
   int i = 0;
   b.append('{');
-  [:expand(std::meta::nonstatic_data_members_of(^^Z, std::meta::access_context::unchecked())):] >> [&]<auto dm>() {
+  template for (constexpr auto dm : std::define_static_array(std::meta::nonstatic_data_members_of(^^Z, std::meta::access_context::unchecked()))) {
     if (i != 0)
       b.append(',');
-    constexpr auto key = std::define_static_string(consteval_to_quoted_escaped(std::meta::identifier_of(dm)));
+    constexpr auto key = std::define_static_string(constevalutil::consteval_to_quoted_escaped(std::meta::identifier_of(dm)));
     b.append_raw(key);
     b.append(':');
     atom(b, z.[:dm:]);
@@ -61606,6 +62016,12 @@ public:
   simdjson_inline const char * raw() const noexcept;
 
   /**
+   * Get the character at index i. This is unchecked.
+   * [0] when the string is of length 0 returns the final quote (").
+   */
+  simdjson_inline char operator[](size_t i) const noexcept;
+
+  /**
    * This compares the current instance to the std::string_view target: returns true if
    * they are byte-by-byte equal (no escaping is done) on target.size() characters,
    * and if the raw_json_string instance has a quote character at byte index target.size().
@@ -61744,10 +62160,10 @@ public:
   simdjson_inline ~simdjson_result() noexcept = default; ///< @private
 
   simdjson_inline simdjson_result<const char *> raw() const noexcept;
+  simdjson_inline char operator[](size_t) const noexcept;
   simdjson_inline simdjson_warn_unused simdjson_result<std::string_view> unescape(haswell::ondemand::json_iterator &iter, bool allow_replacement) const noexcept;
   simdjson_inline simdjson_warn_unused simdjson_result<std::string_view> unescape_wobbly(haswell::ondemand::json_iterator &iter) const noexcept;
 };
-
 } // namespace simdjson
 
 #endif // SIMDJSON_GENERIC_ONDEMAND_RAW_JSON_STRING_H
@@ -63509,6 +63925,9 @@ public:
   template<typename T> simdjson_inline error_code get(T &out) & noexcept;
   template<typename T> simdjson_inline error_code get(T &out) && noexcept;
 #if SIMDJSON_EXCEPTIONS
+
+  using haswell::implementation_simdjson_result_base<haswell::ondemand::document>::operator*;
+  using haswell::implementation_simdjson_result_base<haswell::ondemand::document>::operator->;
   template <class T, typename std::enable_if<std::is_same<T, haswell::ondemand::document>::value == false>::type>
   explicit simdjson_inline operator T() noexcept(false);
   simdjson_inline operator haswell::ondemand::array() & noexcept(false);
@@ -64891,32 +65310,6 @@ constexpr bool user_defined_type = (std::is_class_v<T>
 !concepts::appendable_containers<T> && !require_custom_serialization<T>);
 
 
-// workaround from
-// https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2024/p2996r10.html#back-and-forth
-// for missing expansion statements
-namespace __impl {
-  template<auto... vals>
-  struct replicator_type {
-    template<typename F>
-      constexpr void operator>>(F body) const {
-        (body.template operator()<vals>(), ...);
-      }
-  };
-
-  template<auto... vals>
-  replicator_type<vals...> replicator = {};
-}
-
-template<typename R>
-consteval auto expand(R range) {
-  std::vector<std::meta::info> args;
-  for (auto r : range) {
-    args.push_back(reflect_constant(r));
-  }
-  return substitute(^^__impl::replicator, args);
-}
-// end of workaround
-
 template <typename T, typename ValT>
   requires(user_defined_type<T> && std::is_class_v<T>)
 error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept {
@@ -64927,9 +65320,8 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept {
     SIMDJSON_TRY(val.get_object().get(obj));
   }
   error_code e = simdjson::SUCCESS;
-
-  [:expand(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked())):] >> [&]<auto mem>() {
-    if constexpr (!std::meta::is_const(mem) && std::meta::is_public(mem)) {
+  template for (constexpr auto mem : std::define_static_array(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked()))) {
+        if constexpr (!std::meta::is_const(mem) && std::meta::is_public(mem)) {
       constexpr std::string_view key = std::define_static_string(std::meta::identifier_of(mem));
       // Note: removed static assert as optional types are now handled generically
       // as long we are succesful or the field is not found, we continue
@@ -64948,16 +65340,15 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept {
 #if SIMDJSON_STATIC_REFLECTION
   std::string_view str;
   SIMDJSON_TRY(val.get_string().get(str));
-
-  bool found = false;
-  [:expand(std::meta::enumerators_of(^^T)):] >> [&]<auto enum_val>{
-    if (!found && str == std::meta::identifier_of(enum_val)) {
+  constexpr auto enumerators = std::define_static_array(std::meta::enumerators_of(^^T));
+  template for (constexpr auto enum_val : enumerators) {
+    if (str == std::meta::identifier_of(enum_val)) {
       out = [:enum_val:];
-      found = true;
+      return SUCCESS;
     }
   };
 
-  return found ? SUCCESS : INCORRECT_TYPE;
+  return INCORRECT_TYPE;
 #else
   // Fallback: deserialize as integer if reflection not available
   std::underlying_type_t<T> int_val;
@@ -69104,8 +69495,13 @@ namespace ondemand {
 
 simdjson_inline raw_json_string::raw_json_string(const uint8_t * _buf) noexcept : buf{_buf} {}
 
-simdjson_inline const char * raw_json_string::raw() const noexcept { return reinterpret_cast<const char *>(buf); }
+simdjson_inline const char * raw_json_string::raw() const noexcept {
+  return reinterpret_cast<const char *>(buf);
+}
 
+simdjson_inline char raw_json_string::operator[](size_t i) const noexcept {
+  return reinterpret_cast<const char *>(buf)[i];
+}
 
 simdjson_inline bool raw_json_string::is_free_from_unescaped_quote(std::string_view target) noexcept {
   size_t pos{0};
@@ -69281,6 +69677,10 @@ simdjson_inline simdjson_result<haswell::ondemand::raw_json_string>::simdjson_re
 simdjson_inline simdjson_result<const char *> simdjson_result<haswell::ondemand::raw_json_string>::raw() const noexcept {
   if (error()) { return error(); }
   return first.raw();
+}
+simdjson_inline char simdjson_result<haswell::ondemand::raw_json_string>::operator[](size_t i) const noexcept {
+  if (error()) { return error(); }
+  return first[i];
 }
 simdjson_inline simdjson_warn_unused simdjson_result<std::string_view> simdjson_result<haswell::ondemand::raw_json_string>::unescape(haswell::ondemand::json_iterator &iter, bool allow_replacement) const noexcept {
   if (error()) { return error(); }
@@ -71143,12 +71543,17 @@ find_next_json_quotable_character(const std::string_view view,
 }
 
 SIMDJSON_CONSTEXPR_LAMBDA static std::string_view control_chars[] = {
-    "\\x0000", "\\x0001", "\\x0002", "\\x0003", "\\x0004", "\\x0005", "\\x0006",
-    "\\x0007", "\\x0008", "\\t",     "\\n",     "\\x000b", "\\f",     "\\r",
-    "\\x000e", "\\x000f", "\\x0010", "\\x0011", "\\x0012", "\\x0013", "\\x0014",
-    "\\x0015", "\\x0016", "\\x0017", "\\x0018", "\\x0019", "\\x001a", "\\x001b",
-    "\\x001c", "\\x001d", "\\x001e", "\\x001f"};
+    "\\u0000", "\\u0001", "\\u0002", "\\u0003", "\\u0004", "\\u0005", "\\u0006",
+    "\\u0007", "\\b", "\\t",     "\\n",     "\\u000b", "\\f",     "\\r",
+    "\\u000e", "\\u000f", "\\u0010", "\\u0011", "\\u0012", "\\u0013", "\\u0014",
+    "\\u0015", "\\u0016", "\\u0017", "\\u0018", "\\u0019", "\\u001a", "\\u001b",
+    "\\u001c", "\\u001d", "\\u001e", "\\u001f"};
 
+// All Unicode characters may be placed within the quotation marks, except for the
+// characters that MUST be escaped: quotation mark, reverse solidus, and the control
+// characters (U+0000 through U+001F).
+// There are two-character sequence escape representations of some popular characters:
+// \", \\, \b, \f, \n, \r, \t.
 SIMDJSON_CONSTEXPR_LAMBDA void escape_json_char(char c, char *&out) {
   if (c == '"') {
     memcpy(out, "\\\"", 2);
@@ -71188,29 +71593,6 @@ inline size_t write_string_escaped(const std::string_view input, char *out) {
   }
   return out - initout;
 }
-
-#if SIMDJSON_CONSTEVAL
-// unoptimized, meant for compile-time execution
-consteval std::string consteval_to_quoted_escaped(std::string_view input) {
-  std::string out = "\"";
-  for (char c : input) {
-    if (json_quotable_character[uint8_t(c)]) {
-      if (c == '"') {
-        out.append("\\\"");
-      } else if (c == '\\') {
-        out.append("\\\\");
-      } else {
-        std::string_view v = control_chars[uint8_t(c)];
-        out.append(v);
-      }
-    } else {
-      out.push_back(c);
-    }
-  }
-  out.push_back('"');
-  return out;
-}
-#endif // SIMDJSON_CONSTEVAL
 
 simdjson_inline string_builder::string_builder(size_t initial_capacity)
     : buffer(new(std::nothrow) char[initial_capacity]), position(0),
@@ -71754,9 +72136,6 @@ template<typename number_type,
 constexpr void atom(string_builder &b, const number_type t) {
   b.append(t);
 }
-#if SIMDJSON_CONSTEVAL
-consteval std::string consteval_to_quoted_escaped(std::string_view input);
-#endif
 
 template <class T>
   requires(std::is_class_v<T> && !container_but_not_string<T> &&
@@ -71771,10 +72150,10 @@ template <class T>
 constexpr void atom(string_builder &b, const T &t) {
   int i = 0;
   b.append('{');
-  [:expand(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked())):] >> [&]<auto dm>() {
+  template for (constexpr auto dm : std::define_static_array(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked()))) {
     if (i != 0)
       b.append(',');
-    constexpr auto key = std::define_static_string(consteval_to_quoted_escaped(std::meta::identifier_of(dm)));
+    constexpr auto key = std::define_static_string(constevalutil::consteval_to_quoted_escaped(std::meta::identifier_of(dm)));
     b.append_raw(key);
     b.append(':');
     atom(b, t.[:dm:]);
@@ -71808,21 +72187,16 @@ template <typename T>
   requires(std::is_enum_v<T>)
 void atom(string_builder &b, const T &e) {
 #if SIMDJSON_STATIC_REFLECTION
-  std::string_view result = "<unnamed>";
-  [:expand(std::meta::enumerators_of(^^T)):] >> [&]<auto enum_val>{
+  constexpr auto enumerators = std::define_static_array(std::meta::enumerators_of(^^T));
+  template for (constexpr auto enum_val : enumerators) {
+    constexpr auto enum_str = std::define_static_string(constevalutil::consteval_to_quoted_escaped(std::meta::identifier_of(enum_val)));
     if (e == [:enum_val:]) {
-      result = std::meta::identifier_of(enum_val);
+      b.append_raw(enum_str);
+      return;
     }
   };
-
-  if (result != "<unnamed>") {
-    b.append_raw("\"");
-    b.append_raw(result);
-    b.append_raw("\"");
-  } else {
-    // Fallback to integer if enum value not found
-    atom(b, static_cast<std::underlying_type_t<T>>(e));
-  }
+  // Fallback to integer if enum value not found
+  atom(b, static_cast<std::underlying_type_t<T>>(e));
 #else
   // Fallback: serialize as integer if reflection not available
   atom(b, static_cast<std::underlying_type_t<T>>(e));
@@ -71906,10 +72280,10 @@ template <class Z>
 void append(string_builder &b, const Z &z) {
   int i = 0;
   b.append('{');
-  [:expand(std::meta::nonstatic_data_members_of(^^Z, std::meta::access_context::unchecked())):] >> [&]<auto dm>() {
+  template for (constexpr auto dm : std::define_static_array(std::meta::nonstatic_data_members_of(^^Z, std::meta::access_context::unchecked()))) {
     if (i != 0)
       b.append(',');
-    constexpr auto key = std::define_static_string(consteval_to_quoted_escaped(std::meta::identifier_of(dm)));
+    constexpr auto key = std::define_static_string(constevalutil::consteval_to_quoted_escaped(std::meta::identifier_of(dm)));
     b.append_raw(key);
     b.append(':');
     atom(b, z.[:dm:]);
@@ -75070,6 +75444,12 @@ public:
   simdjson_inline const char * raw() const noexcept;
 
   /**
+   * Get the character at index i. This is unchecked.
+   * [0] when the string is of length 0 returns the final quote (").
+   */
+  simdjson_inline char operator[](size_t i) const noexcept;
+
+  /**
    * This compares the current instance to the std::string_view target: returns true if
    * they are byte-by-byte equal (no escaping is done) on target.size() characters,
    * and if the raw_json_string instance has a quote character at byte index target.size().
@@ -75208,10 +75588,10 @@ public:
   simdjson_inline ~simdjson_result() noexcept = default; ///< @private
 
   simdjson_inline simdjson_result<const char *> raw() const noexcept;
+  simdjson_inline char operator[](size_t) const noexcept;
   simdjson_inline simdjson_warn_unused simdjson_result<std::string_view> unescape(icelake::ondemand::json_iterator &iter, bool allow_replacement) const noexcept;
   simdjson_inline simdjson_warn_unused simdjson_result<std::string_view> unescape_wobbly(icelake::ondemand::json_iterator &iter) const noexcept;
 };
-
 } // namespace simdjson
 
 #endif // SIMDJSON_GENERIC_ONDEMAND_RAW_JSON_STRING_H
@@ -76973,6 +77353,9 @@ public:
   template<typename T> simdjson_inline error_code get(T &out) & noexcept;
   template<typename T> simdjson_inline error_code get(T &out) && noexcept;
 #if SIMDJSON_EXCEPTIONS
+
+  using icelake::implementation_simdjson_result_base<icelake::ondemand::document>::operator*;
+  using icelake::implementation_simdjson_result_base<icelake::ondemand::document>::operator->;
   template <class T, typename std::enable_if<std::is_same<T, icelake::ondemand::document>::value == false>::type>
   explicit simdjson_inline operator T() noexcept(false);
   simdjson_inline operator icelake::ondemand::array() & noexcept(false);
@@ -78355,32 +78738,6 @@ constexpr bool user_defined_type = (std::is_class_v<T>
 !concepts::appendable_containers<T> && !require_custom_serialization<T>);
 
 
-// workaround from
-// https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2024/p2996r10.html#back-and-forth
-// for missing expansion statements
-namespace __impl {
-  template<auto... vals>
-  struct replicator_type {
-    template<typename F>
-      constexpr void operator>>(F body) const {
-        (body.template operator()<vals>(), ...);
-      }
-  };
-
-  template<auto... vals>
-  replicator_type<vals...> replicator = {};
-}
-
-template<typename R>
-consteval auto expand(R range) {
-  std::vector<std::meta::info> args;
-  for (auto r : range) {
-    args.push_back(reflect_constant(r));
-  }
-  return substitute(^^__impl::replicator, args);
-}
-// end of workaround
-
 template <typename T, typename ValT>
   requires(user_defined_type<T> && std::is_class_v<T>)
 error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept {
@@ -78391,9 +78748,8 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept {
     SIMDJSON_TRY(val.get_object().get(obj));
   }
   error_code e = simdjson::SUCCESS;
-
-  [:expand(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked())):] >> [&]<auto mem>() {
-    if constexpr (!std::meta::is_const(mem) && std::meta::is_public(mem)) {
+  template for (constexpr auto mem : std::define_static_array(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked()))) {
+        if constexpr (!std::meta::is_const(mem) && std::meta::is_public(mem)) {
       constexpr std::string_view key = std::define_static_string(std::meta::identifier_of(mem));
       // Note: removed static assert as optional types are now handled generically
       // as long we are succesful or the field is not found, we continue
@@ -78412,16 +78768,15 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept {
 #if SIMDJSON_STATIC_REFLECTION
   std::string_view str;
   SIMDJSON_TRY(val.get_string().get(str));
-
-  bool found = false;
-  [:expand(std::meta::enumerators_of(^^T)):] >> [&]<auto enum_val>{
-    if (!found && str == std::meta::identifier_of(enum_val)) {
+  constexpr auto enumerators = std::define_static_array(std::meta::enumerators_of(^^T));
+  template for (constexpr auto enum_val : enumerators) {
+    if (str == std::meta::identifier_of(enum_val)) {
       out = [:enum_val:];
-      found = true;
+      return SUCCESS;
     }
   };
 
-  return found ? SUCCESS : INCORRECT_TYPE;
+  return INCORRECT_TYPE;
 #else
   // Fallback: deserialize as integer if reflection not available
   std::underlying_type_t<T> int_val;
@@ -82568,8 +82923,13 @@ namespace ondemand {
 
 simdjson_inline raw_json_string::raw_json_string(const uint8_t * _buf) noexcept : buf{_buf} {}
 
-simdjson_inline const char * raw_json_string::raw() const noexcept { return reinterpret_cast<const char *>(buf); }
+simdjson_inline const char * raw_json_string::raw() const noexcept {
+  return reinterpret_cast<const char *>(buf);
+}
 
+simdjson_inline char raw_json_string::operator[](size_t i) const noexcept {
+  return reinterpret_cast<const char *>(buf)[i];
+}
 
 simdjson_inline bool raw_json_string::is_free_from_unescaped_quote(std::string_view target) noexcept {
   size_t pos{0};
@@ -82745,6 +83105,10 @@ simdjson_inline simdjson_result<icelake::ondemand::raw_json_string>::simdjson_re
 simdjson_inline simdjson_result<const char *> simdjson_result<icelake::ondemand::raw_json_string>::raw() const noexcept {
   if (error()) { return error(); }
   return first.raw();
+}
+simdjson_inline char simdjson_result<icelake::ondemand::raw_json_string>::operator[](size_t i) const noexcept {
+  if (error()) { return error(); }
+  return first[i];
 }
 simdjson_inline simdjson_warn_unused simdjson_result<std::string_view> simdjson_result<icelake::ondemand::raw_json_string>::unescape(icelake::ondemand::json_iterator &iter, bool allow_replacement) const noexcept {
   if (error()) { return error(); }
@@ -84607,12 +84971,17 @@ find_next_json_quotable_character(const std::string_view view,
 }
 
 SIMDJSON_CONSTEXPR_LAMBDA static std::string_view control_chars[] = {
-    "\\x0000", "\\x0001", "\\x0002", "\\x0003", "\\x0004", "\\x0005", "\\x0006",
-    "\\x0007", "\\x0008", "\\t",     "\\n",     "\\x000b", "\\f",     "\\r",
-    "\\x000e", "\\x000f", "\\x0010", "\\x0011", "\\x0012", "\\x0013", "\\x0014",
-    "\\x0015", "\\x0016", "\\x0017", "\\x0018", "\\x0019", "\\x001a", "\\x001b",
-    "\\x001c", "\\x001d", "\\x001e", "\\x001f"};
+    "\\u0000", "\\u0001", "\\u0002", "\\u0003", "\\u0004", "\\u0005", "\\u0006",
+    "\\u0007", "\\b", "\\t",     "\\n",     "\\u000b", "\\f",     "\\r",
+    "\\u000e", "\\u000f", "\\u0010", "\\u0011", "\\u0012", "\\u0013", "\\u0014",
+    "\\u0015", "\\u0016", "\\u0017", "\\u0018", "\\u0019", "\\u001a", "\\u001b",
+    "\\u001c", "\\u001d", "\\u001e", "\\u001f"};
 
+// All Unicode characters may be placed within the quotation marks, except for the
+// characters that MUST be escaped: quotation mark, reverse solidus, and the control
+// characters (U+0000 through U+001F).
+// There are two-character sequence escape representations of some popular characters:
+// \", \\, \b, \f, \n, \r, \t.
 SIMDJSON_CONSTEXPR_LAMBDA void escape_json_char(char c, char *&out) {
   if (c == '"') {
     memcpy(out, "\\\"", 2);
@@ -84652,29 +85021,6 @@ inline size_t write_string_escaped(const std::string_view input, char *out) {
   }
   return out - initout;
 }
-
-#if SIMDJSON_CONSTEVAL
-// unoptimized, meant for compile-time execution
-consteval std::string consteval_to_quoted_escaped(std::string_view input) {
-  std::string out = "\"";
-  for (char c : input) {
-    if (json_quotable_character[uint8_t(c)]) {
-      if (c == '"') {
-        out.append("\\\"");
-      } else if (c == '\\') {
-        out.append("\\\\");
-      } else {
-        std::string_view v = control_chars[uint8_t(c)];
-        out.append(v);
-      }
-    } else {
-      out.push_back(c);
-    }
-  }
-  out.push_back('"');
-  return out;
-}
-#endif // SIMDJSON_CONSTEVAL
 
 simdjson_inline string_builder::string_builder(size_t initial_capacity)
     : buffer(new(std::nothrow) char[initial_capacity]), position(0),
@@ -85218,9 +85564,6 @@ template<typename number_type,
 constexpr void atom(string_builder &b, const number_type t) {
   b.append(t);
 }
-#if SIMDJSON_CONSTEVAL
-consteval std::string consteval_to_quoted_escaped(std::string_view input);
-#endif
 
 template <class T>
   requires(std::is_class_v<T> && !container_but_not_string<T> &&
@@ -85235,10 +85578,10 @@ template <class T>
 constexpr void atom(string_builder &b, const T &t) {
   int i = 0;
   b.append('{');
-  [:expand(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked())):] >> [&]<auto dm>() {
+  template for (constexpr auto dm : std::define_static_array(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked()))) {
     if (i != 0)
       b.append(',');
-    constexpr auto key = std::define_static_string(consteval_to_quoted_escaped(std::meta::identifier_of(dm)));
+    constexpr auto key = std::define_static_string(constevalutil::consteval_to_quoted_escaped(std::meta::identifier_of(dm)));
     b.append_raw(key);
     b.append(':');
     atom(b, t.[:dm:]);
@@ -85272,21 +85615,16 @@ template <typename T>
   requires(std::is_enum_v<T>)
 void atom(string_builder &b, const T &e) {
 #if SIMDJSON_STATIC_REFLECTION
-  std::string_view result = "<unnamed>";
-  [:expand(std::meta::enumerators_of(^^T)):] >> [&]<auto enum_val>{
+  constexpr auto enumerators = std::define_static_array(std::meta::enumerators_of(^^T));
+  template for (constexpr auto enum_val : enumerators) {
+    constexpr auto enum_str = std::define_static_string(constevalutil::consteval_to_quoted_escaped(std::meta::identifier_of(enum_val)));
     if (e == [:enum_val:]) {
-      result = std::meta::identifier_of(enum_val);
+      b.append_raw(enum_str);
+      return;
     }
   };
-
-  if (result != "<unnamed>") {
-    b.append_raw("\"");
-    b.append_raw(result);
-    b.append_raw("\"");
-  } else {
-    // Fallback to integer if enum value not found
-    atom(b, static_cast<std::underlying_type_t<T>>(e));
-  }
+  // Fallback to integer if enum value not found
+  atom(b, static_cast<std::underlying_type_t<T>>(e));
 #else
   // Fallback: serialize as integer if reflection not available
   atom(b, static_cast<std::underlying_type_t<T>>(e));
@@ -85370,10 +85708,10 @@ template <class Z>
 void append(string_builder &b, const Z &z) {
   int i = 0;
   b.append('{');
-  [:expand(std::meta::nonstatic_data_members_of(^^Z, std::meta::access_context::unchecked())):] >> [&]<auto dm>() {
+  template for (constexpr auto dm : std::define_static_array(std::meta::nonstatic_data_members_of(^^Z, std::meta::access_context::unchecked()))) {
     if (i != 0)
       b.append(',');
-    constexpr auto key = std::define_static_string(consteval_to_quoted_escaped(std::meta::identifier_of(dm)));
+    constexpr auto key = std::define_static_string(constevalutil::consteval_to_quoted_escaped(std::meta::identifier_of(dm)));
     b.append_raw(key);
     b.append(':');
     atom(b, z.[:dm:]);
@@ -88649,6 +88987,12 @@ public:
   simdjson_inline const char * raw() const noexcept;
 
   /**
+   * Get the character at index i. This is unchecked.
+   * [0] when the string is of length 0 returns the final quote (").
+   */
+  simdjson_inline char operator[](size_t i) const noexcept;
+
+  /**
    * This compares the current instance to the std::string_view target: returns true if
    * they are byte-by-byte equal (no escaping is done) on target.size() characters,
    * and if the raw_json_string instance has a quote character at byte index target.size().
@@ -88787,10 +89131,10 @@ public:
   simdjson_inline ~simdjson_result() noexcept = default; ///< @private
 
   simdjson_inline simdjson_result<const char *> raw() const noexcept;
+  simdjson_inline char operator[](size_t) const noexcept;
   simdjson_inline simdjson_warn_unused simdjson_result<std::string_view> unescape(ppc64::ondemand::json_iterator &iter, bool allow_replacement) const noexcept;
   simdjson_inline simdjson_warn_unused simdjson_result<std::string_view> unescape_wobbly(ppc64::ondemand::json_iterator &iter) const noexcept;
 };
-
 } // namespace simdjson
 
 #endif // SIMDJSON_GENERIC_ONDEMAND_RAW_JSON_STRING_H
@@ -90552,6 +90896,9 @@ public:
   template<typename T> simdjson_inline error_code get(T &out) & noexcept;
   template<typename T> simdjson_inline error_code get(T &out) && noexcept;
 #if SIMDJSON_EXCEPTIONS
+
+  using ppc64::implementation_simdjson_result_base<ppc64::ondemand::document>::operator*;
+  using ppc64::implementation_simdjson_result_base<ppc64::ondemand::document>::operator->;
   template <class T, typename std::enable_if<std::is_same<T, ppc64::ondemand::document>::value == false>::type>
   explicit simdjson_inline operator T() noexcept(false);
   simdjson_inline operator ppc64::ondemand::array() & noexcept(false);
@@ -91934,32 +92281,6 @@ constexpr bool user_defined_type = (std::is_class_v<T>
 !concepts::appendable_containers<T> && !require_custom_serialization<T>);
 
 
-// workaround from
-// https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2024/p2996r10.html#back-and-forth
-// for missing expansion statements
-namespace __impl {
-  template<auto... vals>
-  struct replicator_type {
-    template<typename F>
-      constexpr void operator>>(F body) const {
-        (body.template operator()<vals>(), ...);
-      }
-  };
-
-  template<auto... vals>
-  replicator_type<vals...> replicator = {};
-}
-
-template<typename R>
-consteval auto expand(R range) {
-  std::vector<std::meta::info> args;
-  for (auto r : range) {
-    args.push_back(reflect_constant(r));
-  }
-  return substitute(^^__impl::replicator, args);
-}
-// end of workaround
-
 template <typename T, typename ValT>
   requires(user_defined_type<T> && std::is_class_v<T>)
 error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept {
@@ -91970,9 +92291,8 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept {
     SIMDJSON_TRY(val.get_object().get(obj));
   }
   error_code e = simdjson::SUCCESS;
-
-  [:expand(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked())):] >> [&]<auto mem>() {
-    if constexpr (!std::meta::is_const(mem) && std::meta::is_public(mem)) {
+  template for (constexpr auto mem : std::define_static_array(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked()))) {
+        if constexpr (!std::meta::is_const(mem) && std::meta::is_public(mem)) {
       constexpr std::string_view key = std::define_static_string(std::meta::identifier_of(mem));
       // Note: removed static assert as optional types are now handled generically
       // as long we are succesful or the field is not found, we continue
@@ -91991,16 +92311,15 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept {
 #if SIMDJSON_STATIC_REFLECTION
   std::string_view str;
   SIMDJSON_TRY(val.get_string().get(str));
-
-  bool found = false;
-  [:expand(std::meta::enumerators_of(^^T)):] >> [&]<auto enum_val>{
-    if (!found && str == std::meta::identifier_of(enum_val)) {
+  constexpr auto enumerators = std::define_static_array(std::meta::enumerators_of(^^T));
+  template for (constexpr auto enum_val : enumerators) {
+    if (str == std::meta::identifier_of(enum_val)) {
       out = [:enum_val:];
-      found = true;
+      return SUCCESS;
     }
   };
 
-  return found ? SUCCESS : INCORRECT_TYPE;
+  return INCORRECT_TYPE;
 #else
   // Fallback: deserialize as integer if reflection not available
   std::underlying_type_t<T> int_val;
@@ -96147,8 +96466,13 @@ namespace ondemand {
 
 simdjson_inline raw_json_string::raw_json_string(const uint8_t * _buf) noexcept : buf{_buf} {}
 
-simdjson_inline const char * raw_json_string::raw() const noexcept { return reinterpret_cast<const char *>(buf); }
+simdjson_inline const char * raw_json_string::raw() const noexcept {
+  return reinterpret_cast<const char *>(buf);
+}
 
+simdjson_inline char raw_json_string::operator[](size_t i) const noexcept {
+  return reinterpret_cast<const char *>(buf)[i];
+}
 
 simdjson_inline bool raw_json_string::is_free_from_unescaped_quote(std::string_view target) noexcept {
   size_t pos{0};
@@ -96324,6 +96648,10 @@ simdjson_inline simdjson_result<ppc64::ondemand::raw_json_string>::simdjson_resu
 simdjson_inline simdjson_result<const char *> simdjson_result<ppc64::ondemand::raw_json_string>::raw() const noexcept {
   if (error()) { return error(); }
   return first.raw();
+}
+simdjson_inline char simdjson_result<ppc64::ondemand::raw_json_string>::operator[](size_t i) const noexcept {
+  if (error()) { return error(); }
+  return first[i];
 }
 simdjson_inline simdjson_warn_unused simdjson_result<std::string_view> simdjson_result<ppc64::ondemand::raw_json_string>::unescape(ppc64::ondemand::json_iterator &iter, bool allow_replacement) const noexcept {
   if (error()) { return error(); }
@@ -98186,12 +98514,17 @@ find_next_json_quotable_character(const std::string_view view,
 }
 
 SIMDJSON_CONSTEXPR_LAMBDA static std::string_view control_chars[] = {
-    "\\x0000", "\\x0001", "\\x0002", "\\x0003", "\\x0004", "\\x0005", "\\x0006",
-    "\\x0007", "\\x0008", "\\t",     "\\n",     "\\x000b", "\\f",     "\\r",
-    "\\x000e", "\\x000f", "\\x0010", "\\x0011", "\\x0012", "\\x0013", "\\x0014",
-    "\\x0015", "\\x0016", "\\x0017", "\\x0018", "\\x0019", "\\x001a", "\\x001b",
-    "\\x001c", "\\x001d", "\\x001e", "\\x001f"};
+    "\\u0000", "\\u0001", "\\u0002", "\\u0003", "\\u0004", "\\u0005", "\\u0006",
+    "\\u0007", "\\b", "\\t",     "\\n",     "\\u000b", "\\f",     "\\r",
+    "\\u000e", "\\u000f", "\\u0010", "\\u0011", "\\u0012", "\\u0013", "\\u0014",
+    "\\u0015", "\\u0016", "\\u0017", "\\u0018", "\\u0019", "\\u001a", "\\u001b",
+    "\\u001c", "\\u001d", "\\u001e", "\\u001f"};
 
+// All Unicode characters may be placed within the quotation marks, except for the
+// characters that MUST be escaped: quotation mark, reverse solidus, and the control
+// characters (U+0000 through U+001F).
+// There are two-character sequence escape representations of some popular characters:
+// \", \\, \b, \f, \n, \r, \t.
 SIMDJSON_CONSTEXPR_LAMBDA void escape_json_char(char c, char *&out) {
   if (c == '"') {
     memcpy(out, "\\\"", 2);
@@ -98231,29 +98564,6 @@ inline size_t write_string_escaped(const std::string_view input, char *out) {
   }
   return out - initout;
 }
-
-#if SIMDJSON_CONSTEVAL
-// unoptimized, meant for compile-time execution
-consteval std::string consteval_to_quoted_escaped(std::string_view input) {
-  std::string out = "\"";
-  for (char c : input) {
-    if (json_quotable_character[uint8_t(c)]) {
-      if (c == '"') {
-        out.append("\\\"");
-      } else if (c == '\\') {
-        out.append("\\\\");
-      } else {
-        std::string_view v = control_chars[uint8_t(c)];
-        out.append(v);
-      }
-    } else {
-      out.push_back(c);
-    }
-  }
-  out.push_back('"');
-  return out;
-}
-#endif // SIMDJSON_CONSTEVAL
 
 simdjson_inline string_builder::string_builder(size_t initial_capacity)
     : buffer(new(std::nothrow) char[initial_capacity]), position(0),
@@ -98797,9 +99107,6 @@ template<typename number_type,
 constexpr void atom(string_builder &b, const number_type t) {
   b.append(t);
 }
-#if SIMDJSON_CONSTEVAL
-consteval std::string consteval_to_quoted_escaped(std::string_view input);
-#endif
 
 template <class T>
   requires(std::is_class_v<T> && !container_but_not_string<T> &&
@@ -98814,10 +99121,10 @@ template <class T>
 constexpr void atom(string_builder &b, const T &t) {
   int i = 0;
   b.append('{');
-  [:expand(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked())):] >> [&]<auto dm>() {
+  template for (constexpr auto dm : std::define_static_array(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked()))) {
     if (i != 0)
       b.append(',');
-    constexpr auto key = std::define_static_string(consteval_to_quoted_escaped(std::meta::identifier_of(dm)));
+    constexpr auto key = std::define_static_string(constevalutil::consteval_to_quoted_escaped(std::meta::identifier_of(dm)));
     b.append_raw(key);
     b.append(':');
     atom(b, t.[:dm:]);
@@ -98851,21 +99158,16 @@ template <typename T>
   requires(std::is_enum_v<T>)
 void atom(string_builder &b, const T &e) {
 #if SIMDJSON_STATIC_REFLECTION
-  std::string_view result = "<unnamed>";
-  [:expand(std::meta::enumerators_of(^^T)):] >> [&]<auto enum_val>{
+  constexpr auto enumerators = std::define_static_array(std::meta::enumerators_of(^^T));
+  template for (constexpr auto enum_val : enumerators) {
+    constexpr auto enum_str = std::define_static_string(constevalutil::consteval_to_quoted_escaped(std::meta::identifier_of(enum_val)));
     if (e == [:enum_val:]) {
-      result = std::meta::identifier_of(enum_val);
+      b.append_raw(enum_str);
+      return;
     }
   };
-
-  if (result != "<unnamed>") {
-    b.append_raw("\"");
-    b.append_raw(result);
-    b.append_raw("\"");
-  } else {
-    // Fallback to integer if enum value not found
-    atom(b, static_cast<std::underlying_type_t<T>>(e));
-  }
+  // Fallback to integer if enum value not found
+  atom(b, static_cast<std::underlying_type_t<T>>(e));
 #else
   // Fallback: serialize as integer if reflection not available
   atom(b, static_cast<std::underlying_type_t<T>>(e));
@@ -98949,10 +99251,10 @@ template <class Z>
 void append(string_builder &b, const Z &z) {
   int i = 0;
   b.append('{');
-  [:expand(std::meta::nonstatic_data_members_of(^^Z, std::meta::access_context::unchecked())):] >> [&]<auto dm>() {
+  template for (constexpr auto dm : std::define_static_array(std::meta::nonstatic_data_members_of(^^Z, std::meta::access_context::unchecked()))) {
     if (i != 0)
       b.append(',');
-    constexpr auto key = std::define_static_string(consteval_to_quoted_escaped(std::meta::identifier_of(dm)));
+    constexpr auto key = std::define_static_string(constevalutil::consteval_to_quoted_escaped(std::meta::identifier_of(dm)));
     b.append_raw(key);
     b.append(':');
     atom(b, z.[:dm:]);
@@ -102544,6 +102846,12 @@ public:
   simdjson_inline const char * raw() const noexcept;
 
   /**
+   * Get the character at index i. This is unchecked.
+   * [0] when the string is of length 0 returns the final quote (").
+   */
+  simdjson_inline char operator[](size_t i) const noexcept;
+
+  /**
    * This compares the current instance to the std::string_view target: returns true if
    * they are byte-by-byte equal (no escaping is done) on target.size() characters,
    * and if the raw_json_string instance has a quote character at byte index target.size().
@@ -102682,10 +102990,10 @@ public:
   simdjson_inline ~simdjson_result() noexcept = default; ///< @private
 
   simdjson_inline simdjson_result<const char *> raw() const noexcept;
+  simdjson_inline char operator[](size_t) const noexcept;
   simdjson_inline simdjson_warn_unused simdjson_result<std::string_view> unescape(westmere::ondemand::json_iterator &iter, bool allow_replacement) const noexcept;
   simdjson_inline simdjson_warn_unused simdjson_result<std::string_view> unescape_wobbly(westmere::ondemand::json_iterator &iter) const noexcept;
 };
-
 } // namespace simdjson
 
 #endif // SIMDJSON_GENERIC_ONDEMAND_RAW_JSON_STRING_H
@@ -104447,6 +104755,9 @@ public:
   template<typename T> simdjson_inline error_code get(T &out) & noexcept;
   template<typename T> simdjson_inline error_code get(T &out) && noexcept;
 #if SIMDJSON_EXCEPTIONS
+
+  using westmere::implementation_simdjson_result_base<westmere::ondemand::document>::operator*;
+  using westmere::implementation_simdjson_result_base<westmere::ondemand::document>::operator->;
   template <class T, typename std::enable_if<std::is_same<T, westmere::ondemand::document>::value == false>::type>
   explicit simdjson_inline operator T() noexcept(false);
   simdjson_inline operator westmere::ondemand::array() & noexcept(false);
@@ -105829,32 +106140,6 @@ constexpr bool user_defined_type = (std::is_class_v<T>
 !concepts::appendable_containers<T> && !require_custom_serialization<T>);
 
 
-// workaround from
-// https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2024/p2996r10.html#back-and-forth
-// for missing expansion statements
-namespace __impl {
-  template<auto... vals>
-  struct replicator_type {
-    template<typename F>
-      constexpr void operator>>(F body) const {
-        (body.template operator()<vals>(), ...);
-      }
-  };
-
-  template<auto... vals>
-  replicator_type<vals...> replicator = {};
-}
-
-template<typename R>
-consteval auto expand(R range) {
-  std::vector<std::meta::info> args;
-  for (auto r : range) {
-    args.push_back(reflect_constant(r));
-  }
-  return substitute(^^__impl::replicator, args);
-}
-// end of workaround
-
 template <typename T, typename ValT>
   requires(user_defined_type<T> && std::is_class_v<T>)
 error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept {
@@ -105865,9 +106150,8 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept {
     SIMDJSON_TRY(val.get_object().get(obj));
   }
   error_code e = simdjson::SUCCESS;
-
-  [:expand(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked())):] >> [&]<auto mem>() {
-    if constexpr (!std::meta::is_const(mem) && std::meta::is_public(mem)) {
+  template for (constexpr auto mem : std::define_static_array(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked()))) {
+        if constexpr (!std::meta::is_const(mem) && std::meta::is_public(mem)) {
       constexpr std::string_view key = std::define_static_string(std::meta::identifier_of(mem));
       // Note: removed static assert as optional types are now handled generically
       // as long we are succesful or the field is not found, we continue
@@ -105886,16 +106170,15 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept {
 #if SIMDJSON_STATIC_REFLECTION
   std::string_view str;
   SIMDJSON_TRY(val.get_string().get(str));
-
-  bool found = false;
-  [:expand(std::meta::enumerators_of(^^T)):] >> [&]<auto enum_val>{
-    if (!found && str == std::meta::identifier_of(enum_val)) {
+  constexpr auto enumerators = std::define_static_array(std::meta::enumerators_of(^^T));
+  template for (constexpr auto enum_val : enumerators) {
+    if (str == std::meta::identifier_of(enum_val)) {
       out = [:enum_val:];
-      found = true;
+      return SUCCESS;
     }
   };
 
-  return found ? SUCCESS : INCORRECT_TYPE;
+  return INCORRECT_TYPE;
 #else
   // Fallback: deserialize as integer if reflection not available
   std::underlying_type_t<T> int_val;
@@ -110042,8 +110325,13 @@ namespace ondemand {
 
 simdjson_inline raw_json_string::raw_json_string(const uint8_t * _buf) noexcept : buf{_buf} {}
 
-simdjson_inline const char * raw_json_string::raw() const noexcept { return reinterpret_cast<const char *>(buf); }
+simdjson_inline const char * raw_json_string::raw() const noexcept {
+  return reinterpret_cast<const char *>(buf);
+}
 
+simdjson_inline char raw_json_string::operator[](size_t i) const noexcept {
+  return reinterpret_cast<const char *>(buf)[i];
+}
 
 simdjson_inline bool raw_json_string::is_free_from_unescaped_quote(std::string_view target) noexcept {
   size_t pos{0};
@@ -110219,6 +110507,10 @@ simdjson_inline simdjson_result<westmere::ondemand::raw_json_string>::simdjson_r
 simdjson_inline simdjson_result<const char *> simdjson_result<westmere::ondemand::raw_json_string>::raw() const noexcept {
   if (error()) { return error(); }
   return first.raw();
+}
+simdjson_inline char simdjson_result<westmere::ondemand::raw_json_string>::operator[](size_t i) const noexcept {
+  if (error()) { return error(); }
+  return first[i];
 }
 simdjson_inline simdjson_warn_unused simdjson_result<std::string_view> simdjson_result<westmere::ondemand::raw_json_string>::unescape(westmere::ondemand::json_iterator &iter, bool allow_replacement) const noexcept {
   if (error()) { return error(); }
@@ -112081,12 +112373,17 @@ find_next_json_quotable_character(const std::string_view view,
 }
 
 SIMDJSON_CONSTEXPR_LAMBDA static std::string_view control_chars[] = {
-    "\\x0000", "\\x0001", "\\x0002", "\\x0003", "\\x0004", "\\x0005", "\\x0006",
-    "\\x0007", "\\x0008", "\\t",     "\\n",     "\\x000b", "\\f",     "\\r",
-    "\\x000e", "\\x000f", "\\x0010", "\\x0011", "\\x0012", "\\x0013", "\\x0014",
-    "\\x0015", "\\x0016", "\\x0017", "\\x0018", "\\x0019", "\\x001a", "\\x001b",
-    "\\x001c", "\\x001d", "\\x001e", "\\x001f"};
+    "\\u0000", "\\u0001", "\\u0002", "\\u0003", "\\u0004", "\\u0005", "\\u0006",
+    "\\u0007", "\\b", "\\t",     "\\n",     "\\u000b", "\\f",     "\\r",
+    "\\u000e", "\\u000f", "\\u0010", "\\u0011", "\\u0012", "\\u0013", "\\u0014",
+    "\\u0015", "\\u0016", "\\u0017", "\\u0018", "\\u0019", "\\u001a", "\\u001b",
+    "\\u001c", "\\u001d", "\\u001e", "\\u001f"};
 
+// All Unicode characters may be placed within the quotation marks, except for the
+// characters that MUST be escaped: quotation mark, reverse solidus, and the control
+// characters (U+0000 through U+001F).
+// There are two-character sequence escape representations of some popular characters:
+// \", \\, \b, \f, \n, \r, \t.
 SIMDJSON_CONSTEXPR_LAMBDA void escape_json_char(char c, char *&out) {
   if (c == '"') {
     memcpy(out, "\\\"", 2);
@@ -112126,29 +112423,6 @@ inline size_t write_string_escaped(const std::string_view input, char *out) {
   }
   return out - initout;
 }
-
-#if SIMDJSON_CONSTEVAL
-// unoptimized, meant for compile-time execution
-consteval std::string consteval_to_quoted_escaped(std::string_view input) {
-  std::string out = "\"";
-  for (char c : input) {
-    if (json_quotable_character[uint8_t(c)]) {
-      if (c == '"') {
-        out.append("\\\"");
-      } else if (c == '\\') {
-        out.append("\\\\");
-      } else {
-        std::string_view v = control_chars[uint8_t(c)];
-        out.append(v);
-      }
-    } else {
-      out.push_back(c);
-    }
-  }
-  out.push_back('"');
-  return out;
-}
-#endif // SIMDJSON_CONSTEVAL
 
 simdjson_inline string_builder::string_builder(size_t initial_capacity)
     : buffer(new(std::nothrow) char[initial_capacity]), position(0),
@@ -112692,9 +112966,6 @@ template<typename number_type,
 constexpr void atom(string_builder &b, const number_type t) {
   b.append(t);
 }
-#if SIMDJSON_CONSTEVAL
-consteval std::string consteval_to_quoted_escaped(std::string_view input);
-#endif
 
 template <class T>
   requires(std::is_class_v<T> && !container_but_not_string<T> &&
@@ -112709,10 +112980,10 @@ template <class T>
 constexpr void atom(string_builder &b, const T &t) {
   int i = 0;
   b.append('{');
-  [:expand(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked())):] >> [&]<auto dm>() {
+  template for (constexpr auto dm : std::define_static_array(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked()))) {
     if (i != 0)
       b.append(',');
-    constexpr auto key = std::define_static_string(consteval_to_quoted_escaped(std::meta::identifier_of(dm)));
+    constexpr auto key = std::define_static_string(constevalutil::consteval_to_quoted_escaped(std::meta::identifier_of(dm)));
     b.append_raw(key);
     b.append(':');
     atom(b, t.[:dm:]);
@@ -112746,21 +113017,16 @@ template <typename T>
   requires(std::is_enum_v<T>)
 void atom(string_builder &b, const T &e) {
 #if SIMDJSON_STATIC_REFLECTION
-  std::string_view result = "<unnamed>";
-  [:expand(std::meta::enumerators_of(^^T)):] >> [&]<auto enum_val>{
+  constexpr auto enumerators = std::define_static_array(std::meta::enumerators_of(^^T));
+  template for (constexpr auto enum_val : enumerators) {
+    constexpr auto enum_str = std::define_static_string(constevalutil::consteval_to_quoted_escaped(std::meta::identifier_of(enum_val)));
     if (e == [:enum_val:]) {
-      result = std::meta::identifier_of(enum_val);
+      b.append_raw(enum_str);
+      return;
     }
   };
-
-  if (result != "<unnamed>") {
-    b.append_raw("\"");
-    b.append_raw(result);
-    b.append_raw("\"");
-  } else {
-    // Fallback to integer if enum value not found
-    atom(b, static_cast<std::underlying_type_t<T>>(e));
-  }
+  // Fallback to integer if enum value not found
+  atom(b, static_cast<std::underlying_type_t<T>>(e));
 #else
   // Fallback: serialize as integer if reflection not available
   atom(b, static_cast<std::underlying_type_t<T>>(e));
@@ -112844,10 +113110,10 @@ template <class Z>
 void append(string_builder &b, const Z &z) {
   int i = 0;
   b.append('{');
-  [:expand(std::meta::nonstatic_data_members_of(^^Z, std::meta::access_context::unchecked())):] >> [&]<auto dm>() {
+  template for (constexpr auto dm : std::define_static_array(std::meta::nonstatic_data_members_of(^^Z, std::meta::access_context::unchecked()))) {
     if (i != 0)
       b.append(',');
-    constexpr auto key = std::define_static_string(consteval_to_quoted_escaped(std::meta::identifier_of(dm)));
+    constexpr auto key = std::define_static_string(constevalutil::consteval_to_quoted_escaped(std::meta::identifier_of(dm)));
     b.append_raw(key);
     b.append(':');
     atom(b, z.[:dm:]);
@@ -115916,6 +116182,12 @@ public:
   simdjson_inline const char * raw() const noexcept;
 
   /**
+   * Get the character at index i. This is unchecked.
+   * [0] when the string is of length 0 returns the final quote (").
+   */
+  simdjson_inline char operator[](size_t i) const noexcept;
+
+  /**
    * This compares the current instance to the std::string_view target: returns true if
    * they are byte-by-byte equal (no escaping is done) on target.size() characters,
    * and if the raw_json_string instance has a quote character at byte index target.size().
@@ -116054,10 +116326,10 @@ public:
   simdjson_inline ~simdjson_result() noexcept = default; ///< @private
 
   simdjson_inline simdjson_result<const char *> raw() const noexcept;
+  simdjson_inline char operator[](size_t) const noexcept;
   simdjson_inline simdjson_warn_unused simdjson_result<std::string_view> unescape(lsx::ondemand::json_iterator &iter, bool allow_replacement) const noexcept;
   simdjson_inline simdjson_warn_unused simdjson_result<std::string_view> unescape_wobbly(lsx::ondemand::json_iterator &iter) const noexcept;
 };
-
 } // namespace simdjson
 
 #endif // SIMDJSON_GENERIC_ONDEMAND_RAW_JSON_STRING_H
@@ -117819,6 +118091,9 @@ public:
   template<typename T> simdjson_inline error_code get(T &out) & noexcept;
   template<typename T> simdjson_inline error_code get(T &out) && noexcept;
 #if SIMDJSON_EXCEPTIONS
+
+  using lsx::implementation_simdjson_result_base<lsx::ondemand::document>::operator*;
+  using lsx::implementation_simdjson_result_base<lsx::ondemand::document>::operator->;
   template <class T, typename std::enable_if<std::is_same<T, lsx::ondemand::document>::value == false>::type>
   explicit simdjson_inline operator T() noexcept(false);
   simdjson_inline operator lsx::ondemand::array() & noexcept(false);
@@ -119201,32 +119476,6 @@ constexpr bool user_defined_type = (std::is_class_v<T>
 !concepts::appendable_containers<T> && !require_custom_serialization<T>);
 
 
-// workaround from
-// https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2024/p2996r10.html#back-and-forth
-// for missing expansion statements
-namespace __impl {
-  template<auto... vals>
-  struct replicator_type {
-    template<typename F>
-      constexpr void operator>>(F body) const {
-        (body.template operator()<vals>(), ...);
-      }
-  };
-
-  template<auto... vals>
-  replicator_type<vals...> replicator = {};
-}
-
-template<typename R>
-consteval auto expand(R range) {
-  std::vector<std::meta::info> args;
-  for (auto r : range) {
-    args.push_back(reflect_constant(r));
-  }
-  return substitute(^^__impl::replicator, args);
-}
-// end of workaround
-
 template <typename T, typename ValT>
   requires(user_defined_type<T> && std::is_class_v<T>)
 error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept {
@@ -119237,9 +119486,8 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept {
     SIMDJSON_TRY(val.get_object().get(obj));
   }
   error_code e = simdjson::SUCCESS;
-
-  [:expand(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked())):] >> [&]<auto mem>() {
-    if constexpr (!std::meta::is_const(mem) && std::meta::is_public(mem)) {
+  template for (constexpr auto mem : std::define_static_array(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked()))) {
+        if constexpr (!std::meta::is_const(mem) && std::meta::is_public(mem)) {
       constexpr std::string_view key = std::define_static_string(std::meta::identifier_of(mem));
       // Note: removed static assert as optional types are now handled generically
       // as long we are succesful or the field is not found, we continue
@@ -119258,16 +119506,15 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept {
 #if SIMDJSON_STATIC_REFLECTION
   std::string_view str;
   SIMDJSON_TRY(val.get_string().get(str));
-
-  bool found = false;
-  [:expand(std::meta::enumerators_of(^^T)):] >> [&]<auto enum_val>{
-    if (!found && str == std::meta::identifier_of(enum_val)) {
+  constexpr auto enumerators = std::define_static_array(std::meta::enumerators_of(^^T));
+  template for (constexpr auto enum_val : enumerators) {
+    if (str == std::meta::identifier_of(enum_val)) {
       out = [:enum_val:];
-      found = true;
+      return SUCCESS;
     }
   };
 
-  return found ? SUCCESS : INCORRECT_TYPE;
+  return INCORRECT_TYPE;
 #else
   // Fallback: deserialize as integer if reflection not available
   std::underlying_type_t<T> int_val;
@@ -123414,8 +123661,13 @@ namespace ondemand {
 
 simdjson_inline raw_json_string::raw_json_string(const uint8_t * _buf) noexcept : buf{_buf} {}
 
-simdjson_inline const char * raw_json_string::raw() const noexcept { return reinterpret_cast<const char *>(buf); }
+simdjson_inline const char * raw_json_string::raw() const noexcept {
+  return reinterpret_cast<const char *>(buf);
+}
 
+simdjson_inline char raw_json_string::operator[](size_t i) const noexcept {
+  return reinterpret_cast<const char *>(buf)[i];
+}
 
 simdjson_inline bool raw_json_string::is_free_from_unescaped_quote(std::string_view target) noexcept {
   size_t pos{0};
@@ -123591,6 +123843,10 @@ simdjson_inline simdjson_result<lsx::ondemand::raw_json_string>::simdjson_result
 simdjson_inline simdjson_result<const char *> simdjson_result<lsx::ondemand::raw_json_string>::raw() const noexcept {
   if (error()) { return error(); }
   return first.raw();
+}
+simdjson_inline char simdjson_result<lsx::ondemand::raw_json_string>::operator[](size_t i) const noexcept {
+  if (error()) { return error(); }
+  return first[i];
 }
 simdjson_inline simdjson_warn_unused simdjson_result<std::string_view> simdjson_result<lsx::ondemand::raw_json_string>::unescape(lsx::ondemand::json_iterator &iter, bool allow_replacement) const noexcept {
   if (error()) { return error(); }
@@ -125453,12 +125709,17 @@ find_next_json_quotable_character(const std::string_view view,
 }
 
 SIMDJSON_CONSTEXPR_LAMBDA static std::string_view control_chars[] = {
-    "\\x0000", "\\x0001", "\\x0002", "\\x0003", "\\x0004", "\\x0005", "\\x0006",
-    "\\x0007", "\\x0008", "\\t",     "\\n",     "\\x000b", "\\f",     "\\r",
-    "\\x000e", "\\x000f", "\\x0010", "\\x0011", "\\x0012", "\\x0013", "\\x0014",
-    "\\x0015", "\\x0016", "\\x0017", "\\x0018", "\\x0019", "\\x001a", "\\x001b",
-    "\\x001c", "\\x001d", "\\x001e", "\\x001f"};
+    "\\u0000", "\\u0001", "\\u0002", "\\u0003", "\\u0004", "\\u0005", "\\u0006",
+    "\\u0007", "\\b", "\\t",     "\\n",     "\\u000b", "\\f",     "\\r",
+    "\\u000e", "\\u000f", "\\u0010", "\\u0011", "\\u0012", "\\u0013", "\\u0014",
+    "\\u0015", "\\u0016", "\\u0017", "\\u0018", "\\u0019", "\\u001a", "\\u001b",
+    "\\u001c", "\\u001d", "\\u001e", "\\u001f"};
 
+// All Unicode characters may be placed within the quotation marks, except for the
+// characters that MUST be escaped: quotation mark, reverse solidus, and the control
+// characters (U+0000 through U+001F).
+// There are two-character sequence escape representations of some popular characters:
+// \", \\, \b, \f, \n, \r, \t.
 SIMDJSON_CONSTEXPR_LAMBDA void escape_json_char(char c, char *&out) {
   if (c == '"') {
     memcpy(out, "\\\"", 2);
@@ -125498,29 +125759,6 @@ inline size_t write_string_escaped(const std::string_view input, char *out) {
   }
   return out - initout;
 }
-
-#if SIMDJSON_CONSTEVAL
-// unoptimized, meant for compile-time execution
-consteval std::string consteval_to_quoted_escaped(std::string_view input) {
-  std::string out = "\"";
-  for (char c : input) {
-    if (json_quotable_character[uint8_t(c)]) {
-      if (c == '"') {
-        out.append("\\\"");
-      } else if (c == '\\') {
-        out.append("\\\\");
-      } else {
-        std::string_view v = control_chars[uint8_t(c)];
-        out.append(v);
-      }
-    } else {
-      out.push_back(c);
-    }
-  }
-  out.push_back('"');
-  return out;
-}
-#endif // SIMDJSON_CONSTEVAL
 
 simdjson_inline string_builder::string_builder(size_t initial_capacity)
     : buffer(new(std::nothrow) char[initial_capacity]), position(0),
@@ -126064,9 +126302,6 @@ template<typename number_type,
 constexpr void atom(string_builder &b, const number_type t) {
   b.append(t);
 }
-#if SIMDJSON_CONSTEVAL
-consteval std::string consteval_to_quoted_escaped(std::string_view input);
-#endif
 
 template <class T>
   requires(std::is_class_v<T> && !container_but_not_string<T> &&
@@ -126081,10 +126316,10 @@ template <class T>
 constexpr void atom(string_builder &b, const T &t) {
   int i = 0;
   b.append('{');
-  [:expand(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked())):] >> [&]<auto dm>() {
+  template for (constexpr auto dm : std::define_static_array(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked()))) {
     if (i != 0)
       b.append(',');
-    constexpr auto key = std::define_static_string(consteval_to_quoted_escaped(std::meta::identifier_of(dm)));
+    constexpr auto key = std::define_static_string(constevalutil::consteval_to_quoted_escaped(std::meta::identifier_of(dm)));
     b.append_raw(key);
     b.append(':');
     atom(b, t.[:dm:]);
@@ -126118,21 +126353,16 @@ template <typename T>
   requires(std::is_enum_v<T>)
 void atom(string_builder &b, const T &e) {
 #if SIMDJSON_STATIC_REFLECTION
-  std::string_view result = "<unnamed>";
-  [:expand(std::meta::enumerators_of(^^T)):] >> [&]<auto enum_val>{
+  constexpr auto enumerators = std::define_static_array(std::meta::enumerators_of(^^T));
+  template for (constexpr auto enum_val : enumerators) {
+    constexpr auto enum_str = std::define_static_string(constevalutil::consteval_to_quoted_escaped(std::meta::identifier_of(enum_val)));
     if (e == [:enum_val:]) {
-      result = std::meta::identifier_of(enum_val);
+      b.append_raw(enum_str);
+      return;
     }
   };
-
-  if (result != "<unnamed>") {
-    b.append_raw("\"");
-    b.append_raw(result);
-    b.append_raw("\"");
-  } else {
-    // Fallback to integer if enum value not found
-    atom(b, static_cast<std::underlying_type_t<T>>(e));
-  }
+  // Fallback to integer if enum value not found
+  atom(b, static_cast<std::underlying_type_t<T>>(e));
 #else
   // Fallback: serialize as integer if reflection not available
   atom(b, static_cast<std::underlying_type_t<T>>(e));
@@ -126216,10 +126446,10 @@ template <class Z>
 void append(string_builder &b, const Z &z) {
   int i = 0;
   b.append('{');
-  [:expand(std::meta::nonstatic_data_members_of(^^Z, std::meta::access_context::unchecked())):] >> [&]<auto dm>() {
+  template for (constexpr auto dm : std::define_static_array(std::meta::nonstatic_data_members_of(^^Z, std::meta::access_context::unchecked()))) {
     if (i != 0)
       b.append(',');
-    constexpr auto key = std::define_static_string(consteval_to_quoted_escaped(std::meta::identifier_of(dm)));
+    constexpr auto key = std::define_static_string(constevalutil::consteval_to_quoted_escaped(std::meta::identifier_of(dm)));
     b.append_raw(key);
     b.append(':');
     atom(b, z.[:dm:]);
@@ -129301,6 +129531,12 @@ public:
   simdjson_inline const char * raw() const noexcept;
 
   /**
+   * Get the character at index i. This is unchecked.
+   * [0] when the string is of length 0 returns the final quote (").
+   */
+  simdjson_inline char operator[](size_t i) const noexcept;
+
+  /**
    * This compares the current instance to the std::string_view target: returns true if
    * they are byte-by-byte equal (no escaping is done) on target.size() characters,
    * and if the raw_json_string instance has a quote character at byte index target.size().
@@ -129439,10 +129675,10 @@ public:
   simdjson_inline ~simdjson_result() noexcept = default; ///< @private
 
   simdjson_inline simdjson_result<const char *> raw() const noexcept;
+  simdjson_inline char operator[](size_t) const noexcept;
   simdjson_inline simdjson_warn_unused simdjson_result<std::string_view> unescape(lasx::ondemand::json_iterator &iter, bool allow_replacement) const noexcept;
   simdjson_inline simdjson_warn_unused simdjson_result<std::string_view> unescape_wobbly(lasx::ondemand::json_iterator &iter) const noexcept;
 };
-
 } // namespace simdjson
 
 #endif // SIMDJSON_GENERIC_ONDEMAND_RAW_JSON_STRING_H
@@ -131204,6 +131440,9 @@ public:
   template<typename T> simdjson_inline error_code get(T &out) & noexcept;
   template<typename T> simdjson_inline error_code get(T &out) && noexcept;
 #if SIMDJSON_EXCEPTIONS
+
+  using lasx::implementation_simdjson_result_base<lasx::ondemand::document>::operator*;
+  using lasx::implementation_simdjson_result_base<lasx::ondemand::document>::operator->;
   template <class T, typename std::enable_if<std::is_same<T, lasx::ondemand::document>::value == false>::type>
   explicit simdjson_inline operator T() noexcept(false);
   simdjson_inline operator lasx::ondemand::array() & noexcept(false);
@@ -132586,32 +132825,6 @@ constexpr bool user_defined_type = (std::is_class_v<T>
 !concepts::appendable_containers<T> && !require_custom_serialization<T>);
 
 
-// workaround from
-// https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2024/p2996r10.html#back-and-forth
-// for missing expansion statements
-namespace __impl {
-  template<auto... vals>
-  struct replicator_type {
-    template<typename F>
-      constexpr void operator>>(F body) const {
-        (body.template operator()<vals>(), ...);
-      }
-  };
-
-  template<auto... vals>
-  replicator_type<vals...> replicator = {};
-}
-
-template<typename R>
-consteval auto expand(R range) {
-  std::vector<std::meta::info> args;
-  for (auto r : range) {
-    args.push_back(reflect_constant(r));
-  }
-  return substitute(^^__impl::replicator, args);
-}
-// end of workaround
-
 template <typename T, typename ValT>
   requires(user_defined_type<T> && std::is_class_v<T>)
 error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept {
@@ -132622,9 +132835,8 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept {
     SIMDJSON_TRY(val.get_object().get(obj));
   }
   error_code e = simdjson::SUCCESS;
-
-  [:expand(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked())):] >> [&]<auto mem>() {
-    if constexpr (!std::meta::is_const(mem) && std::meta::is_public(mem)) {
+  template for (constexpr auto mem : std::define_static_array(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked()))) {
+        if constexpr (!std::meta::is_const(mem) && std::meta::is_public(mem)) {
       constexpr std::string_view key = std::define_static_string(std::meta::identifier_of(mem));
       // Note: removed static assert as optional types are now handled generically
       // as long we are succesful or the field is not found, we continue
@@ -132643,16 +132855,15 @@ error_code tag_invoke(deserialize_tag, ValT &val, T &out) noexcept {
 #if SIMDJSON_STATIC_REFLECTION
   std::string_view str;
   SIMDJSON_TRY(val.get_string().get(str));
-
-  bool found = false;
-  [:expand(std::meta::enumerators_of(^^T)):] >> [&]<auto enum_val>{
-    if (!found && str == std::meta::identifier_of(enum_val)) {
+  constexpr auto enumerators = std::define_static_array(std::meta::enumerators_of(^^T));
+  template for (constexpr auto enum_val : enumerators) {
+    if (str == std::meta::identifier_of(enum_val)) {
       out = [:enum_val:];
-      found = true;
+      return SUCCESS;
     }
   };
 
-  return found ? SUCCESS : INCORRECT_TYPE;
+  return INCORRECT_TYPE;
 #else
   // Fallback: deserialize as integer if reflection not available
   std::underlying_type_t<T> int_val;
@@ -136799,8 +137010,13 @@ namespace ondemand {
 
 simdjson_inline raw_json_string::raw_json_string(const uint8_t * _buf) noexcept : buf{_buf} {}
 
-simdjson_inline const char * raw_json_string::raw() const noexcept { return reinterpret_cast<const char *>(buf); }
+simdjson_inline const char * raw_json_string::raw() const noexcept {
+  return reinterpret_cast<const char *>(buf);
+}
 
+simdjson_inline char raw_json_string::operator[](size_t i) const noexcept {
+  return reinterpret_cast<const char *>(buf)[i];
+}
 
 simdjson_inline bool raw_json_string::is_free_from_unescaped_quote(std::string_view target) noexcept {
   size_t pos{0};
@@ -136976,6 +137192,10 @@ simdjson_inline simdjson_result<lasx::ondemand::raw_json_string>::simdjson_resul
 simdjson_inline simdjson_result<const char *> simdjson_result<lasx::ondemand::raw_json_string>::raw() const noexcept {
   if (error()) { return error(); }
   return first.raw();
+}
+simdjson_inline char simdjson_result<lasx::ondemand::raw_json_string>::operator[](size_t i) const noexcept {
+  if (error()) { return error(); }
+  return first[i];
 }
 simdjson_inline simdjson_warn_unused simdjson_result<std::string_view> simdjson_result<lasx::ondemand::raw_json_string>::unescape(lasx::ondemand::json_iterator &iter, bool allow_replacement) const noexcept {
   if (error()) { return error(); }
@@ -138838,12 +139058,17 @@ find_next_json_quotable_character(const std::string_view view,
 }
 
 SIMDJSON_CONSTEXPR_LAMBDA static std::string_view control_chars[] = {
-    "\\x0000", "\\x0001", "\\x0002", "\\x0003", "\\x0004", "\\x0005", "\\x0006",
-    "\\x0007", "\\x0008", "\\t",     "\\n",     "\\x000b", "\\f",     "\\r",
-    "\\x000e", "\\x000f", "\\x0010", "\\x0011", "\\x0012", "\\x0013", "\\x0014",
-    "\\x0015", "\\x0016", "\\x0017", "\\x0018", "\\x0019", "\\x001a", "\\x001b",
-    "\\x001c", "\\x001d", "\\x001e", "\\x001f"};
+    "\\u0000", "\\u0001", "\\u0002", "\\u0003", "\\u0004", "\\u0005", "\\u0006",
+    "\\u0007", "\\b", "\\t",     "\\n",     "\\u000b", "\\f",     "\\r",
+    "\\u000e", "\\u000f", "\\u0010", "\\u0011", "\\u0012", "\\u0013", "\\u0014",
+    "\\u0015", "\\u0016", "\\u0017", "\\u0018", "\\u0019", "\\u001a", "\\u001b",
+    "\\u001c", "\\u001d", "\\u001e", "\\u001f"};
 
+// All Unicode characters may be placed within the quotation marks, except for the
+// characters that MUST be escaped: quotation mark, reverse solidus, and the control
+// characters (U+0000 through U+001F).
+// There are two-character sequence escape representations of some popular characters:
+// \", \\, \b, \f, \n, \r, \t.
 SIMDJSON_CONSTEXPR_LAMBDA void escape_json_char(char c, char *&out) {
   if (c == '"') {
     memcpy(out, "\\\"", 2);
@@ -138883,29 +139108,6 @@ inline size_t write_string_escaped(const std::string_view input, char *out) {
   }
   return out - initout;
 }
-
-#if SIMDJSON_CONSTEVAL
-// unoptimized, meant for compile-time execution
-consteval std::string consteval_to_quoted_escaped(std::string_view input) {
-  std::string out = "\"";
-  for (char c : input) {
-    if (json_quotable_character[uint8_t(c)]) {
-      if (c == '"') {
-        out.append("\\\"");
-      } else if (c == '\\') {
-        out.append("\\\\");
-      } else {
-        std::string_view v = control_chars[uint8_t(c)];
-        out.append(v);
-      }
-    } else {
-      out.push_back(c);
-    }
-  }
-  out.push_back('"');
-  return out;
-}
-#endif // SIMDJSON_CONSTEVAL
 
 simdjson_inline string_builder::string_builder(size_t initial_capacity)
     : buffer(new(std::nothrow) char[initial_capacity]), position(0),
@@ -139449,9 +139651,6 @@ template<typename number_type,
 constexpr void atom(string_builder &b, const number_type t) {
   b.append(t);
 }
-#if SIMDJSON_CONSTEVAL
-consteval std::string consteval_to_quoted_escaped(std::string_view input);
-#endif
 
 template <class T>
   requires(std::is_class_v<T> && !container_but_not_string<T> &&
@@ -139466,10 +139665,10 @@ template <class T>
 constexpr void atom(string_builder &b, const T &t) {
   int i = 0;
   b.append('{');
-  [:expand(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked())):] >> [&]<auto dm>() {
+  template for (constexpr auto dm : std::define_static_array(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked()))) {
     if (i != 0)
       b.append(',');
-    constexpr auto key = std::define_static_string(consteval_to_quoted_escaped(std::meta::identifier_of(dm)));
+    constexpr auto key = std::define_static_string(constevalutil::consteval_to_quoted_escaped(std::meta::identifier_of(dm)));
     b.append_raw(key);
     b.append(':');
     atom(b, t.[:dm:]);
@@ -139503,21 +139702,16 @@ template <typename T>
   requires(std::is_enum_v<T>)
 void atom(string_builder &b, const T &e) {
 #if SIMDJSON_STATIC_REFLECTION
-  std::string_view result = "<unnamed>";
-  [:expand(std::meta::enumerators_of(^^T)):] >> [&]<auto enum_val>{
+  constexpr auto enumerators = std::define_static_array(std::meta::enumerators_of(^^T));
+  template for (constexpr auto enum_val : enumerators) {
+    constexpr auto enum_str = std::define_static_string(constevalutil::consteval_to_quoted_escaped(std::meta::identifier_of(enum_val)));
     if (e == [:enum_val:]) {
-      result = std::meta::identifier_of(enum_val);
+      b.append_raw(enum_str);
+      return;
     }
   };
-
-  if (result != "<unnamed>") {
-    b.append_raw("\"");
-    b.append_raw(result);
-    b.append_raw("\"");
-  } else {
-    // Fallback to integer if enum value not found
-    atom(b, static_cast<std::underlying_type_t<T>>(e));
-  }
+  // Fallback to integer if enum value not found
+  atom(b, static_cast<std::underlying_type_t<T>>(e));
 #else
   // Fallback: serialize as integer if reflection not available
   atom(b, static_cast<std::underlying_type_t<T>>(e));
@@ -139601,10 +139795,10 @@ template <class Z>
 void append(string_builder &b, const Z &z) {
   int i = 0;
   b.append('{');
-  [:expand(std::meta::nonstatic_data_members_of(^^Z, std::meta::access_context::unchecked())):] >> [&]<auto dm>() {
+  template for (constexpr auto dm : std::define_static_array(std::meta::nonstatic_data_members_of(^^Z, std::meta::access_context::unchecked()))) {
     if (i != 0)
       b.append(',');
-    constexpr auto key = std::define_static_string(consteval_to_quoted_escaped(std::meta::identifier_of(dm)));
+    constexpr auto key = std::define_static_string(constevalutil::consteval_to_quoted_escaped(std::meta::identifier_of(dm)));
     b.append_raw(key);
     b.append(':');
     atom(b, z.[:dm:]);

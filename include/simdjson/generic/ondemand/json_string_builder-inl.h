@@ -155,12 +155,17 @@ find_next_json_quotable_character(const std::string_view view,
 }
 
 SIMDJSON_CONSTEXPR_LAMBDA static std::string_view control_chars[] = {
-    "\\x0000", "\\x0001", "\\x0002", "\\x0003", "\\x0004", "\\x0005", "\\x0006",
-    "\\x0007", "\\x0008", "\\t",     "\\n",     "\\x000b", "\\f",     "\\r",
-    "\\x000e", "\\x000f", "\\x0010", "\\x0011", "\\x0012", "\\x0013", "\\x0014",
-    "\\x0015", "\\x0016", "\\x0017", "\\x0018", "\\x0019", "\\x001a", "\\x001b",
-    "\\x001c", "\\x001d", "\\x001e", "\\x001f"};
+    "\\u0000", "\\u0001", "\\u0002", "\\u0003", "\\u0004", "\\u0005", "\\u0006",
+    "\\u0007", "\\b", "\\t",     "\\n",     "\\u000b", "\\f",     "\\r",
+    "\\u000e", "\\u000f", "\\u0010", "\\u0011", "\\u0012", "\\u0013", "\\u0014",
+    "\\u0015", "\\u0016", "\\u0017", "\\u0018", "\\u0019", "\\u001a", "\\u001b",
+    "\\u001c", "\\u001d", "\\u001e", "\\u001f"};
 
+// All Unicode characters may be placed within the quotation marks, except for the
+// characters that MUST be escaped: quotation mark, reverse solidus, and the control
+// characters (U+0000 through U+001F).
+// There are two-character sequence escape representations of some popular characters:
+// \", \\, \b, \f, \n, \r, \t.
 SIMDJSON_CONSTEXPR_LAMBDA void escape_json_char(char c, char *&out) {
   if (c == '"') {
     memcpy(out, "\\\"", 2);
@@ -200,29 +205,6 @@ inline size_t write_string_escaped(const std::string_view input, char *out) {
   }
   return out - initout;
 }
-
-#if SIMDJSON_CONSTEVAL
-// unoptimized, meant for compile-time execution
-consteval std::string consteval_to_quoted_escaped(std::string_view input) {
-  std::string out = "\"";
-  for (char c : input) {
-    if (json_quotable_character[uint8_t(c)]) {
-      if (c == '"') {
-        out.append("\\\"");
-      } else if (c == '\\') {
-        out.append("\\\\");
-      } else {
-        std::string_view v = control_chars[uint8_t(c)];
-        out.append(v);
-      }
-    } else {
-      out.push_back(c);
-    }
-  }
-  out.push_back('"');
-  return out;
-}
-#endif // SIMDJSON_CONSTEVAL
 
 simdjson_inline string_builder::string_builder(size_t initial_capacity)
     : buffer(new(std::nothrow) char[initial_capacity]), position(0),
