@@ -1,4 +1,4 @@
-/* auto-generated on 2025-06-04 00:22:10 -0400. Do not edit! */
+/* auto-generated on 2025-06-24 15:13:44 -0400. Do not edit! */
 /* including simdjson.h:  */
 /* begin file simdjson.h */
 #ifndef SIMDJSON_H
@@ -4491,7 +4491,7 @@ public:
     iterator& operator=(const iterator&) noexcept = default;
   private:
     simdjson_inline iterator(const internal::tape_ref &tape) noexcept;
-    internal::tape_ref tape;
+    internal::tape_ref tape{};
     friend class array;
   };
 
@@ -4582,7 +4582,7 @@ public:
 
 private:
   simdjson_inline array(const internal::tape_ref &tape) noexcept;
-  internal::tape_ref tape;
+  internal::tape_ref tape{};
   friend class element;
   friend struct simdjson_result<element>;
   template<typename T>
@@ -6220,7 +6220,7 @@ public:
 
 private:
   simdjson_inline element(const internal::tape_ref &tape) noexcept;
-  internal::tape_ref tape;
+  internal::tape_ref tape{};
   friend class document;
   friend class object;
   friend class array;
@@ -6391,7 +6391,7 @@ public:
   private:
     simdjson_inline iterator(const internal::tape_ref &tape) noexcept;
 
-    internal::tape_ref tape;
+    internal::tape_ref tape{};
 
     friend class object;
   };
@@ -6526,7 +6526,7 @@ public:
 private:
   simdjson_inline object(const internal::tape_ref &tape) noexcept;
 
-  internal::tape_ref tape;
+  internal::tape_ref tape{};
 
   friend class element;
   friend struct simdjson_result<element>;

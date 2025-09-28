@@ -77,7 +77,7 @@ template <typename T, typename ValT = SIMDJSON_IMPLEMENTATION::ondemand::value>
 concept custom_deserializable = tag_invocable<deserialize_tag, ValT&, T&>;
 
 template <typename T, typename ValT = SIMDJSON_IMPLEMENTATION::ondemand::value>
-concept deserializable = custom_deserializable<T, ValT> || is_builtin_deserializable_v<T>;
+concept deserializable = custom_deserializable<T, ValT> || is_builtin_deserializable_v<T> || concepts::optional_type<T>;
 
 template <typename T, typename ValT = SIMDJSON_IMPLEMENTATION::ondemand::value>
 concept nothrow_custom_deserializable = nothrow_tag_invocable<deserialize_tag, ValT&, T&>;
@@ -88,9 +88,25 @@ concept nothrow_deserializable = nothrow_custom_deserializable<T, ValT> || is_bu
 
 /// Deserialize Tag
 inline constexpr struct deserialize_tag {
+  using array_type = SIMDJSON_IMPLEMENTATION::ondemand::array;
+  using object_type = SIMDJSON_IMPLEMENTATION::ondemand::object;
   using value_type = SIMDJSON_IMPLEMENTATION::ondemand::value;
   using document_type = SIMDJSON_IMPLEMENTATION::ondemand::document;
   using document_reference_type = SIMDJSON_IMPLEMENTATION::ondemand::document_reference;
+
+  // Customization Point for array
+  template <typename T>
+    requires custom_deserializable<T, value_type>
+  [[nodiscard]] constexpr /* error_code */ auto operator()(array_type &object, T& output) const noexcept(nothrow_custom_deserializable<T, value_type>) {
+    return tag_invoke(*this, object, output);
+  }
+
+  // Customization Point for object
+  template <typename T>
+    requires custom_deserializable<T, value_type>
+  [[nodiscard]] constexpr /* error_code */ auto operator()(object_type &object, T& output) const noexcept(nothrow_custom_deserializable<T, value_type>) {
+    return tag_invoke(*this, object, output);
+  }
 
   // Customization Point for value
   template <typename T>
