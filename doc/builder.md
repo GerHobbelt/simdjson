@@ -109,6 +109,9 @@ bool car_test() {
 }
 ```
 
+
+
+
 The `string_builder` constructor takes an optional parameter which specifies the initial
 memory allocation in byte. If you know approximately the size of your JSON output, you can
 pass this value as a parameter (e.g., `simdjson::builder::string_builder sb{1233213}`).
@@ -123,6 +126,57 @@ The `string_builder` might throw an exception in case of error when you cast it 
 ```
 
 In all cases, the `std::string_view` instance depends the corresponding `string_builder` instance.
+
+### C++20
+
+
+
+If you have C++20, you can simplify the code, as the `std::vector<double>` is automatically
+supported.
+
+```cpp
+    Car c = {"Toyota", "Corolla", 2017, {30.0,30.2,30.513,30.79}};
+    simdjson::builder::string_builder sb;
+    sb.start_object();
+    sb.append_key_value("make", c.make);
+    sb.append_comma();
+    sb.append_key_value("model", c.model);
+    sb.append_comma();
+    sb.append_key_value("year", c.year);
+    sb.append_comma();
+    sb.append_key_value("tire_pressure", c.tire_pressure);
+    sb.end_object();
+    std::string_view p = sb.view();
+```
+
+With C++20, you can similarly handle standard containers transparently.
+For example, you can serialize `std::map<std::string,T>` types.
+
+```cpp
+    std::map<std::string,double> c = {{"key1", 1}, {"key2", 1}};
+    simdjson::builder::string_builder sb;
+    sb.append(c);
+    std::string_view p = sb.view();
+```
+
+You can also serialize `std::vector<T>` types.
+
+```cpp
+    std::vector<std::vector<double>> c = {{1.0, 2.0}, {3.0, 4.0}};
+    simdjson::builder::string_builder sb;
+    sb.append(c);
+    std::string_view p = sb.view();
+```
+
+You can also skip the creation for the `string_builder` instance in such simple cases.
+
+```cpp
+std::vector<std::vector<double>> c = {{1.0, 2.0}, {3.0, 4.0}};
+std::string json = simdjson::to_json(c);
+```
+
+We do recommend that you create and reuse the `string_builder` instance for performance
+reasons.
 
 C++26 static reflection
 ------------------------
@@ -165,7 +219,7 @@ automatically. In most cases, it should work automatically:
 
 In some instances, you might want to create a string directly from your own data type.
 You can create a string directly, without an explicit `string_builder` instance
-with the `simdjson::builder::to_json_string` function.
+with the `simdjson::to_json` template function.
 (Under the hood a `string_builder` instance may still be created.)
 
 ```cpp
@@ -178,12 +232,12 @@ with the `simdjson::builder::to_json_string` function.
 
     void f() {
         Car c = {"Toyota", "Corolla", 2017, {30.0,30.2,30.513,30.79}};
-        std::string json = simdjson::builder::to_json_string(c);
+        std::string json = simdjson::to_json(c);
     }
 ```
 
 If you know the output size, in bytes, of your JSON string, you may
-pass it as a second parameter (e.g., `simdjson::builder::to_json_string(c, 31123)`).
+pass it as a second parameter (e.g., `simdjson::to_json(c, 31123)`).
 
 
 
@@ -194,7 +248,7 @@ pattern:
 
 ```cpp
   std::string json;
-  if(simdjson::builder::to_json_string(c).get(json)) {
+  if(simdjson::to(c).get(json)) {
     // there was an error
   } else {
     // json contain the serialized JSON
