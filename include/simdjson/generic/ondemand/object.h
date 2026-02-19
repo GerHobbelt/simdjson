@@ -5,8 +5,9 @@
 #include "simdjson/generic/ondemand/base.h"
 #include "simdjson/generic/implementation_simdjson_result_base.h"
 #include "simdjson/generic/ondemand/value_iterator.h"
+#include <vector>
 #if SIMDJSON_STATIC_REFLECTION && SIMDJSON_SUPPORTS_CONCEPTS
-#include "simdjson/generic/ondemand/json_string_builder.h"  // for builder::internal::fixed_string
+#include "simdjson/generic/ondemand/json_string_builder.h"  // for constevalutil::fixed_string
 #endif
 #endif // SIMDJSON_CONDITIONAL_INCLUDE
 
@@ -34,7 +35,7 @@ public:
    * The following code reads z, then y, then x, and thus will not retrieve x or y if fed the
    * JSON `{ "x": 1, "y": 2, "z": 3 }`:
    *
-   * ```c++
+   * ```cpp
    * simdjson::ondemand::parser parser;
    * auto obj = parser.parse(R"( { "x": 1, "y": 2, "z": 3 } )"_padded);
    * double z = obj.find_field("z");
@@ -161,6 +162,15 @@ public:
   inline simdjson_result<value> at_path(std::string_view json_path) noexcept;
 
   /**
+   * Get all values matching the given JSONPath expression with wildcard support.
+   * Supports wildcard patterns like ".*" to match all object fields.
+   *
+   * @param json_path JSONPath expression with wildcards
+   * @return Vector of values matching the wildcard pattern
+  */
+  inline simdjson_result<std::vector<value>> at_path_with_wildcard(std::string_view json_path) noexcept;
+
+  /**
    * Reset the iterator so that we are pointing back at the
    * beginning of the object. You should still consume values only once even if you
    * can iterate through the object more than once. If you unescape a string or a key
@@ -214,7 +224,7 @@ public:
    * @returns SUCCESS If the parse succeeded and the out parameter was set to the value.
    */
   template <typename T>
-  simdjson_inline error_code get(T &out)
+  simdjson_warn_unused simdjson_inline error_code get(T &out)
      noexcept(custom_deserializable<T, object> ? nothrow_custom_deserializable<T, object> : true) {
     static_assert(custom_deserializable<T, object>);
     return deserialize(*this, out);
@@ -243,7 +253,7 @@ public:
    * potentially improving performance by skipping unwanted fields.
    *
    * Example:
-   * ```c++
+   * ```cpp
    * struct Car {
    *   std::string make;
    *   std::string model;
@@ -260,16 +270,16 @@ public:
    * @param out The output struct to populate with selected fields
    * @returns SUCCESS on success, or an error code if a required field is missing or has wrong type
    */
-  template<builder::internal::fixed_string... FieldNames, typename T>
+  template<constevalutil::fixed_string... FieldNames, typename T>
     requires(std::is_class_v<T> && (sizeof...(FieldNames) > 0))
-  simdjson_inline error_code extract_into(T& out) & noexcept;
+  simdjson_warn_unused simdjson_inline error_code extract_into(T& out) & noexcept;
 #endif // SIMDJSON_STATIC_REFLECTION
 #endif // SIMDJSON_SUPPORTS_CONCEPTS
 protected:
   /**
    * Go to the end of the object, no matter where you are right now.
    */
-  simdjson_inline error_code consume() noexcept;
+  simdjson_warn_unused simdjson_inline error_code consume() noexcept;
   static simdjson_inline simdjson_result<object> start(value_iterator &iter) noexcept;
   static simdjson_inline simdjson_result<object> start_root(value_iterator &iter) noexcept;
   static simdjson_inline simdjson_result<object> started(value_iterator &iter) noexcept;
@@ -308,6 +318,7 @@ public:
   simdjson_inline simdjson_result<SIMDJSON_IMPLEMENTATION::ondemand::value> operator[](std::string_view key) && noexcept;
   simdjson_inline simdjson_result<SIMDJSON_IMPLEMENTATION::ondemand::value> at_pointer(std::string_view json_pointer) noexcept;
   simdjson_inline simdjson_result<SIMDJSON_IMPLEMENTATION::ondemand::value> at_path(std::string_view json_path) noexcept;
+  simdjson_inline simdjson_result<std::vector<SIMDJSON_IMPLEMENTATION::ondemand::value>> at_path_with_wildcard(std::string_view json_path) noexcept;
   inline simdjson_result<bool> reset() noexcept;
   inline simdjson_result<bool> is_empty() noexcept;
   inline simdjson_result<size_t> count_fields() & noexcept;
@@ -324,7 +335,7 @@ public:
     return first.get<T>();
   }
   template<typename T>
-  simdjson_inline error_code get(T& out) noexcept {
+  simdjson_warn_unused simdjson_inline error_code get(T& out) noexcept {
     if (error()) { return error(); }
     if constexpr (std::is_same_v<T, SIMDJSON_IMPLEMENTATION::ondemand::object>) {
       out = first;
@@ -333,6 +344,16 @@ public:
     }
     return SUCCESS;
   }
+
+#if SIMDJSON_STATIC_REFLECTION
+  // TODO: move this code into object-inl.h
+  template<constevalutil::fixed_string... FieldNames, typename T>
+    requires(std::is_class_v<T> && (sizeof...(FieldNames) > 0))
+  simdjson_warn_unused simdjson_inline error_code extract_into(T& out) noexcept {
+    if (error()) { return error(); }
+    return first.extract_into<FieldNames...>(out);
+  }
+#endif // SIMDJSON_STATIC_REFLECTION
 #endif // SIMDJSON_SUPPORTS_CONCEPTS
 };
 
