@@ -1,6 +1,7 @@
 # Parse json at compile time
    * [Introduction](#introduction)
    * [Example](#example)
+   * [Concepts](#concepts)
    * [Loading from disk](#loading-from-disk)
    * [Limitations (compile-time errors)](#limitations-compile-time-errors)
 
@@ -53,15 +54,22 @@ Suppose you want to parse the following JSON document:
 }
 ```
 
+**Reminder**: In C++, `R"( )"` allows us to write multi-line strings with unescaped quotes.
+
+
 You can do so, at compile-time, as follows:
 
 
 ```cpp
-constexpr auto cfg = simdjson::compile_time::parse_json<R"({
+constexpr auto cfg = R"(
+
+{
     "port": 8080,
     "host": "localhost",
     "debug": true
-})">();
+}
+
+)"_json;
 
 // cfg.port == 8080
 // std::string_view(cfg.host) == "localhost"
@@ -71,12 +79,16 @@ constexpr auto cfg = simdjson::compile_time::parse_json<R"({
 You can nest objects and arrays:
 
 ```cpp
-constexpr auto data = simdjson::compile_time::parse_json<R"({
+constexpr auto data = R"(
+
+{
     "servers": [
         {"host": "s1", "port": 3000},
         {"host": "s2", "port": 3001}
     ]
-})">();
+}
+
+)"_json;
 
 
 // data.servers.size() == 2
@@ -86,10 +98,76 @@ constexpr auto data = simdjson::compile_time::parse_json<R"({
 Top-level arrays are allowed:
 
 ```cpp
-constexpr auto arr = simdjson::compile_time::parse_json<R"([1, 2, 3])">();
+constexpr auto arr = R"(
+
+[1, 2, 3]
+
+)"_json;
 static_assert(arr.size() == 3);
 static_assert(arr[1] == 2);
 ```
+
+
+## Concepts
+
+Given that the parsed data is made of structures that depend on the JSON input, you might
+want to check that it conforms to your expectation. You can do so with concepts.
+
+Let us consider this example:
+
+```cpp
+    constexpr auto config = R"(
+
+    [
+      { "name": "Alice", "age": 30 },
+      { "name": "Bob", "age": 25 },
+      { "name": "Charlie", "age": 35 }
+    ]
+
+    )"_json;
+```
+
+You might want to ensure that the result is an array of persons. You can define your
+expectation with concepts like so:
+
+```cpp
+template <typename T>
+concept person = requires(T p) {
+    std::string_view(p.name);  // has name field convertible to string_view
+    p.age;                     // has age field
+    requires std::is_integral_v<decltype(p.age)>;  // age is integral
+};
+
+/**
+ * Concept to validate that a type is an array of person objects
+ */
+template <typename T>
+concept array_of_person = requires(T arr) {
+    arr.size();                    // has size method
+    arr[0];                        // can access elements with []
+    requires person<decltype(arr[0])>;  // elements satisfy person concept
+};
+```
+
+And then a simple static assert with `decltype` is sufficient to check that the expectation is met:
+
+```cpp
+  constexpr auto config = R"(
+
+  [
+    { "name": "Alice", "age": 30 },
+    { "name": "Bob", "age": 25 },
+    { "name": "Charlie", "age": 35 }
+  ]
+
+  )"_json;
+
+
+  // Validate that the array satisfies the array_of_person concept
+  static_assert(array_of_person<decltype(config)>);
+```
+
+
 
 ## Loading from disk
 

@@ -1,6 +1,7 @@
 The Basics
 ==========
 
+
 An overview of what you need to know to use simdjson to parse JSON documents, with examples.
 [Our documentation regarding the generation (serialization) of JSON documents is in a
 separate document](https://github.com/simdjson/simdjson/blob/master/doc/builder.md).
@@ -168,8 +169,10 @@ For efficiency reasons, simdjson requires a string with a few bytes (`simdjson::
 at the end, these bytes may be read but their content does not affect the parsing. In practice,
 it means that the JSON inputs should be stored in a memory region with `simdjson::SIMDJSON_PADDING`
 extra bytes at the end. You do not have to set these bytes to specific values though you may
-want to if you want to avoid runtime warnings with some sanitizers. Advanced users may want to
-read the section Free Padding in [our performance notes](performance.md).
+want to if you want to avoid runtime warnings with some sanitizers. We expect the user
+of the library to load the data (from disk or from the network) into a padded buffer. To make
+this easy, we provide the `padded_string::load` function which loads files from disk in a padded buffer.
+[You can similarly fetch a file from a URL to a padded string](https://github.com/simdjson/curltostring) using our `simdjson::padded_string_builder`. Advanced users may want to read the section Free Padding in [our performance notes](performance.md).
 
 The simdjson library offers a tree-like [API](https://en.wikipedia.org/wiki/API), which you can
 access by creating a `ondemand::parser` and calling the `iterate()` method. The iterate method
@@ -181,6 +184,9 @@ ondemand::parser parser;
 auto json = padded_string::load("twitter.json"); // load JSON file 'twitter.json'.
 ondemand::document doc = parser.iterate(json); // position a pointer at the beginning of the JSON data
 ```
+
+(Windows users compiling with C++17 or better may use `wchar_t` strings to support non-ASCII
+filenames: `padded_string::load(L"twitter.json")`.)
 
 If you prefer not to create your own `ondemand::parser` instance, you can access
 a thread-local version by calling `ondemand::parser.get_parser()`.
@@ -350,7 +356,13 @@ the  macro `SIMDJSON_DEVELOPMENT_CHECKS` to 1 prior to including
 the `simdjson.h` header to enable these additional checks: just make sure you remove the
 definition once your code has been tested. When `SIMDJSON_DEVELOPMENT_CHECKS` is set to 1, the
 simdjson library runs additional (expensive) tests on your code to help ensure that you are
-using the library in a safe manner.
+using the library in a safe manner. We add asserts which may halt your program, helping
+you find the bad programming pattern.
+
+When `SIMDJSON_DEVELOPMENT_CHECKS`, some of our data structures contain extra data for
+tracking explicitly potential programming mistakes. Thus you should not relying on the
+size (`sizeof`) of our data structures to be constant: they may change depending on the
+compiler settings.
 
 Once your code has been tested, you can then run it in
 Release mode: under Visual Studio, it means having the `_DEBUG` macro undefined, and, for other
@@ -433,8 +445,8 @@ support for users who avoid exceptions. See [the simdjson error handling documen
 
   If you know the type of the value, you can cast it right there, too! `for (double value : array) { ... }`.
 
-  You may also use explicit iterators: `for(auto i = array.begin(); i != array.end(); i++) {}`. You can check that an array is empty with the condition `auto i = array.begin(); if (i == array.end()) {...}`.
-* **Object Iteration:** You can iterate through an object's fields, as well: `for (auto field : object) { ... }`. You may also use explicit iterators : `for(auto i = object.begin(); i != object.end(); i++) { auto field = *i; .... }`. You can check that an object is empty with the condition `auto i = object.begin(); if (i == object.end()) {...}`.
+  You may also use explicit iterators: `for(auto i = array.begin(); i != array.end(); i++) {}`. You can check that an array is empty with the condition `auto i = array.begin(); if (i == array.end()) {...}`. You should derefence (`*i`) an iterator at most once before incrementing it (`i++`), when compiling in debug mode with development checks, we add asserts to help you identify such a mistake.
+* **Object Iteration:** You can iterate through an object's fields, as well: `for (auto field : object) { ... }`.
   - `field.unescaped_key()` will get you the unescaped key string as a `std::string_view` instance. E.g., the JSON string `"\u00e1"` becomes the Unicode string `á`. Optionally,  you pass `true` as a parameter to the `unescaped_key` method if you want invalid escape sequences to be replaced by a default replacement character (e.g., `\ud800\ud801\ud811`): otherwise bad escape sequences lead to an immediate error.
   - `field.escaped_key()` will get you the key string as  as a `std::string_view` instance, but unlike `unescaped_key()`, the key is not processed, so no unescaping is done. E.g., the JSON string `"\u00e1"` becomes the Unicode string `\u00e1`. We expect that `escaped_key()` is faster than `field.unescaped_key()`.
   - `field.value()` will get you the value, which you can then use all these other methods on.
@@ -447,13 +459,17 @@ support for users who avoid exceptions. See [the simdjson error handling documen
 
   When you are iterating through an object, you are advancing through its keys and values. You should not also access the object or other objects. E.g. within a loop over `myobject`, you should not be accessing `myobject`. The following is an anti-pattern: `for(auto value: myobject) {myobject["mykey"]}`.
 
+  We discourage using the object iterators explicitly: `for(auto i = object.begin(); i != object.end(); i++) { auto field = *i; .... }`. In addition to the usual requirement to check against `end()` prior to dereferencing, you must also always dereference the pointer (`*it`) exactly once before you increment it (`it++`). You must also only deference the iterator once (never more than once). When compiling in
+  debug mode with development checks, we add asserts to help check whether you correctly
+  dereferenced the pointer before incrementing it.
+
   You should never reset an object as you are iterating through it. The following is an anti-pattern: `for(auto value: myobject) {myobject.reset()}`.
-* **Array Index:** Because it is forward-only, you cannot look up an array element by index by index. Instead,
+* **Array Index:** Because it is forward-only, you cannot look up an array element by index. Instead,
   you should iterate through the array and keep an index yourself. Exceptionally, if need a single value
   out of the array, you may use an array access (e.g., `array[1]`). You should never reset an array as you are iterating through it. The following is an anti-pattern: `for(auto value: myarray) {myarray.reset()}`.
 * **Field Access:** To get the value of the "foo" field in an object, use `object["foo"]`. This will
   scan through the object looking for the field with the matching string, doing a character-by-character
-  comparison. It may generate the error `simdjson::NO_SUCH_FIELD` if there is no such key in the object, it may throw an exception (see [Error handling](#error-handling)). For efficiency reason, you should avoid looking up the same field repeatedly: e.g., do
+  comparison. It may generate the error `simdjson::NO_SUCH_FIELD` if there is no such key in the object, it may throw an exception (see [Error handling](#error-handling)). The returned value is only valid so long as you do not access another field: normally, you should therefore grab the value right after accessing a key (i.e., convert it to number, string, object, array...). For efficiency reason, you should avoid looking up the same field repeatedly: e.g., do
   not do `object["foo"]` followed by `object["foo"]` with the same `object` instance. Generally, you should not mix and match iterating through an object (`for(auto field : object) {...}`) and key accesses (`object["foo"]`): if you need to iterate through an object after a key access, you need to call `reset()` on the object. Whenever you call `reset()`, you need to keep in mind that though you can iterate over the array repeatedly, values should be consumedonly once (e.g., repeatedly calling `unescaped_key()` on the same  key is forbidden). Keep in mind that On-Demand does not buffer or save the result of the parsing: if you repeatedly access `object["foo"]`, then it must repeatedly seek the key and parse the content. The library does not provide a distinct function to check if a key is present, instead we recommend you attempt to access the key: e.g., by doing `ondemand::value val{}; if (!object["foo"].get(val)) {...}`, you have that `val` contains the requested value inside the if clause.  It is your responsibility as a user to temporarily keep a reference to the value (`auto v = object["foo"]`), or to consume the content and store it in your own data structures. If you consume an
   object twice: `std::string_view(object["foo"]` followed by `std::string_view(object["foo"]` then your code
   is in error. Furthermore, you can only consume one field at a time, on the same object. The
@@ -477,7 +493,7 @@ support for users who avoid exceptions. See [the simdjson error handling documen
   > unlike `key()`, it has to determine the location of the final quote character.
   >
   > ```cpp
-  > auto json = R"({"k\u0065y": 1})"_padded;
+  > auto json = R"({"k\u0065y": 1})"_padded; // R"( ... )" is a C++ raw string literal.
   > ondemand::parser parser;
   > auto doc = parser.iterate(json);
   > ondemand::object object = doc.get_object();
@@ -502,7 +518,7 @@ support for users who avoid exceptions. See [the simdjson error handling documen
   >
   > ```cpp
   > ondemand::parser parser;
-  > auto json = R"(  { "x": 1, "y": 2 }  )"_padded;
+  > auto json = R"(  { "x": 1, "y": 2 }  )"_padded; //  R"( ... )" is a C++ raw string literal.
   > auto doc = parser.iterate(json);
   > double y = doc.find_field("y"); // The cursor is now after the 2 (at })
   > double x = doc.find_field("x"); // This fails, because there are no more fields after "y"
@@ -523,13 +539,13 @@ support for users who avoid exceptions. See [the simdjson error handling documen
   > auto silly_json = R"( { "test": "result"  }  )"_padded;
   > ondemand::document doc = parser.iterate(silly_json);
   > std::cout << simdjson::to_json_string(doc["test"]) << std::endl; // Requires simdjson 1.0 or better
-  >````
+  > ```
   > ```cpp
   > // retrieves an unescaped string value as a string_view instance
   > auto silly_json = R"( { "test": "result"  }  )"_padded;
   > ondemand::document doc = parser.iterate(silly_json);
   > std::cout << std::string_view(doc["test"]) << std::endl;
-  >````
+  > ```
   You can use `to_json_string` to efficiently extract components of a JSON document to reconstruct a new JSON document, as in the following example:
   > ```cpp
   > auto cars_json = R"( [
@@ -558,7 +574,7 @@ support for users who avoid exceptions. See [the simdjson error handling documen
   > oss << "]";
   > auto json_string = oss.str();
   > // json_string == "[[ 40.1, 39.9, 37.7, 40.4 ],[ 30.1, 31.0, 28.6, 28.7 ]]"
-  >````
+  > ```
 * **Extracting Values (without exceptions):** You can use a variant usage of `get()` with error
   codes to avoid exceptions. You first declare the variable of the appropriate type (`double`,
   `uint64_t`, `int64_t`, `bool`, `ondemand::object` and `ondemand::array`) and pass it by reference

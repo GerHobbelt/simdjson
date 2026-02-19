@@ -4,6 +4,10 @@
 #include <string>
 #include <string_view>
 
+#if SIMDJSON_SUPPORTS_RANGES
+#include <ranges>
+#endif
+
 using namespace simdjson;
 
 struct Car {
@@ -12,6 +16,33 @@ struct Car {
   int64_t year;
   std::vector<double> tire_pressure;
 }; // Car
+
+
+#if SIMDJSON_SUPPORTS_CONCEPTS
+struct Car2549 {
+	std::string make;
+	std::string model;
+	int64_t year;
+	std::vector<float> tire_pressure;
+};
+namespace simdjson {
+  // we intentionally pass by non-const reference to car.
+	template <typename builder_type>
+	void tag_invoke(serialize_tag, builder_type& builder,  Car2549& car) {
+		builder.start_object();
+		builder.append_key_value("make", car.make);
+		builder.append_comma();
+		builder.append_key_value("model", car.model);
+		builder.append_comma();
+		builder.append_key_value("year", car.year);
+		builder.append_comma();
+		builder.append_key_value("tire_pressure", car.tire_pressure);
+		builder.end_object();
+	}
+} // namespace simdjson
+
+static_assert(simdjson::require_custom_serialization<Car2549>);
+#endif
 
 namespace builder_tests {
 using namespace std;
@@ -424,6 +455,21 @@ bool car_test() {
   TEST_SUCCEED();
 }
 #if SIMDJSON_SUPPORTS_CONCEPTS
+
+bool issue2549() {
+  TEST_START();
+  simdjson::builder::string_builder sb;
+	Car2549 c = { "Toyota", "Corolla", 2017, {1.0f,2.0f,3.0f} };
+  sb.start_object();
+  sb.append_key_value("car", c);
+  sb.end_object();
+  std::string_view p;
+  auto result = sb.view().get(p);
+  ASSERT_SUCCESS(result);
+  ASSERT_EQUAL(p, "{\"car\":{\"make\":\"Toyota\",\"model\":\"Corolla\",\"year\":2017,\"tire_pressure\":[1.0,2.0,3.0]}}");
+  TEST_SUCCEED();
+}
+
 bool car_test_template() {
   TEST_START();
   simdjson::builder::string_builder sb;
@@ -517,6 +563,24 @@ bool map_test() {
   ASSERT_EQUAL(s, "{\"key1\":1.0,\"key2\":1.0}");
   TEST_SUCCEED();
 }
+bool ranges_test() {
+  TEST_START();
+  struct Foo {
+    int a;
+    float b;
+  };
+  std::vector<Foo> c = {{1, 2.0f}, {3, 4.0f}, {5, 6.0f}, {7, 8.0f}};
+  simdjson::builder::string_builder sb;
+  sb.append(c | std::views::transform(&Foo::b));
+  std::string_view p;
+  auto result = sb.view().get(p);
+  ASSERT_SUCCESS(result);
+  ASSERT_EQUAL(p, "[2.0,4.0,6.0,8.0]");
+  std::string s;
+  ASSERT_SUCCESS(simdjson::to_json(c | std::views::transform(&Foo::b)).get(s));
+  ASSERT_EQUAL(s, "[2.0,4.0,6.0,8.0]");
+  TEST_SUCCEED();
+}
 bool double_double_test() {
   TEST_START();
   std::vector<std::vector<double>> c = {{1.0, 2.0}, {3.0, 4.0}};
@@ -586,14 +650,15 @@ bool run() {
          car_test_exception() && string_convertion_except() &&
 #endif
 #if SIMDJSON_SUPPORTS_RANGES && SIMDJSON_SUPPORTS_CONCEPTS
-         map_test() && double_double_test() && double_double_test_to_string() &&
-         car_test_simple() && car_test_simple_complete() &&
+         map_test() && ranges_test() && double_double_test() &&
+         double_double_test_to_string() && car_test_simple() &&
+         car_test_simple_complete() &&
 #if SIMDJSON_EXCEPTIONS
          car_test_simple_complete_exceptions() &&
 #endif
 #endif
 #if SIMDJSON_SUPPORTS_CONCEPTS
-         car_test_template() && serialize_optional() &&
+         issue2549() && car_test_template() && serialize_optional() &&
 #endif
          append_char() && append_integer() && append_float() && append_null() &&
          clear() && escape_and_append() && escape_and_append_with_quotes() &&

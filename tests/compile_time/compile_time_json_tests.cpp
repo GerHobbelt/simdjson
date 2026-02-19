@@ -8,8 +8,8 @@
 
 #include <print>
 
-using namespace simdjson;
 using namespace std::string_view_literals;
+using namespace simdjson;
 
 namespace compile_time_json_tests {
 /**
@@ -479,6 +479,219 @@ bool array_of_objects() {
     TEST_SUCCEED();
 }
 
+
+bool test_complex_mixed_str() {
+    TEST_START();
+    auto f= "fds"_padded;
+
+    constexpr auto config = R"(
+    {
+        "app": "myapp",
+        "version": 1.0,
+        "config": {
+            "ports": [8080, 8081, 8082],
+            "enabled": true
+        },
+        "servers": [
+            {"host": "server1", "port": 3000},
+            {"host": "server2", "port": 3001}
+        ]
+    }
+
+    )"_json;
+
+    static_assert(std::string_view(config.app) == "myapp");
+    static_assert(config.version == 1.0);
+    static_assert(config.config.ports[0] == 8080);
+    static_assert(config.config.enabled == true);
+    static_assert(std::string_view(config.servers[0].host) == "server1");
+    static_assert(config.servers[1].port == 3001);
+
+    ASSERT_EQUAL(std::string_view(config.app), "myapp"sv);
+    ASSERT_EQUAL(config.config.ports[0], 8080);
+    ASSERT_EQUAL(std::string_view(config.servers[0].host), "server1"sv);
+    ASSERT_EQUAL(config.servers[1].port, 3001);
+
+    TEST_SUCCEED();
+}
+
+/**
+ * Test: User config example - basic object with primitives
+ */
+bool test_user_config_example() {
+    TEST_START();
+
+    constexpr auto cfg = R"(
+
+    {
+        "port": 8080,
+        "host": "localhost",
+        "debug": true
+    }
+
+    )"_json;
+
+    static_assert(cfg.port == 8080);
+    static_assert(std::string_view(cfg.host) == "localhost");
+    static_assert(cfg.debug == true);
+
+    ASSERT_EQUAL(cfg.port, 8080);
+    ASSERT_EQUAL(std::string_view(cfg.host), "localhost"sv);
+    ASSERT_TRUE(cfg.debug);
+
+    TEST_SUCCEED();
+}
+
+/**
+ * Test: Nested objects and arrays example
+ */
+bool test_nested_servers_example() {
+    TEST_START();
+
+    constexpr auto data = R"(
+
+    {
+        "servers": [
+            {"host": "s1", "port": 3000},
+            {"host": "s2", "port": 3001}
+        ]
+    }
+
+    )"_json;
+
+    static_assert(data.servers.size() == 2);
+    static_assert(std::string_view(data.servers[0].host) == "s1");
+    static_assert(data.servers[0].port == 3000);
+    static_assert(std::string_view(data.servers[1].host) == "s2");
+    static_assert(data.servers[1].port == 3001);
+
+    ASSERT_EQUAL(data.servers.size(), 2);
+    ASSERT_EQUAL(std::string_view(data.servers[0].host), "s1"sv);
+    ASSERT_EQUAL(data.servers[0].port, 3000);
+    ASSERT_EQUAL(std::string_view(data.servers[1].host), "s2"sv);
+    ASSERT_EQUAL(data.servers[1].port, 3001);
+
+    TEST_SUCCEED();
+}
+
+/**
+ * Test: Top-level array example
+ */
+bool test_top_level_array_example() {
+    TEST_START();
+
+    constexpr auto arr = R"(
+          [1, 2, 3]
+   )"_json;
+
+    static_assert(arr.size() == 3);
+    static_assert(arr[0] == 1);
+    static_assert(arr[1] == 2);
+    static_assert(arr[2] == 3);
+
+    ASSERT_EQUAL(arr.size(), 3);
+    ASSERT_EQUAL(arr[0], 1);
+    ASSERT_EQUAL(arr[1], 2);
+    ASSERT_EQUAL(arr[2], 3);
+
+    TEST_SUCCEED();
+}
+
+/**
+ * Concept to validate that a type represents a person with name and age
+ */
+template <typename T>
+concept person = requires(T p) {
+    std::string_view(p.name);  // has name field convertible to string_view
+    p.age;                     // has age field
+    requires std::is_integral_v<decltype(p.age)>;  // age is integral
+};
+
+/**
+ * Concept to validate that a type is an array of person objects
+ */
+template <typename T>
+concept array_of_person = requires(T arr) {
+    arr.size();                    // has size method
+    arr[0];                        // can access elements with []
+    requires person<decltype(arr[0])>;  // elements satisfy person concept
+};
+
+/**
+ * Test: Array of objects with concept validation
+ */
+bool test_array_of_objects_with_concept() {
+    TEST_START();
+
+    constexpr auto config = R"(
+
+    [
+      { "name": "Alice", "age": 30 },
+      { "name": "Bob", "age": 25 },
+      { "name": "Charlie", "age": 35 }
+    ]
+
+    )"_json;
+
+    std::print("Array size: {}\n", config.size());
+
+    static_assert(config.size() == 3);
+
+    // Validate that the array satisfies the array_of_person concept
+    static_assert(array_of_person<decltype(config)>);
+
+
+    // Test the actual values
+    static_assert(std::string_view(config[0].name) == "Alice");
+    static_assert(config[0].age == 30);
+    static_assert(std::string_view(config[1].name) == "Bob");
+    static_assert(config[1].age == 25);
+    static_assert(std::string_view(config[2].name) == "Charlie");
+    static_assert(config[2].age == 35);
+
+    // Runtime assertions
+    ASSERT_EQUAL(config.size(), 3);
+    ASSERT_EQUAL(std::string_view(config[0].name), "Alice"sv);
+    ASSERT_EQUAL(config[0].age, 30);
+    ASSERT_EQUAL(std::string_view(config[1].name), "Bob"sv);
+    ASSERT_EQUAL(config[1].age, 25);
+    ASSERT_EQUAL(std::string_view(config[2].name), "Charlie"sv);
+    ASSERT_EQUAL(config[2].age, 35);
+
+    TEST_SUCCEED();
+}
+
+#if defined(__cpp_pp_embed) && __cpp_pp_embed >= 202502L
+#define TEST_EMBED_SUPPORTED
+/**
+ * Test: #embed support for external JSON files (C++26)
+ */
+bool test_embed_twitter_json() {
+    TEST_START();
+
+    // C++26 #embed allows embedding files directly into the binary at compile time
+    // This creates a const char array with the file contents plus null terminator
+    constexpr const char twitter_json[] = {
+        #embed TWITTER_JSON
+        , 0
+    };
+
+    // Parse the embedded JSON at compile time
+    constexpr auto parsed_twitter = simdjson::compile_time::parse_json<twitter_json>();
+
+    // Verify the structure - twitter.json should have a "statuses" array
+    static_assert(parsed_twitter.statuses.size() > 0);
+
+    // Runtime verification
+    ASSERT_TRUE(parsed_twitter.statuses.size() > 0);
+
+    std::cout << "Successfully parsed embedded twitter.json with "
+              << parsed_twitter.statuses.size() << " statuses" << std::endl;
+
+    TEST_SUCCEED();
+}
+#endif //  defined(__cpp_pp_embed) && __cpp_pp_embed >= 202502L
+
 bool run() {
     return test_basic_object() &&
            test_nested_objects() &&
@@ -498,7 +711,16 @@ bool run() {
            test_simple_object_str_with_obj() &&
            test_empty_arrays() &&
            simple_array() &&
-           array_of_objects();
+           test_complex_mixed_str() &&
+           array_of_objects() &&
+           test_user_config_example() &&
+           test_nested_servers_example() &&
+           test_top_level_array_example() &&
+           test_array_of_objects_with_concept()
+#ifdef TEST_EMBED_SUPPORTED
+           && test_embed_twitter_json()
+#endif
+;
 }
 
 } // namespace compile_time_json_tests

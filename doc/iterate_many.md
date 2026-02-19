@@ -8,7 +8,7 @@ library provides high-speed access to files or streams containing multiple small
 {"text":"a"}
 {"text":"b"}
 {"text":"c"}
-...
+"..."
 ```
 ... you want to read the entries (individual JSON documents) as quickly and as conveniently as possible. Importantly, the input might span several gigabytes, but you want to use a small (fixed) amount of memory. Ideally, you'd also like the parallelize the processing (using more than one core) to speed up the process.
 
@@ -141,7 +141,9 @@ API
 Example:
 
 ```cpp
+//  R"( ... )" is a C++ raw string literal.
 auto json = R"({ "foo": 1 } { "foo": 2 } { "foo": 3 } )"_padded;
+// _padded returns an simdjson::padded_string instance
 ondemand::parser parser;
 ondemand::document_stream docs = parser.iterate_many(json);
 for (auto doc : docs) {

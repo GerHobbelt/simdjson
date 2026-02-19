@@ -54,6 +54,24 @@ dom::parser parser;
 dom::element doc = parser.parse("[1,2,3]"_padded); // parse a string, the _padded suffix creates a simdjson::padded_string instance
 ```
 
+You can also load a `padded_string` from a file.
+
+
+```cpp
+auto json = padded_string::load("twitter.json"); // load JSON file 'twitter.json'.
+dom::element doc = parser.parse(json);
+```
+
+[You can similarly fetch a file from a URL to a padded string](https://github.com/simdjson/curltostring) using our `simdjson::padded_string_builder`.
+
+(Windows users compiling with C++17 or better may use `wchar_t` strings to support non-ASCII
+filenames: `padded_string::load(L"twitter.json")`.)
+
+
+(Windows users compiling with C++17 or better may use `wchar_t` strings to support non-ASCII
+filenames: `padded_string::load(L"twitter.json")`.)
+
+
 You can copy your data directly on a `simdjson::padded_string` as follows:
 
 ```cpp
@@ -119,6 +137,7 @@ Once you have an element, you can navigate it with idiomatic C++ iterators, oper
   `dom::object` and `dom::array`) and pass it by reference to `get()` which gives you back an error code: e.g.,
   ```cpp
   simdjson::error_code error;
+  // _padded returns an simdjson::padded_string instance
   simdjson::padded_string numberstring = "1.2"_padded; // our JSON input ("1.2")
   simdjson::dom::parser parser;
   double value; // variable where we store the value to be parsed
@@ -153,6 +172,7 @@ Once you have an element, you can navigate it with idiomatic C++ iterators, oper
 The following code illustrates all of the above:
 
 ```cpp
+//  R"( ... )" is a C++ raw string literal.
 auto cars_json = R"( [
   { "make": "Toyota", "model": "Camry",  "year": 2018, "tire_pressure": [ 40.1, 39.9, 37.7, 40.4 ] },
   { "make": "Kia",    "model": "Soul",   "year": 2012, "tire_pressure": [ 30.1, 31.0, 28.6, 28.7 ] },
@@ -825,7 +845,7 @@ memcpy(padded_json_copy.get(), json, json_len);
 memset(padded_json_copy.get() + json_len, 0, SIMDJSON_PADDING);
 simdjson::dom::parser parser;
 simdjson::dom::element element = parser.parse(padded_json_copy.get(), json_len, false);
-````
+```
 
 Setting the `realloc_if_needed` parameter `false` in this manner may lead to better performance since copies are avoided, but it requires that the user takes more responsibilities: the simdjson library cannot verify that the input buffer was padded with SIMDJSON_PADDING extra bytes.
 

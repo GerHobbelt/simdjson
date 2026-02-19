@@ -1,7 +1,3 @@
-/**
- * This file is part of the builder API. It is temporarily in the ondemand directory
- * but we will move it to a builder directory later.
- */
 #ifndef SIMDJSON_GENERIC_STRING_BUILDER_H
 
 #ifndef SIMDJSON_CONDITIONAL_INCLUDE
@@ -24,9 +20,8 @@ struct has_custom_serialization : std::false_type {};
 
 inline constexpr struct serialize_tag {
   template <typename T>
-    requires custom_deserializable<T>
-  constexpr void operator()(SIMDJSON_IMPLEMENTATION::builder::string_builder& b, T& obj) const{
-    return tag_invoke(*this, b, obj);
+  constexpr void operator()(SIMDJSON_IMPLEMENTATION::builder::string_builder& b, T&& obj) const{
+    return tag_invoke(*this, b, std::forward<T>(obj));
   }
 
 
@@ -165,7 +160,7 @@ public:
 
   template <typename T>
   requires(require_custom_serialization<T>)
-  simdjson_inline void append(const T &val);
+  simdjson_inline void append(T &&val);
 
   // Support for string-like types
   template <typename T>
@@ -176,7 +171,7 @@ public:
 #if SIMDJSON_SUPPORTS_RANGES && SIMDJSON_SUPPORTS_CONCEPTS
   // Support for range-based appending (std::ranges::view, etc.)
   template <std::ranges::range R>
-requires (!std::is_convertible<R, std::string_view>::value)
+requires (!std::is_convertible<R, std::string_view>::value && !require_custom_serialization<R>)
   simdjson_inline void append(const R &range) noexcept;
 #endif
   /**
@@ -285,7 +280,7 @@ simdjson_warn_unused simdjson_result<std::string> to_json(const Z &z, size_t ini
   return std::string(s);
 }
 template <class Z>
-simdjson_warn_unused simdjson_error to_json(const Z &z, std::string &s, size_t initial_capacity = simdjson::SIMDJSON_IMPLEMENTATION::builder::string_builder::DEFAULT_INITIAL_CAPACITY) {
+simdjson_warn_unused error_code to_json(const Z &z, std::string &s, size_t initial_capacity = simdjson::SIMDJSON_IMPLEMENTATION::builder::string_builder::DEFAULT_INITIAL_CAPACITY) {
   simdjson::SIMDJSON_IMPLEMENTATION::builder::string_builder b(initial_capacity);
   b.append(z);
   std::string_view sv;
