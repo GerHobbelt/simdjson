@@ -271,6 +271,21 @@ Further, they may use the AreFileApisANSI function to determine whether
 the filename is interpreted using the ANSI or the system default OEM
 codepage, and they may call SetFileApisToOEM accordingly.
 
+
+**Advanced feature:**
+On non-Windows systems, you can use memory-file mapping to create a `simdjson::padded_string_view`
+from a file on disk.
+
+```cpp
+// If the macro _WIN32 is defined, this will not work since we do not support memory-file mapping
+// under Windows at this time.
+simdjson::padded_memory_map map(myfilename);
+if (!map.is_valid()) { /* handle error */ }
+simdjson::padded_string_view view = map.view(); // view is usable while padded_memory_map is in scope
+ondemand::document doc = parser.iterate(view); // parse the JSON
+```
+
+
 Documents are iterators
 -----------------------
 
@@ -373,6 +388,10 @@ Once your code is tested, we further encourage you to define `NDEBUG` in your re
 builds to disable additional runtime testing and get the best performance. We
 disable these checks on a best-effort basis but the C++ standard does not provide
 a direct way to check for a release build.
+
+
+Warnign: Mixing debug and release simdjson code is unsafe: you either build all your code
+using simdjson in release mode or all of it in debug mode.
 
 Using the parsed JSON
 ---------------------
