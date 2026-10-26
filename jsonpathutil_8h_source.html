@@ -29,7 +29,7 @@
  <tr id="projectrow">
   <td id="projectlogo"><img alt="Logo" src="logotiny.png"/></td>
   <td id="projectalign">
-   <div id="projectname">simdjson<span id="projectnumber">&#160;5.0.4</span>
+   <div id="projectname">simdjson<span id="projectnumber">&#160;5.0.5</span>
    </div>
    <div id="projectbrief">Ridiculously Fast JSON</div>
   </td>
@@ -320,15 +320,27 @@ $(document).ready(function(){initNavTree('jsonpathutil_8h_source.html',''); init
 <div class="line"><a id="l00252" name="l00252"></a><span class="lineno">  252</span>    std::string step;</div>
 <div class="line"><a id="l00253" name="l00253"></a><span class="lineno">  253</span>    step.reserve(key_and_json_path.first.size() + 1);</div>
 <div class="line"><a id="l00254" name="l00254"></a><span class="lineno">  254</span>    step += <span class="charliteral">&#39;/&#39;</span>;</div>
-<div class="line"><a id="l00255" name="l00255"></a><span class="lineno">  255</span>    step.append(key_and_json_path.first.data(), key_and_json_path.first.size());</div>
-<div class="line"><a id="l00256" name="l00256"></a><span class="lineno">  256</span>    result.steps.push_back(std::move(step));</div>
-<div class="line"><a id="l00257" name="l00257"></a><span class="lineno">  257</span>    path = key_and_json_path.second;</div>
-<div class="line"><a id="l00258" name="l00258"></a><span class="lineno">  258</span>  }</div>
-<div class="line"><a id="l00259" name="l00259"></a><span class="lineno">  259</span>}</div>
-<div class="line"><a id="l00260" name="l00260"></a><span class="lineno">  260</span>} <span class="comment">// namespace internal</span></div>
-<div class="line"><a id="l00261" name="l00261"></a><span class="lineno">  261</span> </div>
-<div class="line"><a id="l00262" name="l00262"></a><span class="lineno">  262</span>} <span class="comment">// namespace simdjson</span></div>
-<div class="line"><a id="l00263" name="l00263"></a><span class="lineno">  263</span><span class="preprocessor">#endif </span><span class="comment">// SIMDJSON_JSONPATHUTIL_H</span></div>
+<div class="line"><a id="l00255" name="l00255"></a><span class="lineno">  255</span>    <span class="comment">// The step is consumed by at_pointer, which unescapes ~0/~1, so &#39;~&#39; and</span></div>
+<div class="line"><a id="l00256" name="l00256"></a><span class="lineno">  256</span>    <span class="comment">// &#39;/&#39; in the key must be escaped as json_path_to_pointer_conversion does:</span></div>
+<div class="line"><a id="l00257" name="l00257"></a><span class="lineno">  257</span>    <span class="comment">// a raw &#39;/&#39; splits the step into two pointer tokens and a raw &#39;~&#39;</span></div>
+<div class="line"><a id="l00258" name="l00258"></a><span class="lineno">  258</span>    <span class="comment">// invalidates it, either way addressing the wrong element.</span></div>
+<div class="line"><a id="l00259" name="l00259"></a><span class="lineno">  259</span>    <span class="keywordflow">for</span> (<span class="keyword">const</span> <span class="keywordtype">char</span> c : key_and_json_path.first) {</div>
+<div class="line"><a id="l00260" name="l00260"></a><span class="lineno">  260</span>      <span class="keywordflow">if</span> (c == <span class="charliteral">&#39;~&#39;</span>) {</div>
+<div class="line"><a id="l00261" name="l00261"></a><span class="lineno">  261</span>        step += <span class="stringliteral">&quot;~0&quot;</span>;</div>
+<div class="line"><a id="l00262" name="l00262"></a><span class="lineno">  262</span>      } <span class="keywordflow">else</span> <span class="keywordflow">if</span> (c == <span class="charliteral">&#39;/&#39;</span>) {</div>
+<div class="line"><a id="l00263" name="l00263"></a><span class="lineno">  263</span>        step += <span class="stringliteral">&quot;~1&quot;</span>;</div>
+<div class="line"><a id="l00264" name="l00264"></a><span class="lineno">  264</span>      } <span class="keywordflow">else</span> {</div>
+<div class="line"><a id="l00265" name="l00265"></a><span class="lineno">  265</span>        step += c;</div>
+<div class="line"><a id="l00266" name="l00266"></a><span class="lineno">  266</span>      }</div>
+<div class="line"><a id="l00267" name="l00267"></a><span class="lineno">  267</span>    }</div>
+<div class="line"><a id="l00268" name="l00268"></a><span class="lineno">  268</span>    result.steps.push_back(std::move(step));</div>
+<div class="line"><a id="l00269" name="l00269"></a><span class="lineno">  269</span>    path = key_and_json_path.second;</div>
+<div class="line"><a id="l00270" name="l00270"></a><span class="lineno">  270</span>  }</div>
+<div class="line"><a id="l00271" name="l00271"></a><span class="lineno">  271</span>}</div>
+<div class="line"><a id="l00272" name="l00272"></a><span class="lineno">  272</span>} <span class="comment">// namespace internal</span></div>
+<div class="line"><a id="l00273" name="l00273"></a><span class="lineno">  273</span> </div>
+<div class="line"><a id="l00274" name="l00274"></a><span class="lineno">  274</span>} <span class="comment">// namespace simdjson</span></div>
+<div class="line"><a id="l00275" name="l00275"></a><span class="lineno">  275</span><span class="preprocessor">#endif </span><span class="comment">// SIMDJSON_JSONPATHUTIL_H</span></div>
 <div class="ttc" id="anamespacesimdjson_html"><div class="ttname"><a href="namespacesimdjson.html">simdjson</a></div><div class="ttdoc">The top level simdjson namespace, containing everything the library provides.</div><div class="ttdef"><b>Definition</b> <a href="arm64_2base_8h_source.html#l00008">base.h:8</a></div></div>
 <div class="ttc" id="anamespacesimdjson_html_a7b735a3a50ba79e3f7f14df5f77d8da9"><div class="ttname"><a href="namespacesimdjson.html#a7b735a3a50ba79e3f7f14df5f77d8da9">simdjson::error_code</a></div><div class="ttdeci">error_code</div><div class="ttdoc">All possible errors returned by simdjson.</div><div class="ttdef"><b>Definition</b> <a href="error_8h_source.html#l00019">error.h:19</a></div></div>
 <div class="ttc" id="anamespacesimdjson_html_a7b735a3a50ba79e3f7f14df5f77d8da9a1de02af1d67e8350f612eee0dcf634b4"><div class="ttname"><a href="namespacesimdjson.html#a7b735a3a50ba79e3f7f14df5f77d8da9a1de02af1d67e8350f612eee0dcf634b4">simdjson::INCORRECT_TYPE</a></div><div class="ttdeci">@ INCORRECT_TYPE</div><div class="ttdoc">JSON element has a different type than user expected.</div><div class="ttdef"><b>Definition</b> <a href="error_8h_source.html#l00037">error.h:37</a></div></div>

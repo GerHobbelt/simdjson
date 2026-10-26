@@ -29,7 +29,7 @@
  <tr id="projectrow">
   <td id="projectlogo"><img alt="Logo" src="logotiny.png"/></td>
   <td id="projectalign">
-   <div id="projectname">simdjson<span id="projectnumber">&#160;5.0.4</span>
+   <div id="projectname">simdjson<span id="projectnumber">&#160;5.0.5</span>
    </div>
    <div id="projectbrief">Ridiculously Fast JSON</div>
   </td>
@@ -4727,10 +4727,10 @@ $(document).ready(function(){initNavTree('fast__float_8h_source.html',''); initR
 <div class="line"><a id="l04691" name="l04691"></a><span class="lineno"> 4691</span><span class="comment">//  https://stackoverflow.com/questions/46079446/is-there-a-warning-for-floating-point-equality-checking-in-visual-studio-2013</span></div>
 <div class="line"><a id="l04692" name="l04692"></a><span class="lineno"> 4692</span><span class="preprocessor">#elif defined(__clang__)</span></div>
 <div class="line"><a id="l04693" name="l04693"></a><span class="lineno"> 4693</span><span class="preprocessor">#pragma clang diagnostic push</span></div>
-<div class="line"><a id="l04694" name="l04694"></a><span class="lineno"> 4694</span><span class="preprocessor">#pragma clang diagnostic ignored &quot;-Wfloat-equal&quot;</span></div>
+<div class="line"><a id="l04694" name="l04694"></a><span class="lineno"> 4694</span>SIMDJSON_DISABLE_GCC_WARNING(-Wfloat-equal)</div>
 <div class="line"><a id="l04695" name="l04695"></a><span class="lineno"> 4695</span><span class="preprocessor">#elif defined(__GNUC__)</span></div>
 <div class="line"><a id="l04696" name="l04696"></a><span class="lineno"> 4696</span><span class="preprocessor">#pragma GCC diagnostic push</span></div>
-<div class="line"><a id="l04697" name="l04697"></a><span class="lineno"> 4697</span><span class="preprocessor">#pragma GCC diagnostic ignored &quot;-Wfloat-equal&quot;</span></div>
+<div class="line"><a id="l04697" name="l04697"></a><span class="lineno"> 4697</span>SIMDJSON_DISABLE_GCC_WARNING(-Wfloat-equal)</div>
 <div class="line"><a id="l04698" name="l04698"></a><span class="lineno"> 4698</span><span class="preprocessor">#endif</span></div>
 <div class="line"><a id="l04699" name="l04699"></a><span class="lineno"> 4699</span>  <span class="keywordflow">return</span> (fmini + 1.0f == 1.0f - fmini);</div>
 <div class="line"><a id="l04700" name="l04700"></a><span class="lineno"> 4700</span><span class="preprocessor">#ifdef SIMDJSON_FASTFLOAT_VISUAL_STUDIO</span></div>
@@ -4968,7 +4968,7 @@ $(document).ready(function(){initNavTree('fast__float_8h_source.html',''); initR
 <div class="line"><a id="l04935" name="l04935"></a><span class="lineno"> 4935</span><span class="preprocessor">#ifdef __clang__</span></div>
 <div class="line"><a id="l04936" name="l04936"></a><span class="lineno"> 4936</span><span class="preprocessor">#pragma clang diagnostic push</span></div>
 <div class="line"><a id="l04937" name="l04937"></a><span class="lineno"> 4937</span><span class="preprocessor">#if (!defined(__APPLE_CC__) &amp;&amp; __clang_major__ &gt;= 10) || (__clang_major__ &gt;= 13)</span></div>
-<div class="line"><a id="l04938" name="l04938"></a><span class="lineno"> 4938</span><span class="preprocessor">#pragma clang diagnostic ignored &quot;-Wc++20-extensions&quot;</span></div>
+<div class="line"><a id="l04938" name="l04938"></a><span class="lineno"> 4938</span>SIMDJSON_DISABLE_GCC_WARNING(-Wc++20-extensions)</div>
 <div class="line"><a id="l04939" name="l04939"></a><span class="lineno"> 4939</span><span class="preprocessor">#endif</span></div>
 <div class="line"><a id="l04940" name="l04940"></a><span class="lineno"> 4940</span><span class="preprocessor">#endif</span></div>
 <div class="line"><a id="l04941" name="l04941"></a><span class="lineno"> 4941</span>  <span class="keywordflow">if</span> simdjson_fastfloat_unlikely (pns.too_many_digits) {</div>
