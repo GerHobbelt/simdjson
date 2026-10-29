@@ -30,7 +30,7 @@
  <tr id="projectrow">
   <td id="projectlogo"><img alt="Logo" src="logotiny.png"/></td>
   <td id="projectalign">
-   <div id="projectname">simdjson<span id="projectnumber">&#160;5.0.7</span>
+   <div id="projectname">simdjson<span id="projectnumber">&#160;5.0.6</span>
    </div>
    <div id="projectbrief">Ridiculously Fast JSON</div>
   </td>
@@ -124,9 +124,7 @@ Public Member Functions</h2></td></tr>
 <tr class="memitem:a9d98e1984b893116d8bb7123d84d75b8" id="r_a9d98e1984b893116d8bb7123d84d75b8"><td class="memItemLeft" align="right" valign="top">size_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a9d98e1984b893116d8bb7123d84d75b8">capacity</a> () const noexcept</td></tr>
 <tr class="memdesc:a9d98e1984b893116d8bb7123d84d75b8"><td class="mdescLeft">&#160;</td><td class="mdescRight">The number of allocated bytes.  <br /></td></tr>
 <tr class="memitem:ae4aff182e0ed84ed5056c2d634ff134a" id="r_ae4aff182e0ed84ed5056c2d634ff134a"><td class="memItemLeft" align="right" valign="top">bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ae4aff182e0ed84ed5056c2d634ff134a">has_sufficient_padding</a> () const noexcept</td></tr>
-<tr class="memdesc:ae4aff182e0ed84ed5056c2d634ff134a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Check that the view has sufficient padding: either SIMDJSON_PADDING bytes of capacity past the end of the document, or enough trailing white space in the document to stand in for the missing bytes.  <br /></td></tr>
-<tr class="memitem:a72e50bd53a2517ac31eae84206adc0a8" id="r_a72e50bd53a2517ac31eae84206adc0a8"><td class="memItemLeft" align="right" valign="top">bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a72e50bd53a2517ac31eae84206adc0a8">use_trailing_whitespace_as_padding</a> () noexcept</td></tr>
-<tr class="memdesc:a72e50bd53a2517ac31eae84206adc0a8"><td class="mdescLeft">&#160;</td><td class="mdescRight">The parser may read up to SIMDJSON_PADDING bytes past the end of the document.  <br /></td></tr>
+<tr class="memdesc:ae4aff182e0ed84ed5056c2d634ff134a"><td class="mdescLeft">&#160;</td><td class="mdescRight">check that the view has sufficient padding  <br /></td></tr>
 <tr class="memitem:a572beea549bf5a58d62ffe4e768c1e82" id="r_a572beea549bf5a58d62ffe4e768c1e82"><td class="memItemLeft" align="right" valign="top">bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a572beea549bf5a58d62ffe4e768c1e82">remove_utf8_bom</a> () noexcept</td></tr>
 <tr class="memdesc:a572beea549bf5a58d62ffe4e768c1e82"><td class="mdescLeft">&#160;</td><td class="mdescRight">Remove the UTF-8 Byte Order Mark (BOM) if it exists.  <br /></td></tr>
 <tr class="memitem:a934e7272d22d6024383eafe07b06773c" id="r_a934e7272d22d6024383eafe07b06773c"><td class="memItemLeft" align="right" valign="top">size_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a934e7272d22d6024383eafe07b06773c">padding</a> () const noexcept</td></tr>
@@ -323,7 +321,7 @@ Public Member Functions</h2></td></tr>
 
 <p>The number of allocated bytes. </p>
 
-<p class="definition">Definition at line <a class="el" href="padded__string__view-inl_8h_source.html#l00071">71</a> of file <a class="el" href="padded__string__view-inl_8h_source.html">padded_string_view-inl.h</a>.</p>
+<p class="definition">Definition at line <a class="el" href="padded__string__view-inl_8h_source.html#l00063">63</a> of file <a class="el" href="padded__string__view-inl_8h_source.html">padded_string_view-inl.h</a>.</p>
 
 </div>
 </div>
@@ -350,7 +348,7 @@ Public Member Functions</h2></td></tr>
 </table>
 </div><div class="memdoc">
 
-<p>Check that the view has sufficient padding: either SIMDJSON_PADDING bytes of capacity past the end of the document, or enough trailing white space in the document to stand in for the missing bytes. </p>
+<p>check that the view has sufficient padding </p>
 
 <p class="definition">Definition at line <a class="el" href="padded__string__view-inl_8h_source.html#l00047">47</a> of file <a class="el" href="padded__string__view-inl_8h_source.html">padded_string_view-inl.h</a>.</p>
 
@@ -381,7 +379,7 @@ Public Member Functions</h2></td></tr>
 
 <p>The amount of padding on the string (<a class="el" href="#a9d98e1984b893116d8bb7123d84d75b8" title="The number of allocated bytes.">capacity()</a> - length()). </p>
 
-<p class="definition">Definition at line <a class="el" href="padded__string__view-inl_8h_source.html#l00073">73</a> of file <a class="el" href="padded__string__view-inl_8h_source.html">padded_string_view-inl.h</a>.</p>
+<p class="definition">Definition at line <a class="el" href="padded__string__view-inl_8h_source.html#l00065">65</a> of file <a class="el" href="padded__string__view-inl_8h_source.html">padded_string_view-inl.h</a>.</p>
 
 </div>
 </div>
@@ -411,38 +409,7 @@ Public Member Functions</h2></td></tr>
 <p>Remove the UTF-8 Byte Order Mark (BOM) if it exists. </p>
 <dl class="section return"><dt>Returns</dt><dd>whether a BOM was found and removed </dd></dl>
 
-<p class="definition">Definition at line <a class="el" href="padded__string__view-inl_8h_source.html#l00075">75</a> of file <a class="el" href="padded__string__view-inl_8h_source.html">padded_string_view-inl.h</a>.</p>
-
-</div>
-</div>
-<a id="a72e50bd53a2517ac31eae84206adc0a8" name="a72e50bd53a2517ac31eae84206adc0a8"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a72e50bd53a2517ac31eae84206adc0a8">&#9670;&#160;</a></span>use_trailing_whitespace_as_padding()</h2>
-
-<div class="memitem">
-<div class="memproto">
-<table class="mlabels">
-  <tr>
-  <td class="mlabels-left">
-      <table class="memname">
-        <tr>
-          <td class="memname">bool simdjson::padded_string_view::use_trailing_whitespace_as_padding </td>
-          <td>(</td>
-          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
-          <td></td>
-        </tr>
-      </table>
-  </td>
-  <td class="mlabels-right">
-<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel noexcept">noexcept</span></span>  </td>
-  </tr>
-</table>
-</div><div class="memdoc">
-
-<p>The parser may read up to SIMDJSON_PADDING bytes past the end of the document. </p>
-<p>When the capacity falls short of that but the document ends with enough white space to make up for it (see <a class="el" href="#ae4aff182e0ed84ed5056c2d634ff134a" title="Check that the view has sufficient padding: either SIMDJSON_PADDING bytes of capacity past the end of...">has_sufficient_padding()</a>), this moves that white space out of the document and into the padding, so that <a class="el" href="#a934e7272d22d6024383eafe07b06773c" title="The amount of padding on the string (capacity() - length()).">padding()</a> &gt;= SIMDJSON_PADDING. It does nothing otherwise.</p>
-<dl class="section return"><dt>Returns</dt><dd>whether the document was shortened </dd></dl>
-
-<p class="definition">Definition at line <a class="el" href="padded__string__view-inl_8h_source.html#l00063">63</a> of file <a class="el" href="padded__string__view-inl_8h_source.html">padded_string_view-inl.h</a>.</p>
+<p class="definition">Definition at line <a class="el" href="padded__string__view-inl_8h_source.html#l00067">67</a> of file <a class="el" href="padded__string__view-inl_8h_source.html">padded_string_view-inl.h</a>.</p>
 
 </div>
 </div>

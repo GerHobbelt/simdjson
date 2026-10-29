@@ -1,7 +1,5 @@
 var NAVTREEINDEX4 =
 {
-"hierarchy.html":[14,2],
-"icelake_2base_8h_source.html":[15,0,0,0,6,0],
 "icelake_2begin_8h_source.html":[15,0,0,0,6,1],
 "icelake_2bitmanipulation_8h_source.html":[15,0,0,0,6,2],
 "icelake_2bitmask_8h_source.html":[15,0,0,0,6,3],
@@ -249,5 +247,7 @@ var NAVTREEINDEX4 =
 "md_doc_2parse__many.html#autotoc_md176":[8,0],
 "md_doc_2parse__many.html#autotoc_md177":[8,1],
 "md_doc_2parse__many.html#autotoc_md178":[8,2],
-"md_doc_2parse__many.html#autotoc_md179":[8,3]
+"md_doc_2parse__many.html#autotoc_md179":[8,3],
+"md_doc_2parse__many.html#autotoc_md180":[8,3,0],
+"md_doc_2parse__many.html#autotoc_md181":[8,3,1]
 };

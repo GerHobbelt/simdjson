@@ -73,8 +73,6 @@ var NAVTREEINDEX3 =
 "classsimdjson_1_1padded__string__view.html#a47ac0063f7dd0ffd832c5e4439f2de30":[14,0,0,28,1],
 "classsimdjson_1_1padded__string__view.html#a572beea549bf5a58d62ffe4e768c1e82":[13,0,0,37,8],
 "classsimdjson_1_1padded__string__view.html#a572beea549bf5a58d62ffe4e768c1e82":[14,0,0,28,8],
-"classsimdjson_1_1padded__string__view.html#a72e50bd53a2517ac31eae84206adc0a8":[13,0,0,37,9],
-"classsimdjson_1_1padded__string__view.html#a72e50bd53a2517ac31eae84206adc0a8":[14,0,0,28,9],
 "classsimdjson_1_1padded__string__view.html#a934e7272d22d6024383eafe07b06773c":[13,0,0,37,7],
 "classsimdjson_1_1padded__string__view.html#a934e7272d22d6024383eafe07b06773c":[14,0,0,28,7],
 "classsimdjson_1_1padded__string__view.html#a9d98e1984b893116d8bb7123d84d75b8":[13,0,0,37,5],
@@ -249,5 +247,7 @@ var NAVTREEINDEX3 =
 "haswell_2ondemand_8h_source.html":[15,0,0,0,5,9],
 "haswell_2simd_8h_source.html":[15,0,0,0,5,10],
 "haswell_2stringparsing__defs_8h_source.html":[15,0,0,0,5,11],
-"haswell_8h_source.html":[15,0,0,0,31]
+"haswell_8h_source.html":[15,0,0,0,31],
+"hierarchy.html":[14,2],
+"icelake_2base_8h_source.html":[15,0,0,0,6,0]
 };

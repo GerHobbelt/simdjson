@@ -30,7 +30,7 @@
  <tr id="projectrow">
   <td id="projectlogo"><img alt="Logo" src="logotiny.png"/></td>
   <td id="projectalign">
-   <div id="projectname">simdjson<span id="projectnumber">&#160;5.0.7</span>
+   <div id="projectname">simdjson<span id="projectnumber">&#160;5.0.6</span>
    </div>
    <div id="projectbrief">Ridiculously Fast JSON</div>
   </td>
@@ -284,7 +284,7 @@ Advanced input options</h2>
 </div><!-- fragment --><p><b><span class="tt">std::string</span> and sanitizer warnings.</b> Whenever you pass an <span class="tt">std::string</span> reference to <span class="tt">parser::iterate</span>, the parser may access bytes beyond the end of the string but before the end of the allocated memory (<span class="tt">std::string::capacity()</span>). Sanitizers that check for reading uninitialized bytes may produce warnings. You can safely ignore these warnings, or call <span class="tt"><a class="el" href="namespacesimdjson.html#ac4131fd8cef9c8046d0bc9aee8d44d16" title="Create a padded_string_view from a string.">simdjson::pad</a>(std::string&amp;)</span> to pad the string explicitly:</p>
 <div class="fragment"><div class="line">std::string json = <span class="stringliteral">&quot;[1]&quot;</span>;</div>
 <div class="line">ondemand::document doc = parser.iterate(<a class="code hl_function" href="namespacesimdjson.html#ac4131fd8cef9c8046d0bc9aee8d44d16">simdjson::pad</a>(json));</div>
-<div class="ttc" id="anamespacesimdjson_html_ac4131fd8cef9c8046d0bc9aee8d44d16"><div class="ttname"><a href="namespacesimdjson.html#ac4131fd8cef9c8046d0bc9aee8d44d16">simdjson::pad</a></div><div class="ttdeci">padded_string_view pad(std::string &amp;s) noexcept</div><div class="ttdoc">Create a padded_string_view from a string.</div><div class="ttdef"><b>Definition</b> <a href="padded__string__view-inl_8h_source.html#l00089">padded_string_view-inl.h:89</a></div></div>
+<div class="ttc" id="anamespacesimdjson_html_ac4131fd8cef9c8046d0bc9aee8d44d16"><div class="ttname"><a href="namespacesimdjson.html#ac4131fd8cef9c8046d0bc9aee8d44d16">simdjson::pad</a></div><div class="ttdeci">padded_string_view pad(std::string &amp;s) noexcept</div><div class="ttdoc">Create a padded_string_view from a string.</div><div class="ttdef"><b>Definition</b> <a href="padded__string__view-inl_8h_source.html#l00081">padded_string_view-inl.h:81</a></div></div>
 </div><!-- fragment --><p>We recommend against creating many <span class="tt">std::string</span> or many <span class="tt">std::padded_string</span> instances in your application to store your JSON data. Consider reusing the same buffers and limiting memory allocations.</p>
 <p><b>Memory-file mapping.</b> You can use <span class="tt">simdjson::padded_memory_map</span> to create a <span class="tt"><a class="el" href="classsimdjson_1_1padded__string__view.html" title="User-provided string that promises it has extra padded bytes at the end for use with parser::parse().">simdjson::padded_string_view</a></span> from a file on disk. On POSIX systems (Linux, macOS, BSD, ...) it uses <span class="tt">mmap</span> for true zero-copy access and is always available. On Windows it is an <b>opt-in</b> feature because it relies on the <span class="tt">CreateFileMapping2</span> / <span class="tt">MapViewOfFile3</span> APIs (Windows 10, version 1803 or later) which are exported from <span class="tt">onecore.lib</span> rather than the default <span class="tt">kernel32.lib</span>. To enable it, you must satisfy <b>all</b> of the following:</p>
 <ol type="1">

@@ -1,7 +1,5 @@
 var NAVTREEINDEX6 =
 {
-"structsimdjson_1_1_s_i_m_d_j_s_o_n___i_m_p_l_e_m_e_n_t_a_t_i_o_n_1_1implementation__simdjson__result__base.html#af167f69543e1834ffbb57b20839d7365":[14,0,0,1,4,9],
-"structsimdjson_1_1_s_i_m_d_j_s_o_n___i_m_p_l_e_m_e_n_t_a_t_i_o_n_1_1implementation__simdjson__result__base.html#af433effbfc61f13dd00002b6ff7fa3dc":[13,0,0,3,3,4],
 "structsimdjson_1_1_s_i_m_d_j_s_o_n___i_m_p_l_e_m_e_n_t_a_t_i_o_n_1_1implementation__simdjson__result__base.html#af433effbfc61f13dd00002b6ff7fa3dc":[14,0,0,1,4,4],
 "structsimdjson_1_1_s_i_m_d_j_s_o_n___i_m_p_l_e_m_e_n_t_a_t_i_o_n_1_1implementation__simdjson__result__base.html#af8a436d40886a295f618311d3849d7e5":[13,0,0,3,3,2],
 "structsimdjson_1_1_s_i_m_d_j_s_o_n___i_m_p_l_e_m_e_n_t_a_t_i_o_n_1_1implementation__simdjson__result__base.html#af8a436d40886a295f618311d3849d7e5":[14,0,0,1,4,2],
@@ -249,5 +247,7 @@ var NAVTREEINDEX6 =
 "structsimdjson_1_1simdjson__result.html#a86dbcba063713c0e284dbde9fae17568":[13,0,0,21,5],
 "structsimdjson_1_1simdjson__result.html#a86dbcba063713c0e284dbde9fae17568":[13,0,0,22,5],
 "structsimdjson_1_1simdjson__result.html#a86dbcba063713c0e284dbde9fae17568":[13,0,0,23,4],
-"structsimdjson_1_1simdjson__result.html#a86dbcba063713c0e284dbde9fae17568":[13,0,0,24,4]
+"structsimdjson_1_1simdjson__result.html#a86dbcba063713c0e284dbde9fae17568":[13,0,0,24,4],
+"structsimdjson_1_1simdjson__result.html#a86dbcba063713c0e284dbde9fae17568":[13,0,0,25,4],
+"structsimdjson_1_1simdjson__result.html#a86dbcba063713c0e284dbde9fae17568":[13,0,0,26,4]
 };

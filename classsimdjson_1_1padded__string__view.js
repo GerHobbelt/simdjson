@@ -8,6 +8,5 @@ var classsimdjson_1_1padded__string__view =
     [ "capacity", "classsimdjson_1_1padded__string__view.html#a9d98e1984b893116d8bb7123d84d75b8", null ],
     [ "has_sufficient_padding", "classsimdjson_1_1padded__string__view.html#ae4aff182e0ed84ed5056c2d634ff134a", null ],
     [ "padding", "classsimdjson_1_1padded__string__view.html#a934e7272d22d6024383eafe07b06773c", null ],
-    [ "remove_utf8_bom", "classsimdjson_1_1padded__string__view.html#a572beea549bf5a58d62ffe4e768c1e82", null ],
-    [ "use_trailing_whitespace_as_padding", "classsimdjson_1_1padded__string__view.html#a72e50bd53a2517ac31eae84206adc0a8", null ]
+    [ "remove_utf8_bom", "classsimdjson_1_1padded__string__view.html#a572beea549bf5a58d62ffe4e768c1e82", null ]
 ];
