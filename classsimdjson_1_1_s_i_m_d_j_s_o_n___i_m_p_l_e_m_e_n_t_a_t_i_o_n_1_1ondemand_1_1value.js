@@ -13,6 +13,7 @@ var classsimdjson_1_1_s_i_m_d_j_s_o_n___i_m_p_l_e_m_e_n_t_a_t_i_o_n_1_1ondemand_
     [ "end", "classsimdjson_1_1_s_i_m_d_j_s_o_n___i_m_p_l_e_m_e_n_t_a_t_i_o_n_1_1ondemand_1_1value.html#a6ed00f1588087b2d0de926c4599366d6", null ],
     [ "find_field", "classsimdjson_1_1_s_i_m_d_j_s_o_n___i_m_p_l_e_m_e_n_t_a_t_i_o_n_1_1ondemand_1_1value.html#a1588a173b15a20cacf77a24d07032d83", null ],
     [ "find_field_unordered", "classsimdjson_1_1_s_i_m_d_j_s_o_n___i_m_p_l_e_m_e_n_t_a_t_i_o_n_1_1ondemand_1_1value.html#acb1514c00a87027c5eb3c81171a3b874", null ],
+    [ "for_each_at_path_segments", "classsimdjson_1_1_s_i_m_d_j_s_o_n___i_m_p_l_e_m_e_n_t_a_t_i_o_n_1_1ondemand_1_1value.html#a0232bce11d3eff8130c6f42365a68847", null ],
     [ "for_each_at_path_with_wildcard", "classsimdjson_1_1_s_i_m_d_j_s_o_n___i_m_p_l_e_m_e_n_t_a_t_i_o_n_1_1ondemand_1_1value.html#abcaa5b09c1c50928c8cf4d368fb2875e", null ],
     [ "get", "classsimdjson_1_1_s_i_m_d_j_s_o_n___i_m_p_l_e_m_e_n_t_a_t_i_o_n_1_1ondemand_1_1value.html#a15d0315e3a6b6975d57de5928263fbdf", null ],
     [ "get", "classsimdjson_1_1_s_i_m_d_j_s_o_n___i_m_p_l_e_m_e_n_t_a_t_i_o_n_1_1ondemand_1_1value.html#abeb77b7f73cd6001d8c65f249901ece4", null ],

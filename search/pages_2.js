@@ -1,6 +1,5 @@
 var searchData=
 [
-  ['compile_20time_0',['Parse json at compile time',['../md_doc_2compile__time.html',1,'']]],
-  ['compile_20time_20jsonpath_20and_20json_20pointer_20accessors_1',['Compile-Time JSONPath and JSON Pointer Accessors',['../md_doc_2compile__time__accessors.html',1,'']]],
-  ['cpu_20architecture_20specific_20implementations_2',['CPU Architecture-Specific Implementations',['../md_doc_2implementation-selection.html',1,'']]]
+  ['3_20using_20static_20reflection_20c_2026_0',['3. Using static reflection (C++26)',['../md_doc_2basics.html#autotoc_md17',1,'']]],
+  ['3_3a_20direct_20extraction_1',['Example 3: Direct Extraction',['../md_doc_2compile__time__accessors.html#autotoc_md104',1,'']]]
 ];

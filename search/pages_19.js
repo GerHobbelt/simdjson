@@ -1,0 +1,25 @@
+var searchData=
+[
+  ['u8string_20c_2020_0',['u8string_view and u8string (C++20)',['../md_doc_2basics.html#autotoc_md10',1,'']]],
+  ['u8string_5fview_20and_20u8string_20c_2020_1',['u8string_view and u8string (C++20)',['../md_doc_2basics.html#autotoc_md10',1,'']]],
+  ['unicode_2',['Unicode',['../classsimdjson_1_1dom_1_1parser.html#autotoc_md216',1,'Windows and Unicode'],['../structsimdjson_1_1padded__string.html#autotoc_md251',1,'Windows and Unicode']]],
+  ['unknown_20fields_3',['Rejecting unknown fields',['../md_doc_2basics.html#autotoc_md23',1,'']]],
+  ['usage_4',['Usage',['../md_doc_2basics.html#autotoc_md34',1,'Example Usage'],['../md_doc_2dom.html#autotoc_md120',1,'Example Usage']]],
+  ['usage_20and_20downclocking_5',['Power Usage and Downclocking',['../md_doc_2performance.html#autotoc_md201',1,'']]],
+  ['usage_20modes_6',['Two Usage Modes',['../md_doc_2compile__time__accessors.html#autotoc_md88',1,'']]],
+  ['use_7',['When to Use',['../md_doc_2compile__time__accessors.html#autotoc_md108',1,'']]],
+  ['use_8',['IMPORTANT: Validate what you use',['../classsimdjson_1_1_s_i_m_d_j_s_o_n___i_m_p_l_e_m_e_n_t_a_t_i_o_n_1_1ondemand_1_1parser.html#autotoc_md234',1,'']]],
+  ['use_20cases_9',['Use cases',['../md_doc_2iterate__many.html#autotoc_md148',1,'Use cases'],['../md_doc_2parse__many.html#autotoc_md185',1,'Use cases']]],
+  ['use_20of_20the_20dom_20api_10',['Best Use of the DOM API',['../md_doc_2dom.html#autotoc_md128',1,'']]],
+  ['use_20tag_5finvoke_20for_20custom_20types_20c_2020_11',['2. Use &lt;span class=&quot;tt&quot;&gt;tag_invoke&lt;/span&gt; for custom types (C++20)',['../md_doc_2basics.html#autotoc_md16',1,'']]],
+  ['using_20at_5fpath_5fwith_5fwildcard_20for_20jsonpath_20queries_12',['Using &lt;span class=&quot;tt&quot;&gt;at_path_with_wildcard&lt;/span&gt; for JSONPath Queries',['../md_doc_2dom.html#autotoc_md119',1,'']]],
+  ['using_20for_5feach_5fat_5fpath_5fwith_5fwildcard_20for_20jsonpath_20queries_20on_20demand_13',['Using &lt;span class=&quot;tt&quot;&gt;for_each_at_path_with_wildcard&lt;/span&gt; for JSONPath Queries (On-Demand)',['../md_doc_2basics.html#autotoc_md33',1,'']]],
+  ['using_20simdjson_20as_20a_20cmake_20dependency_14',['Using simdjson as a CMake dependency',['../md_doc_2basics.html#autotoc_md3',1,'']]],
+  ['using_20simdjson_20with_20package_20managers_15',['Using simdjson with package managers',['../md_doc_2basics.html#autotoc_md2',1,'']]],
+  ['using_20static_20reflection_20c_2026_16',['3. Using static reflection (C++26)',['../md_doc_2basics.html#autotoc_md17',1,'']]],
+  ['using_20the_20dom_20front_20end_17',['The Basics: Loading and Parsing JSON Documents using the DOM front-end',['../md_doc_2dom.html#autotoc_md111',1,'']]],
+  ['using_20the_20parsed_20json_18',['Using the Parsed JSON',['../md_doc_2dom.html#autotoc_md112',1,'']]],
+  ['using_20the_20parsed_20json_19',['Using the parsed JSON',['../md_doc_2basics.html#autotoc_md12',1,'']]],
+  ['using_20the_20parsed_20json_3a_20additional_20examples_20',['Using the parsed JSON: additional examples',['../md_doc_2basics.html#autotoc_md13',1,'']]],
+  ['utf_208_20validation_20alone_21',['UTF-8 validation (alone)',['../md_doc_2basics.html#autotoc_md30',1,'']]]
+];

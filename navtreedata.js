@@ -44,8 +44,8 @@ var NAVTREE =
         [ "Using the parsed JSON: additional examples", "md_doc_2basics.html#autotoc_md13", null ]
       ] ],
       [ "Adding support for custom types", "md_doc_2basics.html#autotoc_md14", [
-        [ "1. Specialize <tt>simdjson::ondemand::value::get</tt> to get custom types (pre-C++20)", "md_doc_2basics.html#autotoc_md15", null ],
-        [ "2. Use <tt>tag_invoke</tt> for custom types (C++20)", "md_doc_2basics.html#autotoc_md16", null ],
+        [ "1. Specialize <span class=\"tt\">simdjson::ondemand::value::get</span> to get custom types (pre-C++20)", "md_doc_2basics.html#autotoc_md15", null ],
+        [ "2. Use <span class=\"tt\">tag_invoke</span> for custom types (C++20)", "md_doc_2basics.html#autotoc_md16", null ],
         [ "3. Using static reflection (C++26)", "md_doc_2basics.html#autotoc_md17", [
           [ "Special cases", "md_doc_2basics.html#autotoc_md18", null ],
           [ "Customizing (de)serialization with annotations", "md_doc_2basics.html#autotoc_md19", [
@@ -66,7 +66,7 @@ var NAVTREE =
       [ "UTF-8 validation (alone)", "md_doc_2basics.html#autotoc_md30", null ],
       [ "JSON Pointer", "md_doc_2basics.html#autotoc_md31", null ],
       [ "JSONPath", "md_doc_2basics.html#autotoc_md32", null ],
-      [ "Using <tt>for_each_at_path_with_wildcard</tt> for JSONPath Queries (On-Demand)", "md_doc_2basics.html#autotoc_md33", [
+      [ "Using <span class=\"tt\">for_each_at_path_with_wildcard</span> for JSONPath Queries (On-Demand)", "md_doc_2basics.html#autotoc_md33", [
         [ "Example Usage", "md_doc_2basics.html#autotoc_md34", null ]
       ] ],
       [ "C++20 Ranges Support", "md_doc_2basics.html#autotoc_md35", null ],
@@ -78,7 +78,7 @@ var NAVTREE =
         [ "Nested objects", "md_doc_2basics.html#autotoc_md41", null ],
         [ "Error handling for key selectors", "md_doc_2basics.html#autotoc_md42", null ],
         [ "Compile-time restrictions", "md_doc_2basics.html#autotoc_md43", null ],
-        [ "Inspecting the matching algorithm with <tt>describe()</tt>", "md_doc_2basics.html#autotoc_md44", null ]
+        [ "Inspecting the matching algorithm with <span class=\"tt\">describe()</span>", "md_doc_2basics.html#autotoc_md44", null ]
       ] ],
       [ "Compile-Time JSONPath and JSON Pointer (C++26 Reflection)", "md_doc_2basics.html#autotoc_md45", null ],
       [ "Error handling", "md_doc_2basics.html#autotoc_md46", [
@@ -112,9 +112,9 @@ var NAVTREE =
         [ "C++20", "md_doc_2builder.html#autotoc_md70", null ]
       ] ],
       [ "C++26 static reflection", "md_doc_2builder.html#autotoc_md71", [
-        [ "Without <tt>string_buffer</tt> instance", "md_doc_2builder.html#autotoc_md73", null ],
+        [ "Without <span class=\"tt\">string_buffer</span> instance", "md_doc_2builder.html#autotoc_md73", null ],
         [ "Extracting just some fields", "md_doc_2builder.html#autotoc_md74", null ],
-        [ "Without <tt>string_buffer</tt> instance but with explicit error handling", "md_doc_2builder.html#autotoc_md75", null ],
+        [ "Without <span class=\"tt\">string_buffer</span> instance but with explicit error handling", "md_doc_2builder.html#autotoc_md75", null ],
         [ "Customization", "md_doc_2builder.html#autotoc_md76", null ],
         [ "Pretty formatted (fractured JSON)", "md_doc_2builder.html#autotoc_md77", null ]
       ] ]
@@ -169,7 +169,7 @@ var NAVTREE =
       [ "C++20 Support", "md_doc_2dom.html#autotoc_md116", null ],
       [ "JSON Pointer", "md_doc_2dom.html#autotoc_md117", null ],
       [ "JSONPath", "md_doc_2dom.html#autotoc_md118", null ],
-      [ "Using <tt>at_path_with_wildcard</tt> for JSONPath Queries", "md_doc_2dom.html#autotoc_md119", [
+      [ "Using <span class=\"tt\">at_path_with_wildcard</span> for JSONPath Queries", "md_doc_2dom.html#autotoc_md119", [
         [ "Example Usage", "md_doc_2dom.html#autotoc_md120", null ]
       ] ],
       [ "Error Handling", "md_doc_2dom.html#autotoc_md121", [
@@ -210,7 +210,7 @@ var NAVTREE =
       [ "Incomplete streams", "md_doc_2iterate__many.html#autotoc_md150", null ],
       [ "Comma-separated documents", "md_doc_2iterate__many.html#autotoc_md151", [
         [ "Limitations of the comma-separated mode", "md_doc_2iterate__many.html#autotoc_md152", null ],
-        [ "Legacy <tt>allow_comma_separated</tt> parameter (deprecated)", "md_doc_2iterate__many.html#autotoc_md153", null ]
+        [ "Legacy <span class=\"tt\">allow_comma_separated</span> parameter (deprecated)", "md_doc_2iterate__many.html#autotoc_md153", null ]
       ] ],
       [ "JSON Text Sequences (RFC 7464)", "md_doc_2iterate__many.html#autotoc_md154", null ],
       [ "JSON Array As A Document Stream", "md_doc_2iterate__many.html#autotoc_md155", null ],
@@ -268,22 +268,24 @@ var NAVTREE =
       [ "Server Loops: Long-Running Processes and Memory Capacity", "md_doc_2performance.html#autotoc_md196", null ],
       [ "Large files and huge page support", "md_doc_2performance.html#autotoc_md197", null ],
       [ "Number parsing", "md_doc_2performance.html#autotoc_md198", null ],
-      [ "Visual Studio", "md_doc_2performance.html#autotoc_md199", null ],
-      [ "Power Usage and Downclocking", "md_doc_2performance.html#autotoc_md200", null ],
-      [ "Free Padding", "md_doc_2performance.html#autotoc_md201", null ]
+      [ "Visual Studio", "md_doc_2performance.html#autotoc_md199", [
+        [ "Strict aliasing", "md_doc_2performance.html#autotoc_md200", null ]
+      ] ],
+      [ "Power Usage and Downclocking", "md_doc_2performance.html#autotoc_md201", null ],
+      [ "Free Padding", "md_doc_2performance.html#autotoc_md202", null ]
     ] ],
     [ "Tape structure in simdjson", "md_doc_2tape.html", [
-      [ "Example", "md_doc_2tape.html#autotoc_md203", [
-        [ "The Tape", "md_doc_2tape.html#autotoc_md204", null ]
+      [ "Example", "md_doc_2tape.html#autotoc_md204", [
+        [ "The Tape", "md_doc_2tape.html#autotoc_md205", null ]
       ] ],
-      [ "General formal of the tape elements", "md_doc_2tape.html#autotoc_md205", null ],
-      [ "Simple JSON values", "md_doc_2tape.html#autotoc_md206", null ],
-      [ "Integer and Double values", "md_doc_2tape.html#autotoc_md207", null ],
-      [ "Big Integers", "md_doc_2tape.html#autotoc_md208", null ],
-      [ "Root node", "md_doc_2tape.html#autotoc_md209", null ],
-      [ "Strings", "md_doc_2tape.html#autotoc_md210", null ],
-      [ "Arrays", "md_doc_2tape.html#autotoc_md211", null ],
-      [ "Objects", "md_doc_2tape.html#autotoc_md212", null ]
+      [ "General formal of the tape elements", "md_doc_2tape.html#autotoc_md206", null ],
+      [ "Simple JSON values", "md_doc_2tape.html#autotoc_md207", null ],
+      [ "Integer and Double values", "md_doc_2tape.html#autotoc_md208", null ],
+      [ "Big Integers", "md_doc_2tape.html#autotoc_md209", null ],
+      [ "Root node", "md_doc_2tape.html#autotoc_md210", null ],
+      [ "Strings", "md_doc_2tape.html#autotoc_md211", null ],
+      [ "Arrays", "md_doc_2tape.html#autotoc_md212", null ],
+      [ "Objects", "md_doc_2tape.html#autotoc_md213", null ]
     ] ],
     [ "Deprecated List", "deprecated.html", null ],
     [ "Topics", "topics.html", "topics" ],
@@ -317,12 +319,16 @@ var NAVTREE =
 var NAVTREEINDEX =
 [
 "amalgamated_8h_source.html",
-"classsimdjson_1_1_s_i_m_d_j_s_o_n___i_m_p_l_e_m_e_n_t_a_t_i_o_n_1_1ondemand_1_1value.html#a8bf7a0fcf3c6d5f1ded5b5a5ac2d7d0c",
-"classsimdjson_1_1dom_1_1object_1_1iterator.html#a6d335de77b8c5b731566e48f6cacd95d",
-"group__object.html#ga7956fe38cd8ecfbc8f709aa6f65c92b4",
-"md_doc_2iterate__many.html#autotoc_md162",
-"structsimdjson_1_1_s_i_m_d_j_s_o_n___i_m_p_l_e_m_e_n_t_a_t_i_o_n_1_1ondemand_1_1number.html#a41dc1bfd660e0b9c86cb5a5171fd7c02"
+"classsimdjson_1_1_s_i_m_d_j_s_o_n___i_m_p_l_e_m_e_n_t_a_t_i_o_n_1_1ondemand_1_1document__reference.html#a171191c8a51168aacb8159795ff97910",
+"classsimdjson_1_1_s_i_m_d_j_s_o_n___i_m_p_l_e_m_e_n_t_a_t_i_o_n_1_1ondemand_1_1value.html#afa915bfa711909964ff1c6e3a80a0612",
+"classsimdjson_1_1dom_1_1parser.html#a6977b4586bc601070cf100e2973a4cbc",
+"hierarchy.html",
+"md_doc_2parse__many.html#autotoc_md180",
+"structsimdjson_1_1_s_i_m_d_j_s_o_n___i_m_p_l_e_m_e_n_t_a_t_i_o_n_1_1implementation__simdjson__result__base.html#af167f69543e1834ffbb57b20839d7365",
+"structsimdjson_1_1simdjson__result.html#a86dbcba063713c0e284dbde9fae17568",
+""
 ];
 
-var SYNCONMSG = 'click to disable panel synchronisation';
-var SYNCOFFMSG = 'click to enable panel synchronisation';
+var SYNCONMSG = 'click to disable panel synchronization';
+var SYNCOFFMSG = 'click to enable panel synchronization';
+var LISTOFALLMEMBERS = 'List of all members';

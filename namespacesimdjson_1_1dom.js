@@ -4,8 +4,8 @@ var namespacesimdjson_1_1dom =
     [ "document", "classsimdjson_1_1dom_1_1document.html", "classsimdjson_1_1dom_1_1document" ],
     [ "document_stream", "classsimdjson_1_1dom_1_1document__stream.html", "classsimdjson_1_1dom_1_1document__stream" ],
     [ "element", "classsimdjson_1_1dom_1_1element.html", "classsimdjson_1_1dom_1_1element" ],
-    [ "key_value_pair", "classsimdjson_1_1dom_1_1key__value__pair.html", "classsimdjson_1_1dom_1_1key__value__pair" ],
     [ "object", "classsimdjson_1_1dom_1_1object.html", "classsimdjson_1_1dom_1_1object" ],
+    [ "key_value_pair", "classsimdjson_1_1dom_1_1key__value__pair.html", "classsimdjson_1_1dom_1_1key__value__pair" ],
     [ "parser", "classsimdjson_1_1dom_1_1parser.html", "classsimdjson_1_1dom_1_1parser" ],
     [ "element_type", "namespacesimdjson_1_1dom.html#a6e1dee3a823ecfee91086d3478bbab3a", [
       [ "ARRAY", "namespacesimdjson_1_1dom.html#a6e1dee3a823ecfee91086d3478bbab3aacb4fb1757fb37c43cded35d3eb857c43", null ],

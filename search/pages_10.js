@@ -1,0 +1,22 @@
+var searchData=
+[
+  ['large_20files_20and_20huge_20page_20support_0',['Large files and huge page support',['../md_doc_2performance.html#autotoc_md197',1,'']]],
+  ['large_20stream_20in_20chunks_1',['Reading a large stream in chunks',['../md_doc_2iterate__many.html#autotoc_md156',1,'']]],
+  ['legacy_20allow_5fcomma_5fseparated_20parameter_20deprecated_2',['Legacy &lt;span class=&quot;tt&quot;&gt;allow_comma_separated&lt;/span&gt; parameter (deprecated)',['../md_doc_2iterate__many.html#autotoc_md153',1,'']]],
+  ['lifetime_3',['Lifetime',['../classsimdjson_1_1_s_i_m_d_j_s_o_n___i_m_p_l_e_m_e_n_t_a_t_i_o_n_1_1ondemand_1_1parser.html#autotoc_md235',1,'IMPORTANT: Buffer Lifetime'],['../classsimdjson_1_1_s_i_m_d_j_s_o_n___i_m_p_l_e_m_e_n_t_a_t_i_o_n_1_1ondemand_1_1parser.html#autotoc_md239',1,'IMPORTANT: Buffer Lifetime'],['../classsimdjson_1_1dom_1_1parser.html#autotoc_md214',1,'IMPORTANT: Document Lifetime'],['../classsimdjson_1_1dom_1_1parser.html#autotoc_md217',1,'IMPORTANT: Document Lifetime'],['../classsimdjson_1_1dom_1_1parser.html#autotoc_md218',1,'IMPORTANT: Document Lifetime'],['../classsimdjson_1_1dom_1_1parser.html#autotoc_md222',1,'IMPORTANT: Document Lifetime'],['../classsimdjson_1_1_s_i_m_d_j_s_o_n___i_m_p_l_e_m_e_n_t_a_t_i_o_n_1_1ondemand_1_1parser.html#autotoc_md236',1,'IMPORTANT: Document Lifetime'],['../classsimdjson_1_1_s_i_m_d_j_s_o_n___i_m_p_l_e_m_e_n_t_a_t_i_o_n_1_1ondemand_1_1parser.html#autotoc_md240',1,'IMPORTANT: Document Lifetime']]],
+  ['lifetime_4',['lifetime',['../classsimdjson_1_1_s_i_m_d_j_s_o_n___i_m_p_l_e_m_e_n_t_a_t_i_o_n_1_1ondemand_1_1parser.html#autotoc_md247',1,'IMPORTANT: string_view lifetime'],['../classsimdjson_1_1_s_i_m_d_j_s_o_n___i_m_p_l_e_m_e_n_t_a_t_i_o_n_1_1ondemand_1_1parser.html#autotoc_md248',1,'IMPORTANT: string_view lifetime'],['../classsimdjson_1_1_s_i_m_d_j_s_o_n___i_m_p_l_e_m_e_n_t_a_t_i_o_n_1_1ondemand_1_1raw__json__string.html#autotoc_md249',1,'IMPORTANT: string_view lifetime'],['../classsimdjson_1_1_s_i_m_d_j_s_o_n___i_m_p_l_e_m_e_n_t_a_t_i_o_n_1_1ondemand_1_1raw__json__string.html#autotoc_md250',1,'IMPORTANT: string_view lifetime']]],
+  ['limitations_5',['Limitations',['../md_doc_2compile__time__accessors.html#autotoc_md107',1,'']]],
+  ['limitations_20compile_20time_20errors_6',['Limitations (compile-time errors)',['../md_doc_2compile__time.html#autotoc_md83',1,'']]],
+  ['limitations_20of_20the_20comma_20separated_20mode_7',['Limitations of the comma separated mode',['../md_doc_2iterate__many.html#autotoc_md152',1,'Limitations of the comma-separated mode'],['../md_doc_2parse__many.html#autotoc_md191',1,'Limitations of the comma-separated mode']]],
+  ['limitations_20of_20the_20on_20demand_20approach_8',['Limitations of the On-Demand Approach',['../md_doc_2ondemand__design.html#autotoc_md173',1,'']]],
+  ['limiting_20the_20maximum_20depth_9',['Limiting the maximum depth',['../md_doc_2basics.html#autotoc_md62',1,'Limiting the maximum depth'],['../md_doc_2dom.html#autotoc_md125',1,'Limiting the maximum depth']]],
+  ['lines_10',['Whitespace-delimited (default, NDJSON / JSON Lines)',['../md_doc_2iterate__many.html#autotoc_md159',1,'']]],
+  ['lines_11',['Newline-Delimited JSON (ndjson) and JSON lines',['../md_doc_2basics.html#autotoc_md53',1,'']]],
+  ['list_12',['Deprecated List',['../deprecated.html',1,'']]],
+  ['loading_20and_20parsing_20json_20documents_13',['The basics: loading and parsing JSON documents',['../md_doc_2basics.html#autotoc_md5',1,'']]],
+  ['loading_20and_20parsing_20json_20documents_20using_20the_20dom_20front_20end_14',['The Basics: Loading and Parsing JSON Documents using the DOM front-end',['../md_doc_2dom.html#autotoc_md111',1,'']]],
+  ['loading_20from_20disk_15',['Loading from disk',['../md_doc_2compile__time.html#autotoc_md82',1,'']]],
+  ['location_20in_20document_16',['Current location in document',['../md_doc_2basics.html#autotoc_md50',1,'']]],
+  ['long_20running_20processes_20and_20memory_20capacity_17',['Long Running Processes and Memory Capacity',['../md_doc_2dom.html#autotoc_md127',1,'Server Loops: Long-Running Processes and Memory Capacity'],['../md_doc_2performance.html#autotoc_md196',1,'Server Loops: Long-Running Processes and Memory Capacity']]],
+  ['loops_3a_20long_20running_20processes_20and_20memory_20capacity_18',['Loops: Long Running Processes and Memory Capacity',['../md_doc_2dom.html#autotoc_md127',1,'Server Loops: Long-Running Processes and Memory Capacity'],['../md_doc_2performance.html#autotoc_md196',1,'Server Loops: Long-Running Processes and Memory Capacity']]]
+];

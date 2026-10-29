@@ -1,8 +1,7 @@
 var searchData=
 [
-  ['a_20better_20way_20to_20parse_20documents_0',['A Better Way to Parse Documents?',['../md_doc_2ondemand__design.html',1,'']]],
-  ['accessors_1',['Compile-Time JSONPath and JSON Pointer Accessors',['../md_doc_2compile__time__accessors.html',1,'']]],
-  ['and_20json_20pointer_20accessors_2',['Compile-Time JSONPath and JSON Pointer Accessors',['../md_doc_2compile__time__accessors.html',1,'']]],
-  ['architecture_20specific_20implementations_3',['CPU Architecture-Specific Implementations',['../md_doc_2implementation-selection.html',1,'']]],
-  ['at_20compile_20time_4',['Parse json at compile time',['../md_doc_2compile__time.html',1,'']]]
+  ['1_20specialize_20simdjson_3a_3aondemand_3a_3avalue_3a_3aget_20to_20get_20custom_20types_20pre_20c_2020_0',['1. Specialize &lt;span class=&quot;tt&quot;&gt;simdjson::ondemand::value::get&lt;/span&gt; to get custom types (pre-C++20)',['../md_doc_2basics.html#autotoc_md15',1,'']]],
+  ['17_20support_1',['C++17 Support',['../md_doc_2dom.html#autotoc_md115',1,'']]],
+  ['1_3a_20validated_20access_2',['Example 1: Validated Access',['../md_doc_2compile__time__accessors.html#autotoc_md102',1,'']]],
+  ['1_3a_20with_20type_20validation_20recommended_3',['Mode 1: With Type Validation (Recommended)',['../md_doc_2compile__time__accessors.html#autotoc_md89',1,'']]]
 ];

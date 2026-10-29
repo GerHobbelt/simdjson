@@ -18,6 +18,7 @@ var classsimdjson_1_1_s_i_m_d_j_s_o_n___i_m_p_l_e_m_e_n_t_a_t_i_o_n_1_1builder_1
     [ "escape_and_append_with_quotes", "classsimdjson_1_1_s_i_m_d_j_s_o_n___i_m_p_l_e_m_e_n_t_a_t_i_o_n_1_1builder_1_1string__builder.html#a00bf1c41d3c5e001895959c700b9c9a0", null ],
     [ "escape_and_append_with_quotes", "classsimdjson_1_1_s_i_m_d_j_s_o_n___i_m_p_l_e_m_e_n_t_a_t_i_o_n_1_1builder_1_1string__builder.html#a2440a83bb3a5d87599a1ced47bebbe37", null ],
     [ "escape_and_append_with_quotes", "classsimdjson_1_1_s_i_m_d_j_s_o_n___i_m_p_l_e_m_e_n_t_a_t_i_o_n_1_1builder_1_1string__builder.html#a106387a1848af00d9434d206a6cb9126", null ],
+    [ "move_to", "classsimdjson_1_1_s_i_m_d_j_s_o_n___i_m_p_l_e_m_e_n_t_a_t_i_o_n_1_1builder_1_1string__builder.html#aa66b70717ae78c570566b4059f1f70e2", null ],
     [ "operator std::string", "classsimdjson_1_1_s_i_m_d_j_s_o_n___i_m_p_l_e_m_e_n_t_a_t_i_o_n_1_1builder_1_1string__builder.html#acff55a6c72df9c575f78d71400b0289a", null ],
     [ "operator std::string_view", "classsimdjson_1_1_s_i_m_d_j_s_o_n___i_m_p_l_e_m_e_n_t_a_t_i_o_n_1_1builder_1_1string__builder.html#a8b45f6e56bdc03f55d1bb6204a672bfa", null ],
     [ "size", "classsimdjson_1_1_s_i_m_d_j_s_o_n___i_m_p_l_e_m_e_n_t_a_t_i_o_n_1_1builder_1_1string__builder.html#a8e4e7328f1d40078710853cb732d29fc", null ],

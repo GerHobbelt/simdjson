@@ -1,7 +1,7 @@
 var searchData=
 [
-  ['2_20use_20tt_20tag_5finvoke_20tt_20for_20custom_20types_20c_2020_0',['2. Use &lt;tt&gt;tag_invoke&lt;/tt&gt; for custom types (C++20)',['../md_doc_2basics.html#autotoc_md16',1,'']]],
-  ['20_1',['20',['../md_doc_2basics.html#autotoc_md15',1,'1. Specialize &lt;tt&gt;simdjson::ondemand::value::get&lt;/tt&gt; to get custom types (pre-C++20)'],['../md_doc_2basics.html#autotoc_md16',1,'2. Use &lt;tt&gt;tag_invoke&lt;/tt&gt; for custom types (C++20)'],['../md_doc_2builder.html#autotoc_md70',1,'C++20'],['../md_doc_2basics.html#autotoc_md27',1,'The simdjson::from shortcut (experimental, C++20)'],['../md_doc_2basics.html#autotoc_md10',1,'u8string_view and u8string (C++20)']]],
+  ['2_20use_20tag_5finvoke_20for_20custom_20types_20c_2020_0',['2. Use &lt;span class=&quot;tt&quot;&gt;tag_invoke&lt;/span&gt; for custom types (C++20)',['../md_doc_2basics.html#autotoc_md16',1,'']]],
+  ['20_1',['20',['../md_doc_2basics.html#autotoc_md15',1,'1. Specialize &lt;span class=&quot;tt&quot;&gt;simdjson::ondemand::value::get&lt;/span&gt; to get custom types (pre-C++20)'],['../md_doc_2basics.html#autotoc_md16',1,'2. Use &lt;span class=&quot;tt&quot;&gt;tag_invoke&lt;/span&gt; for custom types (C++20)'],['../md_doc_2builder.html#autotoc_md70',1,'C++20'],['../md_doc_2basics.html#autotoc_md27',1,'The simdjson::from shortcut (experimental, C++20)'],['../md_doc_2basics.html#autotoc_md10',1,'u8string_view and u8string (C++20)']]],
   ['20_20features_2',['C++20 features',['../md_doc_2iterate__many.html#autotoc_md157',1,'']]],
   ['20_20ranges_20support_3',['C++20 Ranges Support',['../md_doc_2basics.html#autotoc_md35',1,'']]],
   ['20_20support_4',['C++20 Support',['../md_doc_2dom.html#autotoc_md116',1,'']]],

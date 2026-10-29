@@ -11,7 +11,7 @@ var searchData=
   ['newline_20delimited_20json_20ndjson_20and_20json_20lines_8',['Newline-Delimited JSON (ndjson) and JSON lines',['../md_doc_2basics.html#autotoc_md53',1,'']]],
   ['newline_5fdelimited_9',['newline_delimited',['../namespacesimdjson.html#a1d2c63e9741e1bca213ba01eb428858aa70226533a749336efb853837484d1697',1,'simdjson']]],
   ['no_5fsuch_5ffield_10',['NO_SUCH_FIELD',['../namespacesimdjson.html#a7b735a3a50ba79e3f7f14df5f77d8da9a4a2c71f8eca438b3f0553a2811bdab9a',1,'simdjson']]],
-  ['node_11',['Root node',['../md_doc_2tape.html#autotoc_md209',1,'']]],
+  ['node_11',['Root node',['../md_doc_2tape.html#autotoc_md210',1,'']]],
   ['non_20validated_20access_12',['Example 2: Non-Validated Access',['../md_doc_2compile__time__accessors.html#autotoc_md103',1,'']]],
   ['notes_13',['Performance Notes',['../md_doc_2performance.html',1,'']]],
   ['null_14',['null',['../namespacesimdjson_1_1_s_i_m_d_j_s_o_n___i_m_p_l_e_m_e_n_t_a_t_i_o_n_1_1ondemand.html#ac915f0c06e5ab0363e09593bba651330a37a6259cc0c1dae299a7866489dff0bd',1,'simdjson::SIMDJSON_IMPLEMENTATION::ondemand']]],
@@ -26,6 +26,6 @@ var searchData=
   ['number_5flist_5falignment_23',['number_list_alignment',['../namespacesimdjson.html#a99fca0938a2bd6cc2e68619af3dc11a4',1,'simdjson']]],
   ['number_5fof_5fslots_24',['number_of_slots',['../classsimdjson_1_1dom_1_1array.html#a26e66312190e016c22093292974490ff',1,'simdjson::dom::array']]],
   ['number_5fout_5fof_5frange_25',['NUMBER_OUT_OF_RANGE',['../namespacesimdjson.html#a7b735a3a50ba79e3f7f14df5f77d8da9a8c779dcc8fb73a4eb8891af3ef65eebb',1,'simdjson']]],
-  ['number_5ftype_26',['number_type',['../namespacesimdjson_1_1_s_i_m_d_j_s_o_n___i_m_p_l_e_m_e_n_t_a_t_i_o_n_1_1ondemand.html#a6a2b39df6a1ac51d9fbb7b39a1fcf89c',1,'simdjson::SIMDJSON_IMPLEMENTATION::ondemand']]],
+  ['number_5ftype_26',['number_type',['../namespacesimdjson_1_1_s_i_m_d_j_s_o_n___i_m_p_l_e_m_e_n_t_a_t_i_o_n_1_1ondemand.html#aa07241806f814647809402835c25800c',1,'simdjson::SIMDJSON_IMPLEMENTATION::ondemand']]],
   ['numbers_20inside_20strings_27',['Parsing numbers inside strings',['../md_doc_2basics.html#autotoc_md54',1,'']]]
 ];
